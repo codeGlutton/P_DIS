@@ -37,6 +37,10 @@
 		{
 			"Name": "AllToolsets",
 			"Enabled": true
+		},
+		{
+			"Name": "DIS",
+			"Enabled": true
 		}
 	]
 }

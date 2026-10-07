@@ -5,7 +5,10 @@
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
 
-UDISGlobalSubsystem::UDISGlobalSubsystem()
+#include "Enhancement/DISEnhancementContainer.h"
+
+UDISGlobalSubsystem::UDISGlobalSubsystem() :
+	NextEnhancementEffectHandleId(1)
 {
 }
 
@@ -69,6 +72,7 @@ void UDISGlobalSubsystem::Deinitialize()
 
 	// 런타임 등록 데이터 정리
 	RegisteredItemTypeProfiles.Empty();
+	ActiveEnhancementEffectHandles.Empty();
 
 	Super::Deinitialize();
 }
@@ -145,4 +149,70 @@ const FDISItemTypeProfile& UDISGlobalSubsystem::GetItemTypeProfile(const FGamepl
 
 	// 매핑된 프로파일이 없는 경우 기본 폴백 프로파일 반환
 	return FallbackItemProfile;
+}
+
+FDISActiveEnhancementEffectHandle UDISGlobalSubsystem::AllocateEnhancementEffectHandle(UDISEnhancementContainer* InOwnerContainer)
+{
+	// 전역에서 유일하고 중복되지 않는 양수 정수 핸들 번호 생성
+	int32 CandidateId = NextEnhancementEffectHandleId++;
+	if (CandidateId <= 0)
+	{
+		CandidateId = 1;
+		NextEnhancementEffectHandleId = 2;
+	}
+
+	FDISActiveEnhancementEffectHandle NewHandle(CandidateId);
+
+	// 만약 TMap에 이미 존재할 경우 미사용 번호가 나올 때까지 반복 탐색
+	while (ActiveEnhancementEffectHandles.Contains(NewHandle) == true)
+	{
+		CandidateId = NextEnhancementEffectHandleId++;
+		if (CandidateId <= 0)
+		{
+			CandidateId = 1;
+			NextEnhancementEffectHandleId = 2;
+		}
+		NewHandle = FDISActiveEnhancementEffectHandle(CandidateId);
+	}
+
+	// TMap에 소유 컨테이너와 함께 등록
+	ActiveEnhancementEffectHandles.Add(NewHandle, InOwnerContainer);
+	return NewHandle;
+}
+
+bool UDISGlobalSubsystem::ReleaseEnhancementEffectHandle(const FDISActiveEnhancementEffectHandle& Handle)
+{
+	if (Handle.IsValid() == false)
+	{
+		return false;
+	}
+
+	const int32 RemovedCount = ActiveEnhancementEffectHandles.Remove(Handle);
+	return RemovedCount > 0;
+}
+
+bool UDISGlobalSubsystem::IsEnhancementEffectHandleActive(const FDISActiveEnhancementEffectHandle& Handle) const
+{
+	if (Handle.IsValid() == false)
+	{
+		return false;
+	}
+
+	return ActiveEnhancementEffectHandles.Contains(Handle) == true;
+}
+
+UDISEnhancementContainer* UDISGlobalSubsystem::GetEnhancementContainerByEffectHandle(const FDISActiveEnhancementEffectHandle& Handle) const
+{
+	if (Handle.IsValid() == false)
+	{
+		return nullptr;
+	}
+
+	const TWeakObjectPtr<UDISEnhancementContainer>* FoundContainer = ActiveEnhancementEffectHandles.Find(Handle);
+	if (FoundContainer != nullptr)
+	{
+		return FoundContainer->Get();
+	}
+
+	return nullptr;
 }

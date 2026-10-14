@@ -40,7 +40,8 @@ FString FDISActiveEnhancementEffectHandle::ToString() const
 FDISActiveEnhancementEffect::FDISActiveEnhancementEffect() :
 	Spec(FDISEnhancementEffectSpec()),
 	Handle(FDISActiveEnhancementEffectHandle()),
-	bIsActive(false)
+	bIsActive(false),
+	bPendingRemove(false)
 {
 }
 
@@ -50,7 +51,8 @@ FDISActiveEnhancementEffect::FDISActiveEnhancementEffect(
 ) :
 	Spec(InSpec),
 	Handle(InHandle),
-	bIsActive(true)
+	bIsActive(true),
+	bPendingRemove(false)
 {
 	RecalculateModifiers();
 }

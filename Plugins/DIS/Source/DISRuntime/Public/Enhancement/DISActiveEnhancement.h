@@ -158,6 +158,14 @@ public:
 public:
 	bool operator==(const FDISActiveEnhancement& Other) const;
 
+	/* 삭제 대기 상태 관리 */
+public:
+	/* 삭제 대기 상태인지 확인 */
+	bool IsPendingRemove() const { return bPendingRemove; }
+
+	/* 삭제 대기 플래그 설정 */
+	void MarkPendingRemove() { bPendingRemove = true; }
+
 	/* 내부 계산 헬퍼 */
 private:
 	/* 등록된 모디파이어 채널들을 재집계하여 캐시된 실수 계산값 갱신 */
@@ -172,6 +180,10 @@ public:
 	/* 강화 활성화 여부 */
 	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
 	bool bIsActive;
+
+	/* 컨테이너 락 상태에서 스탯 등록 해제 대기 중인지 여부 */
+	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
+	bool bPendingRemove;
 
 	/* EDISEnhancementLevelOp를 인덱스로 하여 각 Op별 모디파이어 채널들을 보관하는 2차원 구조 배열 (Add=0, Multiply=1, Override=2) */
 	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)

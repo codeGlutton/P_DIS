@@ -98,6 +98,7 @@ const TArray<FDISActiveEnhancementModEntry>& FDISActiveEnhancementModChannel::Ge
 FDISActiveEnhancement::FDISActiveEnhancement() :
 	EnhancementClass(nullptr),
 	bIsActive(false),
+	bPendingRemove(false),
 	CachedCalculatedValue(0.0f)
 {
 	ResetModifiers();
@@ -109,6 +110,7 @@ FDISActiveEnhancement::FDISActiveEnhancement(
 ) :
 	EnhancementClass(InEnhancementClass),
 	bIsActive(bInIsActive),
+	bPendingRemove(false),
 	CachedCalculatedValue(0.0f)
 {
 	ResetModifiers();

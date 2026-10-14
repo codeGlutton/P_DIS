@@ -6,9 +6,27 @@
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 
+/* FScopedEnhancementContainerLock */
+
+FScopedEnhancementContainerLock::FScopedEnhancementContainerLock(const UDISEnhancementContainer& InContainer) :
+	Container(InContainer)
+{
+	Container.IncrementLock();
+}
+
+FScopedEnhancementContainerLock::~FScopedEnhancementContainerLock()
+{
+	const_cast<UDISEnhancementContainer&>(Container).DecrementLock();
+}
+
+/* UDISEnhancementContainer */
+
 UDISEnhancementContainer::UDISEnhancementContainer() :
 	OwnerInterface(nullptr),
-	EffectTarget(nullptr)
+	EffectTarget(nullptr),
+	ScopedLockCount(0),
+	PendingEffectRemoves(0),
+	PendingEnhancementRemoves(0)
 {
 }
 
@@ -73,6 +91,8 @@ FDISActiveEnhancementEffectHandle UDISEnhancementContainer::ApplyEnhancementEffe
 		return FDISActiveEnhancementEffectHandle();
 	}
 
+	ENHANCEMENT_SCOPE_LOCK();
+
 	const FDISActiveEnhancementEffectHandle NewHandle = AllocateEffectHandle();
 	if (NewHandle.IsValid() == false)
 	{
@@ -80,10 +100,12 @@ FDISActiveEnhancementEffectHandle UDISEnhancementContainer::ApplyEnhancementEffe
 	}
 
 	FDISActiveEnhancementEffect NewEffect(InSpec, NewHandle);
-	ActiveEffects.Add(NewEffect);
 
-	// 영향을 받는 대상 강화 스탯들에 모디파이어 추가 및 라이프사이클 전파
-	for (const auto& Pair : NewEffect.GetCalculatedModifiers())
+	// 락 중이므로 PendingAddEffects에 지연 추가 (스코프 종료 시 ActiveEffects로 플러시)
+	FDISActiveEnhancementEffect& AddedEffect = PendingAddEffects.Add_GetRef(MoveTemp(NewEffect));
+
+	// 영향을 받는 대상 강화 스탯들에 모디파이어 추가 및 라이프사이클 전파 (즉시 적용)
+	for (const auto& Pair : AddedEffect.GetCalculatedModifiers())
 	{
 		AddModifierToEnhancement(Pair.Key, Pair.Value.LevelOp, NewHandle, Pair.Value.LevelMagnitude);
 	}
@@ -98,26 +120,30 @@ bool UDISEnhancementContainer::RemoveEnhancementEffect(const FDISActiveEnhanceme
 		return false;
 	}
 
-	for (int32 Index = 0; Index < ActiveEffects.Num(); ++Index)
+	ENHANCEMENT_SCOPE_LOCK();
+
+	FDISActiveEnhancementEffect* FoundEffect = FindActiveEnhancementEffect(InHandle);
+	if (FoundEffect == nullptr || FoundEffect->IsPendingRemove() == true)
 	{
-		if (ActiveEffects[Index].GetHandle() == InHandle)
-		{
-			const FDISActiveEnhancementEffect EffectToRemove = ActiveEffects[Index];
-			ActiveEffects.RemoveAtSwap(Index);
-
-			ReleaseEffectHandle(InHandle);
-
-			// 영향받은 모든 대상 강화 스탯에서 모디파이어 제거 및 라이프사이클 처리
-			for (const auto& Pair : EffectToRemove.GetCalculatedModifiers())
-			{
-				RemoveModifierFromEnhancement(Pair.Key, InHandle);
-			}
-
-			return true;
-		}
+		// 대상이 없거나 이미 삭제 대기 중인 경우 중복 삭제 방지
+		return false;
 	}
 
-	return false;
+	// 1. 삭제 대기 플래그 마킹
+	FoundEffect->MarkPendingRemove();
+	PendingEffectRemoves++;
+
+	// 2. 핸들 해제
+	ReleaseEffectHandle(InHandle);
+
+	// 3. 영향받은 모든 대상 강화 스탯에서 모디파이어 제거 및 라이프사이클 처리 (즉시 적용)
+	const TMap<TSubclassOf<UDISEnhancement>, FDISEnhancementModifier> ModifiersToRemove = FoundEffect->GetCalculatedModifiers();
+	for (const auto& Pair : ModifiersToRemove)
+	{
+		RemoveModifierFromEnhancement(Pair.Key, InHandle);
+	}
+
+	return true;
 }
 
 int32 UDISEnhancementContainer::RemoveEnhancementEffectsByClass(TSubclassOf<UDISEnhancementEffect> InEffectClass)
@@ -127,12 +153,14 @@ int32 UDISEnhancementContainer::RemoveEnhancementEffectsByClass(TSubclassOf<UDIS
 		return 0;
 	}
 
+	ENHANCEMENT_SCOPE_LOCK();
+
 	TArray<FDISActiveEnhancementEffectHandle> HandlesToRemove;
-	for (const FDISActiveEnhancementEffect& Effect : ActiveEffects)
+	for (FConstEffectIterator It(*this); It; ++It)
 	{
-		if (Effect.GetEffectClass() == InEffectClass)
+		if (It->GetEffectClass() == InEffectClass)
 		{
-			HandlesToRemove.Add(Effect.GetHandle());
+			HandlesToRemove.Add(It->GetHandle());
 		}
 	}
 
@@ -210,27 +238,38 @@ FText UDISEnhancementContainer::GetEnhancedDisplayName(const FText& BaseName) co
 	TArray<FAffixSortEntry> ValidPrefixes;
 	TArray<FAffixSortEntry> ValidSuffixes;
 
-	for (int32 Index = 0; Index < ActiveEnhancements.Num(); ++Index)
+	auto CollectAffixes = [&](const TArray<FDISActiveEnhancement>& InEnhancements)
 	{
-		const FDISActiveEnhancement& ActiveEnhancement = ActiveEnhancements[Index];
-		const UDISEnhancement* CDO = ActiveEnhancement.GetEnhancementCDO();
-		if (CDO == nullptr || ActiveEnhancement.bIsActive == false || ActiveEnhancement.GetLevel() <= 0)
+		for (int32 Index = 0; Index < InEnhancements.Num(); ++Index)
 		{
-			continue;
-		}
+			const FDISActiveEnhancement& ActiveEnhancement = InEnhancements[Index];
+			if (ActiveEnhancement.IsPendingRemove() == true)
+			{
+				continue;
+			}
 
-		const FText PrefixText = CDO->GetPrefixText(ActiveEnhancement.GetLevel());
-		if (PrefixText.IsEmptyOrWhitespace() == false)
-		{
-			ValidPrefixes.Add({ PrefixText, CDO->GetPrefixPriority(), Index });
-		}
+			const UDISEnhancement* CDO = ActiveEnhancement.GetEnhancementCDO();
+			if (CDO == nullptr || ActiveEnhancement.bIsActive == false || ActiveEnhancement.GetLevel() <= 0)
+			{
+				continue;
+			}
 
-		const FText SuffixText = CDO->GetSuffixText(ActiveEnhancement.GetLevel());
-		if (SuffixText.IsEmptyOrWhitespace() == false)
-		{
-			ValidSuffixes.Add({ SuffixText, CDO->GetSuffixPriority(), Index });
+			const FText PrefixText = CDO->GetPrefixText(ActiveEnhancement.GetLevel());
+			if (PrefixText.IsEmptyOrWhitespace() == false)
+			{
+				ValidPrefixes.Add({ PrefixText, CDO->GetPrefixPriority(), Index });
+			}
+
+			const FText SuffixText = CDO->GetSuffixText(ActiveEnhancement.GetLevel());
+			if (SuffixText.IsEmptyOrWhitespace() == false)
+			{
+				ValidSuffixes.Add({ SuffixText, CDO->GetSuffixPriority(), Index });
+			}
 		}
-	}
+	};
+
+	CollectAffixes(ActiveEnhancements);
+	CollectAffixes(PendingAddEnhancements);
 
 	// 수식어가 없는 경우 기본 이름 반환
 	if (ValidPrefixes.IsEmpty() == true && ValidSuffixes.IsEmpty() == true)
@@ -270,6 +309,79 @@ FText UDISEnhancementContainer::GetEnhancedDisplayName(const FText& BaseName) co
 	}
 
 	return FText::FromString(ResultString.TrimStartAndEnd());
+}
+
+void UDISEnhancementContainer::IncrementLock() const
+{
+	ScopedLockCount++;
+}
+
+void UDISEnhancementContainer::DecrementLock()
+{
+	check(ScopedLockCount > 0);
+	if (--ScopedLockCount == 0)
+	{
+		// 1. PendingAddEffects 중 삭제 대기(bPendingRemove)가 아닌 항목들을 ActiveEffects로 이동
+		for (FDISActiveEnhancementEffect& PendingEffect : PendingAddEffects)
+		{
+			if (PendingEffect.IsPendingRemove() == false)
+			{
+				ActiveEffects.Add(MoveTemp(PendingEffect));
+			}
+		}
+		PendingAddEffects.Empty();
+
+		// 2. PendingAddEnhancements 중 삭제 대기(bPendingRemove)가 아닌 항목들을 ActiveEnhancements로 이동
+		for (FDISActiveEnhancement& PendingEnh : PendingAddEnhancements)
+		{
+			if (PendingEnh.IsPendingRemove() == false)
+			{
+				ActiveEnhancements.Add(MoveTemp(PendingEnh));
+			}
+		}
+		PendingAddEnhancements.Empty();
+
+		// 3. ActiveEffects에서 삭제 대기(bPendingRemove) 마킹된 항목들을 뒤에서부터 일괄 제거
+		if (PendingEffectRemoves > 0)
+		{
+			for (int32 Index = ActiveEffects.Num() - 1; Index >= 0; --Index)
+			{
+				if (ActiveEffects[Index].IsPendingRemove() == true)
+				{
+					ActiveEffects.RemoveAtSwap(Index, EAllowShrinking::No);
+				}
+			}
+			PendingEffectRemoves = 0;
+		}
+
+		// 4. ActiveEnhancements에서 삭제 대기(bPendingRemove) 마킹된 항목들을 뒤에서부터 일괄 제거
+		if (PendingEnhancementRemoves > 0)
+		{
+			for (int32 Index = ActiveEnhancements.Num() - 1; Index >= 0; --Index)
+			{
+				if (ActiveEnhancements[Index].IsPendingRemove() == true)
+				{
+					ActiveEnhancements.RemoveAtSwap(Index, EAllowShrinking::No);
+				}
+			}
+			PendingEnhancementRemoves = 0;
+		}
+	}
+}
+
+bool UDISEnhancementContainer::IsLocked() const
+{
+	return ScopedLockCount > 0;
+}
+
+UDISEnhancementContainer::FConstEffectIterator UDISEnhancementContainer::CreateConstEffectIterator() const
+{
+	return FConstEffectIterator(*this);
+}
+
+UDISEnhancementContainer::FEffectIterator UDISEnhancementContainer::CreateEffectIterator()
+{
+	return FEffectIterator(*this);
 }
 
 UDISGlobalSubsystem* UDISEnhancementContainer::GetGlobalSubsystem() const
@@ -321,9 +433,17 @@ FDISActiveEnhancementEffect* UDISEnhancementContainer::FindActiveEnhancementEffe
 
 	for (FDISActiveEnhancementEffect& Effect : ActiveEffects)
 	{
-		if (Effect.GetHandle() == Handle)
+		if (Effect.GetHandle() == Handle && Effect.IsPendingRemove() == false)
 		{
 			return &Effect;
+		}
+	}
+
+	for (FDISActiveEnhancementEffect& PendingEffect : PendingAddEffects)
+	{
+		if (PendingEffect.GetHandle() == Handle && PendingEffect.IsPendingRemove() == false)
+		{
+			return &PendingEffect;
 		}
 	}
 
@@ -339,9 +459,17 @@ FDISActiveEnhancement* UDISEnhancementContainer::FindActiveEnhancement(TSubclass
 
 	for (FDISActiveEnhancement& Existing : ActiveEnhancements)
 	{
-		if (Existing.GetEnhancementClass() == InEnhancementClass)
+		if (Existing.GetEnhancementClass() == InEnhancementClass && Existing.IsPendingRemove() == false)
 		{
 			return &Existing;
+		}
+	}
+
+	for (FDISActiveEnhancement& PendingExisting : PendingAddEnhancements)
+	{
+		if (PendingExisting.GetEnhancementClass() == InEnhancementClass && PendingExisting.IsPendingRemove() == false)
+		{
+			return &PendingExisting;
 		}
 	}
 
@@ -355,7 +483,8 @@ void UDISEnhancementContainer::AddModifierToEnhancement(TSubclassOf<UDISEnhancem
 		return;
 	}
 
-	bool bWasCreated = false;
+	ENHANCEMENT_SCOPE_LOCK();
+
 	FDISActiveEnhancement* FoundEnhancement = FindActiveEnhancement(InEnhancementClass);
 	if (FoundEnhancement == nullptr)
 	{
@@ -379,6 +508,8 @@ void UDISEnhancementContainer::RemoveModifierFromEnhancement(TSubclassOf<UDISEnh
 	{
 		return;
 	}
+
+	ENHANCEMENT_SCOPE_LOCK();
 
 	FDISActiveEnhancement* FoundEnhancement = FindActiveEnhancement(InEnhancementClass);
 	if (FoundEnhancement == nullptr)
@@ -406,26 +537,17 @@ FDISActiveEnhancement* UDISEnhancementContainer::RegisterEnhancement(TSubclassOf
 		return nullptr;
 	}
 
-	int32 FoundIndex = INDEX_NONE;
-	for (int32 Index = 0; Index < ActiveEnhancements.Num(); ++Index)
+	if (FDISActiveEnhancement* Existing = FindActiveEnhancement(InEnhancementClass))
 	{
-		if (ActiveEnhancements[Index].GetEnhancementClass() == InEnhancementClass)
-		{
-			FoundIndex = Index;
-			break;
-		}
+		return Existing;
 	}
 
-	if (FoundIndex != INDEX_NONE)
-	{
-		return &ActiveEnhancements[FoundIndex];
-	}
-
-	FDISActiveEnhancement& FoundEnhancement = ActiveEnhancements.Add_GetRef(FDISActiveEnhancement(InEnhancementClass));
+	// 락 상태 보호를 위해 PendingAddEnhancements에 추가 (스코프 종료 시 ActiveEnhancements로 플러시)
+	FDISActiveEnhancement& FoundEnhancement = PendingAddEnhancements.Add_GetRef(FDISActiveEnhancement(InEnhancementClass));
 	UObject* CurrentTarget = GetEffectTarget();
 	const UDISEnhancement* CDO = FoundEnhancement.GetEnhancementCDO();
 
-	// 스탯이 컨테이너에 최초 등록된 경우 OnEnhancementAdded 호출
+	// 스탯이 컨테이너에 최초 등록된 경우 OnEnhancementAdded 호출 (즉시 실행)
 	if (CDO != nullptr && CurrentTarget != nullptr)
 	{
 		CDO->OnEnhancementAdded(CurrentTarget, FoundEnhancement);
@@ -441,32 +563,26 @@ void UDISEnhancementContainer::UnregisterEnhancement(TSubclassOf<UDISEnhancement
 		return;
 	}
 
-	int32 FoundIndex = INDEX_NONE;
-	for (int32 Index = 0; Index < ActiveEnhancements.Num(); ++Index)
-	{
-		if (ActiveEnhancements[Index].GetEnhancementClass() == InEnhancementClass)
-		{
-			FoundIndex = Index;
-			break;
-		}
-	}
-
-	if (FoundIndex == INDEX_NONE)
+	FDISActiveEnhancement* FoundEnhancement = FindActiveEnhancement(InEnhancementClass);
+	if (FoundEnhancement == nullptr || FoundEnhancement->IsPendingRemove() == true)
 	{
 		return;
 	}
 
-	FDISActiveEnhancement& FoundEnhancement = ActiveEnhancements[FoundIndex];
-	const UDISEnhancement* CDO = FoundEnhancement.GetEnhancementCDO();
+	// 1. 삭제 대기 마킹 (중복 제거 방지)
+	FoundEnhancement->MarkPendingRemove();
+	PendingEnhancementRemoves++;
+
+	const UDISEnhancement* CDO = FoundEnhancement->GetEnhancementCDO();
 	UObject* CurrentTarget = GetEffectTarget();
 
-	// 스탯 완전 제거 훅 호출
+	// 2. 스탯 완전 제거 훅 호출 (즉시 실행)
 	if (CDO != nullptr && CurrentTarget != nullptr)
 	{
-		CDO->OnEnhancementRemoved(CurrentTarget, FoundEnhancement);
+		CDO->OnEnhancementRemoved(CurrentTarget, *FoundEnhancement);
 	}
 
-	ActiveEnhancements.RemoveAtSwap(FoundIndex);
+	// 실제 배열 메모리 제거는 DecrementLock에서 일괄 처리
 }
 
 void UDISEnhancementContainer::OnEnhancementLevelChange(FDISActiveEnhancement& Enhancement, int32 OldLevel, int32 NewLevel)

@@ -12,12 +12,28 @@
 #include "Enhancement/DISActiveEnhancementEffect.h"
 #include "Enhancement/DISEnhancementModifier.h"
 #include "Enhancement/DISEnhancementEffectSpec.h"
+#include "Enhancement/DISActiveEnhancementEffectIterator.h"
 #include "DISEnhancementContainer.generated.h"
 
 class UDISEnhancement;
 class UDISEnhancementEffect;
 class IDISEnhanceableInterface;
 class UDISGlobalSubsystem;
+class UDISEnhancementContainer;
+
+/**
+ * 컨테이너 변경 작업 시 재귀적 호출 안전성을 보장하는 RAII Scope Lock 구조체
+ */
+struct DISRUNTIME_API FScopedEnhancementContainerLock
+{
+	explicit FScopedEnhancementContainerLock(const UDISEnhancementContainer& InContainer);
+	~FScopedEnhancementContainerLock();
+
+private:
+	const UDISEnhancementContainer& Container;
+};
+
+#define ENHANCEMENT_SCOPE_LOCK() FScopedEnhancementContainerLock ActiveScopeLock(*this);
 
 /**
  * 아이템 등의 강화 스탯 및 장착/해제 가능한 활성 강화 효과 목록을 전담 관리하는 컨테이너 객체
@@ -27,6 +43,13 @@ UCLASS(BlueprintType, meta = (DisplayName = "DIS Enhancement Container"))
 class DISRUNTIME_API UDISEnhancementContainer : public UObject
 {
 	GENERATED_BODY()
+
+	friend struct FScopedEnhancementContainerLock;
+	template<typename ElementType, typename ContainerType> friend class TDISActiveEnhancementEffectIterator;
+
+public:
+	typedef TDISActiveEnhancementEffectIterator<const FDISActiveEnhancementEffect, UDISEnhancementContainer> FConstEffectIterator;
+	typedef TDISActiveEnhancementEffectIterator<FDISActiveEnhancementEffect, UDISEnhancementContainer> FEffectIterator;
 
 public:
 	UDISEnhancementContainer();
@@ -101,6 +124,23 @@ public:
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
 	FText GetEnhancedDisplayName(const FText& BaseName) const;
 
+	/* 락 관리 및 이터레이터 */
+public:
+	/* 컨테이너 조작 락 카운터 증가 */
+	void IncrementLock() const;
+
+	/* 컨테이너 조작 락 카운터 감소 및 0 도달 시 지연 작업 일괄 반영 */
+	void DecrementLock();
+
+	/* 현재 락이 걸려있는지 여부 반환 */
+	bool IsLocked() const;
+
+	/* 활성 효과 순회용 불변 이터레이터 생성 */
+	FConstEffectIterator CreateConstEffectIterator() const;
+
+	/* 활성 효과 순회용 가변 이터레이터 생성 */
+	FEffectIterator CreateEffectIterator();
+
 	/* 내부 유틸리티 및 라이프사이클 디스패처 */
 protected:
 	/* 유효한 전역 서브시스템 참조 획득 시도 */
@@ -158,4 +198,21 @@ protected:
 	/* 현재 장착되어 레벨에 변동을 주고 있는 활성 강화 효과 목록 */
 	UPROPERTY(Category = "Enhancement|Effect", VisibleAnywhere, BlueprintReadOnly)
 	TArray<FDISActiveEnhancementEffect> ActiveEffects;
+
+	/* 락 상태 동안 추가 요청된 지연 활성 강화 효과 목록 */
+	UPROPERTY(Transient)
+	TArray<FDISActiveEnhancementEffect> PendingAddEffects;
+
+	/* 락 상태 동안 추가 요청된 지연 활성 강화 스탯 목록 */
+	UPROPERTY(Transient)
+	TArray<FDISActiveEnhancement> PendingAddEnhancements;
+
+	/* 재귀 호출 보호용 스코프 락 카운터 */
+	mutable int32 ScopedLockCount;
+
+	/* 삭제 대기 중인 효과 개수 */
+	int32 PendingEffectRemoves;
+
+	/* 삭제 대기 중인 스탯 개수 */
+	int32 PendingEnhancementRemoves;
 };

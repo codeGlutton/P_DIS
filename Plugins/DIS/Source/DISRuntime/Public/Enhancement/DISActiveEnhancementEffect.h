@@ -100,6 +100,12 @@ public:
 	/* 요청 명세(Spec) 반환 */
 	const FDISEnhancementEffectSpec& GetSpec() const;
 
+	/* 삭제 대기 상태인지 확인 */
+	bool IsPendingRemove() const { return bPendingRemove; }
+
+	/* 삭제 대기 플래그 설정 */
+	void MarkPendingRemove() { bPendingRemove = true; }
+
 	/* 비교 연산자 */
 public:
 	bool operator==(const FDISActiveEnhancementEffect& Other) const;
@@ -117,6 +123,10 @@ public:
 	/* 활성화 여부 */
 	UPROPERTY(Category = "Enhancement|Effect", VisibleAnywhere, BlueprintReadOnly)
 	bool bIsActive;
+
+	/* 컨테이너 락 상태에서 삭제 대기 중인지 여부 (중복 삭제 방지용) */
+	UPROPERTY(Category = "Enhancement|Effect", VisibleAnywhere, BlueprintReadOnly)
+	bool bPendingRemove;
 
 	/* CDO의 각 모디파이어에 Spec.OverallMagnitude가 곱해져 최종 산출된 런타임 모디파이어 캐시 맵 */
 	UPROPERTY(Category = "Enhancement|Effect", VisibleAnywhere, BlueprintReadOnly)

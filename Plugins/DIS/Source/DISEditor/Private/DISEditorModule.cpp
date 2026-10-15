@@ -1,16 +1,16 @@
 #include "DISEditorModule.h"
 #include "PropertyEditorModule.h"
-#include "Customizations/DISItemShapeCustomization.h"
+#include "Customizations/DISTileShapeCustomization.h"
 
 #define LOCTEXT_NAMESPACE "FDISEditorModule"
 
 void FDISEditorModule::StartupModule()
 {
-	// FDISItemShape 프로퍼티 커스터마이제이션 등록
+	// FDISTileShape 프로퍼티 커스터마이제이션 등록
 	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 	PropertyModule.RegisterCustomPropertyTypeLayout(
-		"DISItemShape",
-		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FDISItemShapeCustomization::MakeInstance)
+		"DISTileShape",
+		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FDISTileShapeCustomization::MakeInstance)
 	);
 }
 
@@ -20,7 +20,7 @@ void FDISEditorModule::ShutdownModule()
 	if (FModuleManager::Get().IsModuleLoaded("PropertyEditor") == true)
 	{
 		FPropertyEditorModule& PropertyModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
-		PropertyModule.UnregisterCustomPropertyTypeLayout("DISItemShape");
+		PropertyModule.UnregisterCustomPropertyTypeLayout("DISTileShape");
 	}
 }
 

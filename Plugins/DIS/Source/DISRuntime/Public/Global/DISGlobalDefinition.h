@@ -39,4 +39,8 @@ public:
 	/* 아이템 타입 태그별 프로파일 설정 맵 */
 	UPROPERTY(Category = "Item Profiles", EditDefaultsOnly, BlueprintReadOnly)
 	TMap<FGameplayTag, FDISItemTypeProfile> ItemTypeProfiles;
+
+	/* 아이템 희귀도 태그별 프로파일 설정 맵 */
+	UPROPERTY(Category = "Rarity Profiles", EditDefaultsOnly, BlueprintReadOnly)
+	TMap<FGameplayTag, FDISRarityProfile> RarityProfiles;
 };

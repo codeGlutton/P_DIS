@@ -9,7 +9,9 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
+#include "StructUtils/InstancedStruct.h"
 #include "Item/DISItemTypes.h"
+#include "Item/DISItemPlacementRule.h"
 #include "DISItemDefinition.generated.h"
 
 class UTexture2D;
@@ -68,7 +70,7 @@ public:
 
 	/* 2D 인벤토리 그리드 상의 상대 타일 점유 형상 */
 	UPROPERTY(Category = "Item Definition|Spatial", EditDefaultsOnly, BlueprintReadOnly)
-	FDISItemShape Shape;
+	FDISTileShape Shape;
 
 	/* 공간 그리드 내 초기 회전 각도 */
 	UPROPERTY(Category = "Item Definition|Spatial", EditDefaultsOnly, BlueprintReadOnly)
@@ -85,4 +87,10 @@ public:
 	/* 아이템 최대 내구도 (0.0일 경우 내구도 미적용/무제한) */
 	UPROPERTY(Category = "Item Definition|Stats", EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float MaxDurability;
+
+	/* 아이템 배치 제한 규칙 속성 */
+public:
+	/* 아이템의 기본 배치 제한 규칙 목록 (TInstancedStruct 다형성 지원) */
+	UPROPERTY(Category = "Item Definition|Rules", EditDefaultsOnly, BlueprintReadOnly, meta = (ExcludeBaseStruct))
+	TArray<TInstancedStruct<FDISItemPlacementRule>> DefaultPlacementRules;
 };

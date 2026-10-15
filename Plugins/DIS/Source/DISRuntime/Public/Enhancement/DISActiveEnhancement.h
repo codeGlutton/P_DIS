@@ -102,7 +102,8 @@ public:
 	FDISActiveEnhancement();
 	explicit FDISActiveEnhancement(
 		TSubclassOf<UDISEnhancement> InEnhancementClass,
-		bool bInIsActive = false
+		bool bInIsActive = false,
+		int32 InBaseMaxLevel = 0
 	);
 
 	/* 유효성 및 CDO 조회 */
@@ -116,31 +117,48 @@ public:
 	/* 강화 클래스 반환 */
 	TSubclassOf<UDISEnhancement> GetEnhancementClass() const;
 
+	/* 기본 최대 레벨 설정 및 조회 */
+public:
+	/* 강화 대상 객체(OwnerInterface)로부터 주입받은 기본 최대 레벨 설정 */
+	void SetBaseMaxLevel(int32 InBaseMaxLevel);
+
+	/* 기본 최대 레벨 반환 */
+	int32 GetBaseMaxLevel() const;
+
 	/* 모디파이어 조작 및 수치 조회 */
 public:
-	/* 이펙트가 진입할 때 해당 Op 채널에 핸들과 실수 크기를 가진 모디파이어 엔트리 추가 */
-	void AddModifier(EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle, float InMagnitude);
+	/* 타깃(현재 레벨 vs 최대 레벨)과 Op 채널에 모디파이어 엔트리 추가 */
+	void AddModifier(EDISEnhancementModifierTarget InTarget, EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle, float InMagnitude);
 
-	/* 이펙트가 제거될 때 모든 Op 채널에서 해당 핸들의 모디파이어 엔트리 탐색 및 제거 (제거 성공 여부 반환) */
+	/* 모든 채널(현재 레벨 및 최대 레벨)에서 해당 핸들의 모디파이어 엔트리 탐색 및 제거 (제거 성공 여부 반환) */
 	bool RemoveModifier(const FDISActiveEnhancementEffectHandle& InHandle);
 
-	/* 특정 Op 채널에서 해당 핸들의 모디파이어 엔트리 제거 (제거 성공 여부 반환) */
-	bool RemoveModifier(EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle);
+	/* 특정 타깃 및 Op 채널에서 해당 핸들의 모디파이어 엔트리 제거 (제거 성공 여부 반환) */
+	bool RemoveModifier(EDISEnhancementModifierTarget InTarget, EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle);
 
-	/* 모든 Op 채널의 모디파이어 엔트리 초기화 */
+	/* 모든 타깃의 모디파이어 엔트리 초기화 */
 	void ResetModifiers();
 
-	/* 등록된 모든 모디파이어 채널들을 조합하여 최종 실수 계산값 반환 (요청 시 동적 산출) */
+	/* 등록된 모든 모디파이어 및 MaxLevel 상한 클램프가 적용된 최종 실수 계산값 반환 */
 	float GetCalculatedValue() const;
 
-	/* 등록된 모든 모디파이어 채널들을 조합하여 최종 강화 레벨(int32, 0 이상 반올림) 반환 (요청 시 동적 산출) */
+	/* MaxLevel 상한 클램프 이전의 순수 실수 계산값 반환 */
+	float GetRawCalculatedValue() const;
+
+	/* 모디파이어가 반영된 최종 산출 최대 레벨 실수값 반환 */
+	float GetCalculatedMaxValue() const;
+
+	/* 최종 강화 레벨(int32, 0 이상 MaxLevel 이하) 반환 */
 	int32 GetLevel() const;
 
-	/* 덮어쓰기(Override) 모디파이어가 등록되어 있는지 여부 반환 */
-	bool HasOverride() const;
+	/* 최종 최대 강화 레벨(int32, 0 이상) 반환 */
+	int32 GetMaxLevel() const;
 
-	/* 특정 Op 채널이 유효하고 모디파이어가 등록되어 있는지 확인 */
-	bool HasModifierOp(EDISEnhancementLevelOp InOp) const;
+	/* 특정 타깃(현재 레벨 vs 최대 레벨)에 덮어쓰기(Override) 모디파이어가 등록되어 있는지 여부 반환 */
+	bool HasOverride(EDISEnhancementModifierTarget InTarget = EDISEnhancementModifierTarget::CurrentLevel) const;
+
+	/* 특정 타깃 및 Op 채널에 모디파이어가 등록되어 있는지 확인 */
+	bool HasModifierOp(EDISEnhancementModifierTarget InTarget, EDISEnhancementLevelOp InOp) const;
 
 	/* 자신에게 영향을 미치는 모디파이어가 하나라도 존재하는지 여부 반환 */
 	bool HasAnyModifiers() const;
@@ -148,11 +166,18 @@ public:
 	/* 등록된 전체 모디파이어 엔트리 총 개수 반환 */
 	int32 GetTotalModifierCount() const;
 
-	/* 특정 Op 채널 포인터 반환 */
-	const FDISActiveEnhancementModChannel* GetModChannel(EDISEnhancementLevelOp InOp) const;
+	/* 현재 레벨의 특정 Op 채널 포인터 반환 */
+	const FDISActiveEnhancementModChannel* GetLevelModChannel(EDISEnhancementLevelOp InOp) const;
 
-	/* 전체 모디파이어 채널 배열 반환 (EDISEnhancementLevelOp 인덱스) */
-	const TArray<FDISActiveEnhancementModChannel>& GetModifierOpValues() const;
+	/* 최대 레벨의 특정 Op 채널 포인터 반환 */
+	const FDISActiveEnhancementModChannel* GetMaxLevelModChannel(EDISEnhancementLevelOp InOp) const;
+
+	/* 현재 레벨 모디파이어 채널 배열 반환 */
+	const TArray<FDISActiveEnhancementModChannel>& GetLevelModifierOpValues() const;
+
+	/* 최대 레벨 모디파이어 채널 배열 반환 */
+	const TArray<FDISActiveEnhancementModChannel>& GetMaxLevelModifierOpValues() const;
+
 
 	/* 비교 연산자 */
 public:
@@ -168,7 +193,7 @@ public:
 
 	/* 내부 계산 헬퍼 */
 private:
-	/* 등록된 모디파이어 채널들을 재집계하여 캐시된 실수 계산값 갱신 */
+	/* 등록된 모디파이어 채널들을 재집계하여 캐시된 실수 계산값 및 최대 레벨 갱신 */
 	void UpdateCalculatedValue();
 
 	/* 런타임 상태 프로퍼티 */
@@ -185,11 +210,27 @@ public:
 	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
 	bool bPendingRemove;
 
-	/* EDISEnhancementLevelOp를 인덱스로 하여 각 Op별 모디파이어 채널들을 보관하는 2차원 구조 배열 (Add=0, Multiply=1, Override=2) */
+	/* OwnerInterface 또는 CDO에서 제공하는 기본 최대 레벨 */
 	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
-	TArray<FDISActiveEnhancementModChannel> ModifierOpValues;
+	int32 BaseMaxLevel;
 
-	/* 모디파이어 연산이 적용된 캐싱된 최종 실수 계산값 */
+	/* 현재 레벨 연산용 모디파이어 채널 배열 (Add=0, Multiply=1, Override=2) */
+	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
+	TArray<FDISActiveEnhancementModChannel> LevelModifierOpValues;
+
+	/* 최대 레벨 연산용 모디파이어 채널 배열 (Add=0, Multiply=1, Override=2) */
+	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
+	TArray<FDISActiveEnhancementModChannel> MaxLevelModifierOpValues;
+
+	/* 클램프 이전의 현재 레벨 실수 계산값 */
+	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
+	float CachedCalculatedRawLevel;
+
+	/* 모디파이어 연산이 적용된 최대 레벨 실수 계산값 */
+	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
+	float CachedCalculatedMaxLevel;
+
+	/* MaxLevel로 클램핑된 최종 실수 계산값 */
 	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
 	float CachedCalculatedValue;
 };

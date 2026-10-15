@@ -8,7 +8,10 @@
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
+#include "StructUtils/InstancedStruct.h"
 #include "Enhancement/DISEnhanceableInterface.h"
+#include "Item/DISItemPlacementRule.h"
+#include "Item/DISItemTypes.h"
 #include "DISItemEntry.generated.h"
 
 class UDISItemDefinition;
@@ -56,6 +59,52 @@ public:
 	UFUNCTION(Category = "DIS|Item Entry", BlueprintCallable, BlueprintPure)
 	FText GetEnhancedDisplayName() const;
 
+	/* 배치 제한 규칙 관리 */
+public:
+	/* 아이템에 등록 가능한 TInstancedStruct 배치 제한 규칙 추가 */
+	void AddPlacementRule(const TInstancedStruct<FDISItemPlacementRule>& InRule);
+
+	/* 템플릿 기반 구체 배치 제한 규칙 생성 및 추가 */
+	template <typename TRuleType, typename... TArgs>
+	TRuleType& EmplacePlacementRule(TArgs&&... Args)
+	{
+		TInstancedStruct<FDISItemPlacementRule> NewRule = TInstancedStruct<FDISItemPlacementRule>::Make<TRuleType>(Forward<TArgs>(Args)...);
+		PlacementRules.Add(NewRule);
+		return NewRule.GetMutable<TRuleType>();
+	}
+
+	/* 아이템의 모든 배치 제한 규칙 제거 */
+	UFUNCTION(Category = "DIS|Item Entry", BlueprintCallable)
+	void ClearPlacementRules();
+
+	/* 아이템에 등록된 모든 배치 제한 규칙 목록 반환 */
+	const TArray<TInstancedStruct<FDISItemPlacementRule>>& GetPlacementRules() const;
+
+	/* 아이템에 등록된 모든 배치 제한 규칙 목록 가변 참조 반환 */
+	TArray<TInstancedStruct<FDISItemPlacementRule>>& GetMutablePlacementRules();
+
+	/* 배치 가능 여부 평가 */
+public:
+	/* 주어진 슬롯 컨텍스트에 아이템이 배치될 수 있는지 모든 규칙을 검증 (모두 통과해야 true 반환) */
+	UFUNCTION(Category = "DIS|Item Entry", BlueprintCallable, BlueprintPure)
+	virtual bool CanPlaceAtSlot(const FDISItemPlacementContext& Context) const;
+
+	/* 스태킹 동등성 검증 */
+public:
+	/* 다른 아이템 엔트리와 스택으로 합쳐질 수 있는지 여부 검증 (정의 일치 및 강화 종류/레벨 완전 일치, 내구도는 무관) */
+	UFUNCTION(Category = "DIS|Item Entry", BlueprintCallable, BlueprintPure)
+	bool CanStackWith(const UDISItemEntry* OtherEntry) const;
+
+	/* 회전 규칙 질의 */
+public:
+	/* 아이템 정의에 기반하여 회전이 허용되는지 여부 반환 */
+	UFUNCTION(Category = "DIS|Item Entry", BlueprintCallable, BlueprintPure)
+	bool CanRotate() const;
+
+	/* 아이템 정의에 지정된 초기 회전 각도 반환 */
+	UFUNCTION(Category = "DIS|Item Entry", BlueprintCallable, BlueprintPure)
+	EDISItemRotation GetInitialRotation() const;
+
 	/* 런타임 멤버 상태 프로퍼티 */
 protected:
 	/* 정적 아이템 메타데이터 정의 (PrimaryDataAsset) */
@@ -69,4 +118,8 @@ protected:
 	/* 강화를 전담 관리하는 컨테이너 인스턴스 */
 	UPROPERTY(Category = "Item Entry", VisibleAnywhere, BlueprintReadOnly)
 	TObjectPtr<UDISEnhancementContainer> EnhancementContainer;
+
+	/* 아이템 인스턴스 전용 배치 제한 규칙 목록 (TInstancedStruct 다형성 지원) */
+	UPROPERTY(Category = "Item Entry", VisibleAnywhere, BlueprintReadOnly, meta = (ExcludeBaseStruct))
+	TArray<TInstancedStruct<FDISItemPlacementRule>> PlacementRules;
 };

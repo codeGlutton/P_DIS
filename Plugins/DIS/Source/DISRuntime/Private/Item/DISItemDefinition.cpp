@@ -11,7 +11,8 @@ UDISItemDefinition::UDISItemDefinition() :
 	InitialRotation(EDISItemRotation::Rotate0),
 	bCanRotate(true),
 	Weight(1.0f),
-	MaxDurability(100.0f)
+	MaxDurability(100.0f),
+	DefaultPlacementRules()
 {
 }
 

@@ -55,6 +55,28 @@ public:
 	UFUNCTION(Category = "DIS|Item", BlueprintCallable, BlueprintPure)
 	const FDISItemTypeProfile& GetItemTypeProfile(const FGameplayTag& ItemTypeTag) const;
 
+	/* 희귀도 프로파일 동적 등록 및 해제 (GameFeatures 지원) */
+public:
+	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable)
+	bool RegisterRarityProfile(const FGameplayTag& RarityTag, const FDISRarityProfile& Profile);
+
+	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable)
+	bool UnregisterRarityProfile(const FGameplayTag& RarityTag);
+
+	/* 희귀도 프로파일 조회 및 서열(Rank) 비교 */
+public:
+	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable, BlueprintPure)
+	const FDISRarityProfile& GetRarityProfile(const FGameplayTag& RarityTag) const;
+
+	/* 지정된 희귀도 태그의 서열 반환 (미등록 시 0) */
+	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable, BlueprintPure)
+	int32 GetRarityRank(const FGameplayTag& RarityTag) const;
+
+	/* 두 희귀도의 서열 비교 (TagA > TagB: 1, TagA == TagB: 0, TagA < TagB: -1) */
+	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable, BlueprintPure)
+	int32 CompareRarity(const FGameplayTag& TagA, const FGameplayTag& TagB) const;
+
+
 	/* 강화 효과(Effect) 활성화 핸들 발급 및 관리 */
 public:
 	/* 전역에서 고유하게 증가하는 정수 래퍼 핸들을 발급하고 TMap에 등록 */
@@ -81,6 +103,14 @@ protected:
 	/* 등록되지 않은 아이템 타입 요청 시 반환할 기본 폴백 프로파일 (UDISGlobalSettings 기반) */
 	UPROPERTY(Transient)
 	FDISItemTypeProfile FallbackItemProfile;
+
+	/* 런타임에 동적으로 등록된 희귀도 프로파일 맵 */
+	UPROPERTY(Transient)
+	TMap<FGameplayTag, FDISRarityProfile> RegisteredRarityProfiles;
+
+	/* 등록되지 않은 희귀도 요청 시 반환할 기본 폴백 프로파일 */
+	UPROPERTY(Transient)
+	FDISRarityProfile FallbackRarityProfile;
 
 	/* 현재 활성화된 강화 효과 핸들 및 소유 컨테이너 매핑 (TMap 중복 관리) */
 	UPROPERTY(Transient)

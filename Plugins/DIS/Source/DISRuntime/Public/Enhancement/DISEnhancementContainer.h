@@ -64,11 +64,31 @@ public:
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
 	TScriptInterface<IDISEnhanceableInterface> GetOwnerInterface() const;
 
-	/* 효과 적용 대상 동적 변경 (장착/해제 라이프사이클 처리) */
+	/* 효과 적용 대상 추가 (기존 활성 강화 스탯 라이프사이클 바인딩 전파) */
+	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
+	void AddEffectTarget(UObject* InEffectTarget);
+
+	/* 효과 적용 대상 제거 (활성 강화 스탯 라이프사이클 언바인딩 전파) */
+	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
+	bool RemoveEffectTarget(UObject* InEffectTarget);
+
+	/* 모든 효과 적용 대상 일괄 제거 */
+	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
+	void ClearEffectTargets();
+
+	/* 현재 등록된 유효한 모든 효과 적용 대상 목록 반환 */
+	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
+	TArray<UObject*> GetEffectTargets() const;
+
+	/* 효과 적용 대상 목록 일괄 설정 (신규 추가 및 제외 대상 라이프사이클 동기화) */
+	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
+	void SetEffectTargets(const TArray<UObject*>& InEffectTargets);
+
+	/* 효과 적용 대상 단일 설정 (기존 대상을 모두 비우고 단일 대상만 설정하는 편의 래퍼) */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
 	void SetEffectTarget(UObject* InEffectTarget);
 
-	/* 현재 효과 적용 대상 반환 */
+	/* 첫 번째 유효 효과 적용 대상 반환 (단일 대상 편의 래퍼) */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
 	UObject* GetEffectTarget() const;
 
@@ -114,15 +134,31 @@ public:
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
 	const TArray<FDISActiveEnhancement>& GetActiveEnhancements() const;
 
-protected:
-	/* 특정 강화 클래스에 대한 최종 레벨 및 라이프사이클 재계산 */
-	void RecalculateEnhancement(TSubclassOf<UDISEnhancement> InEnhancementClass);
+	/* 다른 강화 컨테이너와 활성 강화 종류 및 각 레벨이 완전히 동일한지 비교 검증 */
+	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
+	bool HasIdenticalEnhancements(const UDISEnhancementContainer* OtherContainer) const;
 
-	/* 정보 조회 헬퍼 */
+	/* 정보 조회 및 표시 헬퍼 */
 public:
-	/* 기본 이름에 활성화된 강화들의 우선순위 정렬된 접두사 및 접미사를 결합하여 최종 표시 이름 생성 */
+	/* 기본 이름에 활성화된 강화들의 접두사 및 접미사를 결합하여 최종 표시 이름 생성 (접두사/접미사는 더티 마킹 전까지 캐싱) */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
 	FText GetEnhancedDisplayName(const FText& BaseName) const;
+
+	/* 캐싱된 결합 접두사 반환 */
+	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
+	FString GetCachedPrefix() const;
+
+	/* 캐싱된 결합 접미사 반환 */
+	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
+	FString GetCachedSuffix() const;
+
+	/* 수식어(Prefix/Suffix) 캐시를 무효화하여 다음 조회 시 재계산하도록 마킹 */
+	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
+	void MarkDisplayNameDirty();
+
+protected:
+	/* 활성 강화 스탯 목록으로부터 접두사 및 접미사 결합 문자열 캐시 갱신 */
+	void UpdateCachedAffixes() const;
 
 	/* 락 관리 및 이터레이터 */
 public:
@@ -162,10 +198,13 @@ protected:
 
 protected:
 	/* 특정 강화 스탯에 모디파이어 추가 및 라이프사이클 전파 */
-	void AddModifierToEnhancement(TSubclassOf<UDISEnhancement> InEnhancementClass, EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle, float InMagnitude);
+	void AddModifierToEnhancement(TSubclassOf<UDISEnhancement> InEnhancementClass, EDISEnhancementModifierTarget InTarget, EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle, float InMagnitude);
 
 	/* 특정 강화 스탯에서 모디파이어 제거 및 라이프사이클(제거 판단 포함) 전파 */
 	void RemoveModifierFromEnhancement(TSubclassOf<UDISEnhancement> InEnhancementClass, const FDISActiveEnhancementEffectHandle& InHandle);
+
+	/* OwnerInterface 또는 CDO로부터 해당 스탯의 기본 최대 강화 레벨 조회 */
+	int32 ResolveBaseMaxEnhancementLevel(TSubclassOf<UDISEnhancement> InEnhancementClass) const;
 
 protected:
 	/* 새로운 강화 스탯을 추가/활성화 훅 호출 후 컨테이너에 추가 */
@@ -178,8 +217,11 @@ protected:
 	/* 레벨 값 변경 및 활성/비활성 라이프사이클 훅 전파 헬퍼 */
 	void OnEnhancementLevelChange(FDISActiveEnhancement& Enhancement, int32 OldLevel, int32 NewLevel);
 
-	/* 대상 객체(EffectTarget) 변경 시 바인딩/언바인딩 훅 일괄 전파 헬퍼 */
-	void OnEffectTargetChange(UObject* OldTarget, UObject* NewTarget);
+	/* 신규 대상 객체에 현재 활성화된 모든 강화 스탯 라이프사이클 전파 */
+	void OnTargetAdded(UObject* InTarget);
+
+	/* 제거되는 대상 객체에서 활성화되어 있던 모든 강화 스탯 라이프사이클 해제 전파 */
+	void OnTargetRemoved(UObject* InTarget);
 
 	/* 런타임 멤버 상태 프로퍼티 */
 protected:
@@ -187,9 +229,9 @@ protected:
 	UPROPERTY(Transient)
 	TScriptInterface<IDISEnhanceableInterface> OwnerInterface;
 
-	/* 강화 효과가 실제로 적용될 대상 객체 (약참조로 GC 댕글링 방지) */
+	/* 강화 효과가 실제로 적용될 대상 객체 목록 (약참조로 GC 댕글링 방지) */
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UObject> EffectTarget;
+	TArray<TWeakObjectPtr<UObject>> EffectTargets;
 
 	/* 현재 적용되어 있는 활성 강화 스탯 목록 (Unique 스탯 집계 대상) */
 	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
@@ -215,4 +257,13 @@ protected:
 
 	/* 삭제 대기 중인 스탯 개수 */
 	int32 PendingEnhancementRemoves;
+
+	/* 수식어(Prefix/Suffix) 캐시 재계산 필요 여부 플래그 */
+	mutable bool bIsDisplayNameDirty;
+
+	/* 캐싱된 결합 접두사 문자열 */
+	mutable FString CachedPrefix;
+
+	/* 캐싱된 결합 접미사 문자열 */
+	mutable FString CachedSuffix;
 };

@@ -3,7 +3,8 @@
 UDISEnhancement::UDISEnhancement() :
 	PrefixPriority(0),
 	SuffixPriority(0),
-	Description(FText::GetEmpty())
+	Description(FText::GetEmpty()),
+	DefaultMaxLevel(10)
 {
 }
 
@@ -57,4 +58,9 @@ int32 UDISEnhancement::GetSuffixPriority() const
 const FText& UDISEnhancement::GetDescription() const
 {
 	return Description;
+}
+
+int32 UDISEnhancement::GetDefaultMaxLevel() const
+{
+	return DefaultMaxLevel;
 }

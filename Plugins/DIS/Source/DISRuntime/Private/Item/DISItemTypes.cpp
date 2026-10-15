@@ -1,27 +1,27 @@
 #include "Item/DISItemTypes.h"
 
-FDISItemShape::FDISItemShape()
+FDISTileShape::FDISTileShape()
 {
 	// 기본값 1x1 점유
 	Points.Add(FIntPoint(0, 0));
 }
 
-FDISItemShape::FDISItemShape(const TArray<FIntPoint>& InPoints) :
+FDISTileShape::FDISTileShape(const TArray<FIntPoint>& InPoints) :
 	Points(InPoints)
 {
 }
 
-bool FDISItemShape::IsOccupied(const FIntPoint& Coord) const
+bool FDISTileShape::IsOccupied(const FIntPoint& Coord) const
 {
 	return Points.Contains(Coord);
 }
 
-bool FDISItemShape::IsOccupied(int32 X, int32 Y) const
+bool FDISTileShape::IsOccupied(int32 X, int32 Y) const
 {
 	return Points.Contains(FIntPoint(X, Y));
 }
 
-bool FDISItemShape::SetOccupied(int32 X, int32 Y, bool bOccupied)
+bool FDISTileShape::SetOccupied(int32 X, int32 Y, bool bOccupied)
 {
 	const FIntPoint Coord(X, Y);
 	if (bOccupied == true)
@@ -39,7 +39,7 @@ bool FDISItemShape::SetOccupied(int32 X, int32 Y, bool bOccupied)
 	return false;
 }
 
-void FDISItemShape::Normalize()
+void FDISTileShape::Normalize()
 {
 	if (Points.IsEmpty() == true)
 	{
@@ -65,12 +65,12 @@ void FDISItemShape::Normalize()
 	}
 }
 
-void FDISItemShape::Clear()
+void FDISTileShape::Clear()
 {
 	Points.Empty();
 }
 
-FIntPoint FDISItemShape::GetBoundingDimensions() const
+FIntPoint FDISTileShape::GetBoundingDimensions() const
 {
 	if (Points.IsEmpty() == true)
 	{
@@ -93,7 +93,7 @@ FIntPoint FDISItemShape::GetBoundingDimensions() const
 	return FIntPoint(MaxX - MinX + 1, MaxY - MinY + 1);
 }
 
-TArray<FIntPoint> FDISItemShape::GetRotatedPoints(EDISItemRotation Rotation) const
+TArray<FIntPoint> FDISTileShape::GetRotatedPoints(EDISItemRotation Rotation) const
 {
 	if (Points.IsEmpty() == true)
 	{
@@ -147,7 +147,7 @@ TArray<FIntPoint> FDISItemShape::GetRotatedPoints(EDISItemRotation Rotation) con
 	return RotatedPoints;
 }
 
-FIntPoint FDISItemShape::GetCenter(EDISItemRotation Rotation) const
+FIntPoint FDISTileShape::GetCenter(EDISItemRotation Rotation) const
 {
 	const TArray<FIntPoint> RotatedPoints = GetRotatedPoints(Rotation);
 	if (RotatedPoints.IsEmpty() == true)

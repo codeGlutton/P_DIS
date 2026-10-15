@@ -11,6 +11,7 @@
 #include "DISEnhanceableInterface.generated.h"
 
 class UDISEnhancementContainer;
+class UDISEnhancement;
 
 UINTERFACE(MinimalAPI, BlueprintType)
 class UDISEnhanceableInterface : public UInterface
@@ -30,4 +31,7 @@ class DISRUNTIME_API IDISEnhanceableInterface
 public:
 	/* 강화를 전담 관리하는 컨테이너 객체 포인터 반환 */
 	virtual UDISEnhancementContainer* GetEnhancementContainer() const = 0;
+
+	/* 특정 강화 스탯의 기본 최대 강화 레벨 반환 (기본 구현: UDISEnhancement CDO의 DefaultMaxLevel 반환) */
+	virtual int32 GetBaseMaxEnhancementLevel(TSubclassOf<UDISEnhancement> InEnhancementClass) const;
 };

@@ -14,6 +14,7 @@ public class DISTest : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"GameplayTags",
 			"DISRuntime"
 		});
 

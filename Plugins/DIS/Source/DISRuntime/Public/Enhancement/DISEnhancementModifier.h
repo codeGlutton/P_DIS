@@ -10,6 +10,19 @@
 #include "DISEnhancementModifier.generated.h"
 
 /**
+ * 강화 모디파이어가 변동을 주는 대상 속성 (현재 레벨 vs 최대 레벨 상한)
+ */
+UENUM(BlueprintType)
+enum class EDISEnhancementModifierTarget : uint8
+{
+	/* 현재 강화 레벨 수치에 모디파이어 적용 */
+	CurrentLevel UMETA(DisplayName = "Current Level"),
+
+	/* 해당 강화 스탯의 최대 레벨 상한치에 모디파이어 적용 */
+	MaxLevel     UMETA(DisplayName = "Max Level"),
+};
+
+/**
  * 강화 레벨 적용 연산 방식 (가산, 승산, 덮어쓰기)
  */
 UENUM(BlueprintType)
@@ -40,9 +53,14 @@ struct DISRUNTIME_API FDISEnhancementModifier
 public:
 	FDISEnhancementModifier();
 	FDISEnhancementModifier(EDISEnhancementLevelOp InLevelOp, float InLevelMagnitude);
+	FDISEnhancementModifier(EDISEnhancementModifierTarget InTarget, EDISEnhancementLevelOp InLevelOp, float InLevelMagnitude);
 
 	/* 프로퍼티 */
 public:
+	/* 모디파이어 연산 대상 (현재 레벨 vs 최대 레벨) */
+	UPROPERTY(Category = "Enhancement|Modifier", EditAnywhere, BlueprintReadWrite)
+	EDISEnhancementModifierTarget Target;
+
 	/* 레벨 연산자 (Add, Multiply, Override) */
 	UPROPERTY(Category = "Enhancement|Modifier", EditAnywhere, BlueprintReadWrite)
 	EDISEnhancementLevelOp LevelOp;

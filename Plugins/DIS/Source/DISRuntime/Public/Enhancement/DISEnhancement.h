@@ -72,9 +72,12 @@ public:
 	int32 GetSuffixPriority() const;
 
 	/* 강화 정보 조회 */
-public:
 	UFUNCTION(Category = "Enhancement", BlueprintCallable, BlueprintPure)
 	const FText& GetDescription() const;
+
+	/* 기본 최대 레벨 반환 */
+	UFUNCTION(Category = "Enhancement", BlueprintCallable, BlueprintPure)
+	int32 GetDefaultMaxLevel() const;
 
 	/* 강화 속성 프로퍼티 */
 protected:
@@ -89,4 +92,8 @@ protected:
 	/* 강화 효과 상세 설명 텍스트 */
 	UPROPERTY(Category = "Enhancement", EditDefaultsOnly, BlueprintReadOnly)
 	FText Description;
+
+	/* 스탯 고유 기본 최대 강화 레벨 (기본값 = 10, ClampMin = 1) */
+	UPROPERTY(Category = "Enhancement", EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "1", UIMin = "1"))
+	int32 DefaultMaxLevel;
 };

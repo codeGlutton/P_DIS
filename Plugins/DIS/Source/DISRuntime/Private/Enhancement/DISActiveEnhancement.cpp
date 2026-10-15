@@ -99,6 +99,9 @@ FDISActiveEnhancement::FDISActiveEnhancement() :
 	EnhancementClass(nullptr),
 	bIsActive(false),
 	bPendingRemove(false),
+	BaseMaxLevel(0),
+	CachedCalculatedRawLevel(0.0f),
+	CachedCalculatedMaxLevel(0.0f),
 	CachedCalculatedValue(0.0f)
 {
 	ResetModifiers();
@@ -106,11 +109,15 @@ FDISActiveEnhancement::FDISActiveEnhancement() :
 
 FDISActiveEnhancement::FDISActiveEnhancement(
 	TSubclassOf<UDISEnhancement> InEnhancementClass,
-	bool bInIsActive
+	bool bInIsActive,
+	int32 InBaseMaxLevel
 ) :
 	EnhancementClass(InEnhancementClass),
 	bIsActive(bInIsActive),
 	bPendingRemove(false),
+	BaseMaxLevel(InBaseMaxLevel),
+	CachedCalculatedRawLevel(0.0f),
+	CachedCalculatedMaxLevel(static_cast<float>(InBaseMaxLevel)),
 	CachedCalculatedValue(0.0f)
 {
 	ResetModifiers();
@@ -135,15 +142,34 @@ TSubclassOf<UDISEnhancement> FDISActiveEnhancement::GetEnhancementClass() const
 	return EnhancementClass;
 }
 
+void FDISActiveEnhancement::SetBaseMaxLevel(int32 InBaseMaxLevel)
+{
+	BaseMaxLevel = InBaseMaxLevel;
+	UpdateCalculatedValue();
+}
+
+int32 FDISActiveEnhancement::GetBaseMaxLevel() const
+{
+	return BaseMaxLevel;
+}
+
 void FDISActiveEnhancement::ResetModifiers()
 {
 	const int32 OpCount = static_cast<int32>(EDISEnhancementLevelOp::Max);
-	if (ModifierOpValues.Num() != OpCount)
+	if (LevelModifierOpValues.Num() != OpCount)
 	{
-		ModifierOpValues.SetNum(OpCount);
+		LevelModifierOpValues.SetNum(OpCount);
+	}
+	if (MaxLevelModifierOpValues.Num() != OpCount)
+	{
+		MaxLevelModifierOpValues.SetNum(OpCount);
 	}
 
-	for (FDISActiveEnhancementModChannel& Channel : ModifierOpValues)
+	for (FDISActiveEnhancementModChannel& Channel : LevelModifierOpValues)
+	{
+		Channel.Empty();
+	}
+	for (FDISActiveEnhancementModChannel& Channel : MaxLevelModifierOpValues)
 	{
 		Channel.Empty();
 	}
@@ -151,22 +177,31 @@ void FDISActiveEnhancement::ResetModifiers()
 	UpdateCalculatedValue();
 }
 
-void FDISActiveEnhancement::AddModifier(EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle, float InMagnitude)
+void FDISActiveEnhancement::AddModifier(EDISEnhancementModifierTarget InTarget, EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle, float InMagnitude)
 {
 	const int32 OpIndex = static_cast<int32>(InLevelOp);
-	if (ModifierOpValues.IsValidIndex(OpIndex) == false)
+	TArray<FDISActiveEnhancementModChannel>& TargetChannels = (InTarget == EDISEnhancementModifierTarget::CurrentLevel) ? LevelModifierOpValues : MaxLevelModifierOpValues;
+
+	if (TargetChannels.IsValidIndex(OpIndex) == false)
 	{
 		return;
 	}
 
-	ModifierOpValues[OpIndex].AddEntry(InHandle, InMagnitude);
+	TargetChannels[OpIndex].AddEntry(InHandle, InMagnitude);
 	UpdateCalculatedValue();
 }
 
 bool FDISActiveEnhancement::RemoveModifier(const FDISActiveEnhancementEffectHandle& InHandle)
 {
 	bool bRemovedAny = false;
-	for (FDISActiveEnhancementModChannel& Channel : ModifierOpValues)
+	for (FDISActiveEnhancementModChannel& Channel : LevelModifierOpValues)
+	{
+		if (Channel.RemoveEntry(InHandle) == true)
+		{
+			bRemovedAny = true;
+		}
+	}
+	for (FDISActiveEnhancementModChannel& Channel : MaxLevelModifierOpValues)
 	{
 		if (Channel.RemoveEntry(InHandle) == true)
 		{
@@ -182,55 +217,90 @@ bool FDISActiveEnhancement::RemoveModifier(const FDISActiveEnhancementEffectHand
 	return bRemovedAny;
 }
 
-bool FDISActiveEnhancement::RemoveModifier(EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle)
+bool FDISActiveEnhancement::RemoveModifier(EDISEnhancementModifierTarget InTarget, EDISEnhancementLevelOp InLevelOp, const FDISActiveEnhancementEffectHandle& InHandle)
 {
 	const int32 OpIndex = static_cast<int32>(InLevelOp);
-	if (ModifierOpValues.IsValidIndex(OpIndex) == true)
+	TArray<FDISActiveEnhancementModChannel>& TargetChannels = (InTarget == EDISEnhancementModifierTarget::CurrentLevel) ? LevelModifierOpValues : MaxLevelModifierOpValues;
+
+	if (TargetChannels.IsValidIndex(OpIndex) == true)
 	{
-		const bool bRemoved = ModifierOpValues[OpIndex].RemoveEntry(InHandle);
+		const bool bRemoved = TargetChannels[OpIndex].RemoveEntry(InHandle);
 		if (bRemoved == true)
 		{
 			UpdateCalculatedValue();
 		}
 		return bRemoved;
 	}
+
 	return false;
 }
 
 void FDISActiveEnhancement::UpdateCalculatedValue()
 {
-	// 1. Override 채널 검사 (등록된 엔트리가 있으면 가장 최근 엔트리의 값 사용)
 	const int32 OverrideIndex = static_cast<int32>(EDISEnhancementLevelOp::Override);
-	if (ModifierOpValues.IsValidIndex(OverrideIndex) == true && ModifierOpValues[OverrideIndex].IsEmpty() == false)
-	{
-		const TArray<FDISActiveEnhancementModEntry>& OverrideEntries = ModifierOpValues[OverrideIndex].GetEntries();
-		CachedCalculatedValue = OverrideEntries.Last().Magnitude;
-		return;
-	}
-
-	// 2. Add 채널 수집 (합산)
-	float AddSum = 0.0f;
 	const int32 AddIndex = static_cast<int32>(EDISEnhancementLevelOp::Add);
-	if (ModifierOpValues.IsValidIndex(AddIndex) == true)
-	{
-		for (const FDISActiveEnhancementModEntry& Entry : ModifierOpValues[AddIndex].GetEntries())
-		{
-			AddSum += Entry.Magnitude;
-		}
-	}
-
-	// 3. Multiply 채널 수집 (승산, 기본 1.0f)
-	float Multiplier = 1.0f;
 	const int32 MultiplyIndex = static_cast<int32>(EDISEnhancementLevelOp::Multiply);
-	if (ModifierOpValues.IsValidIndex(MultiplyIndex) == true)
+
+	// 1. MaxLevel 계산
+	if (MaxLevelModifierOpValues.IsValidIndex(OverrideIndex) == true && MaxLevelModifierOpValues[OverrideIndex].IsEmpty() == false)
 	{
-		for (const FDISActiveEnhancementModEntry& Entry : ModifierOpValues[MultiplyIndex].GetEntries())
+		const TArray<FDISActiveEnhancementModEntry>& OverrideEntries = MaxLevelModifierOpValues[OverrideIndex].GetEntries();
+		CachedCalculatedMaxLevel = FMath::Max(0.0f, OverrideEntries.Last().Magnitude);
+	}
+	else
+	{
+		float MaxAddSum = static_cast<float>(BaseMaxLevel);
+		if (MaxLevelModifierOpValues.IsValidIndex(AddIndex) == true)
 		{
-			Multiplier *= Entry.Magnitude;
+			for (const FDISActiveEnhancementModEntry& Entry : MaxLevelModifierOpValues[AddIndex].GetEntries())
+			{
+				MaxAddSum += Entry.Magnitude;
+			}
 		}
+
+		float MaxMultiplier = 1.0f;
+		if (MaxLevelModifierOpValues.IsValidIndex(MultiplyIndex) == true)
+		{
+			for (const FDISActiveEnhancementModEntry& Entry : MaxLevelModifierOpValues[MultiplyIndex].GetEntries())
+			{
+				MaxMultiplier *= Entry.Magnitude;
+			}
+		}
+
+		CachedCalculatedMaxLevel = FMath::Max(0.0f, MaxAddSum * MaxMultiplier);
 	}
 
-	CachedCalculatedValue = AddSum * Multiplier;
+	// 2. CurrentLevel 계산 (기본 0.0f)
+	if (LevelModifierOpValues.IsValidIndex(OverrideIndex) == true && LevelModifierOpValues[OverrideIndex].IsEmpty() == false)
+	{
+		const TArray<FDISActiveEnhancementModEntry>& OverrideEntries = LevelModifierOpValues[OverrideIndex].GetEntries();
+		CachedCalculatedRawLevel = OverrideEntries.Last().Magnitude;
+	}
+	else
+	{
+		float AddSum = 0.0f;
+		if (LevelModifierOpValues.IsValidIndex(AddIndex) == true)
+		{
+			for (const FDISActiveEnhancementModEntry& Entry : LevelModifierOpValues[AddIndex].GetEntries())
+			{
+				AddSum += Entry.Magnitude;
+			}
+		}
+
+		float Multiplier = 1.0f;
+		if (LevelModifierOpValues.IsValidIndex(MultiplyIndex) == true)
+		{
+			for (const FDISActiveEnhancementModEntry& Entry : LevelModifierOpValues[MultiplyIndex].GetEntries())
+			{
+				Multiplier *= Entry.Magnitude;
+			}
+		}
+
+		CachedCalculatedRawLevel = AddSum * Multiplier;
+	}
+
+	// 3. MaxLevel 상한 클램핑
+	CachedCalculatedValue = FMath::Clamp(CachedCalculatedRawLevel, 0.0f, CachedCalculatedMaxLevel);
 }
 
 float FDISActiveEnhancement::GetCalculatedValue() const
@@ -238,26 +308,52 @@ float FDISActiveEnhancement::GetCalculatedValue() const
 	return CachedCalculatedValue;
 }
 
+float FDISActiveEnhancement::GetRawCalculatedValue() const
+{
+	return CachedCalculatedRawLevel;
+}
+
+float FDISActiveEnhancement::GetCalculatedMaxValue() const
+{
+	return CachedCalculatedMaxLevel;
+}
+
 int32 FDISActiveEnhancement::GetLevel() const
 {
-	return FMath::Max(0, FMath::RoundToInt(CachedCalculatedValue));
+	return FMath::RoundToInt(CachedCalculatedValue);
 }
 
-bool FDISActiveEnhancement::HasOverride() const
+int32 FDISActiveEnhancement::GetMaxLevel() const
+{
+	return FMath::RoundToInt(CachedCalculatedMaxLevel);
+}
+
+bool FDISActiveEnhancement::HasOverride(EDISEnhancementModifierTarget InTarget) const
 {
 	const int32 OverrideIndex = static_cast<int32>(EDISEnhancementLevelOp::Override);
-	return ModifierOpValues.IsValidIndex(OverrideIndex) == true && ModifierOpValues[OverrideIndex].IsEmpty() == false;
+	const TArray<FDISActiveEnhancementModChannel>& TargetChannels = (InTarget == EDISEnhancementModifierTarget::CurrentLevel) ? LevelModifierOpValues : MaxLevelModifierOpValues;
+
+	return TargetChannels.IsValidIndex(OverrideIndex) == true && TargetChannels[OverrideIndex].IsEmpty() == false;
 }
 
-bool FDISActiveEnhancement::HasModifierOp(EDISEnhancementLevelOp InOp) const
+bool FDISActiveEnhancement::HasModifierOp(EDISEnhancementModifierTarget InTarget, EDISEnhancementLevelOp InOp) const
 {
 	const int32 OpIndex = static_cast<int32>(InOp);
-	return ModifierOpValues.IsValidIndex(OpIndex) == true && ModifierOpValues[OpIndex].IsEmpty() == false;
+	const TArray<FDISActiveEnhancementModChannel>& TargetChannels = (InTarget == EDISEnhancementModifierTarget::CurrentLevel) ? LevelModifierOpValues : MaxLevelModifierOpValues;
+
+	return TargetChannels.IsValidIndex(OpIndex) == true && TargetChannels[OpIndex].IsEmpty() == false;
 }
 
 bool FDISActiveEnhancement::HasAnyModifiers() const
 {
-	for (const FDISActiveEnhancementModChannel& Channel : ModifierOpValues)
+	for (const FDISActiveEnhancementModChannel& Channel : LevelModifierOpValues)
+	{
+		if (Channel.IsEmpty() == false)
+		{
+			return true;
+		}
+	}
+	for (const FDISActiveEnhancementModChannel& Channel : MaxLevelModifierOpValues)
 	{
 		if (Channel.IsEmpty() == false)
 		{
@@ -270,26 +366,45 @@ bool FDISActiveEnhancement::HasAnyModifiers() const
 int32 FDISActiveEnhancement::GetTotalModifierCount() const
 {
 	int32 Total = 0;
-	for (const FDISActiveEnhancementModChannel& Channel : ModifierOpValues)
+	for (const FDISActiveEnhancementModChannel& Channel : LevelModifierOpValues)
+	{
+		Total += Channel.Num();
+	}
+	for (const FDISActiveEnhancementModChannel& Channel : MaxLevelModifierOpValues)
 	{
 		Total += Channel.Num();
 	}
 	return Total;
 }
 
-const FDISActiveEnhancementModChannel* FDISActiveEnhancement::GetModChannel(EDISEnhancementLevelOp InOp) const
+const FDISActiveEnhancementModChannel* FDISActiveEnhancement::GetLevelModChannel(EDISEnhancementLevelOp InOp) const
 {
 	const int32 OpIndex = static_cast<int32>(InOp);
-	if (ModifierOpValues.IsValidIndex(OpIndex) == true)
+	if (LevelModifierOpValues.IsValidIndex(OpIndex) == true)
 	{
-		return &ModifierOpValues[OpIndex];
+		return &LevelModifierOpValues[OpIndex];
 	}
 	return nullptr;
 }
 
-const TArray<FDISActiveEnhancementModChannel>& FDISActiveEnhancement::GetModifierOpValues() const
+const FDISActiveEnhancementModChannel* FDISActiveEnhancement::GetMaxLevelModChannel(EDISEnhancementLevelOp InOp) const
 {
-	return ModifierOpValues;
+	const int32 OpIndex = static_cast<int32>(InOp);
+	if (MaxLevelModifierOpValues.IsValidIndex(OpIndex) == true)
+	{
+		return &MaxLevelModifierOpValues[OpIndex];
+	}
+	return nullptr;
+}
+
+const TArray<FDISActiveEnhancementModChannel>& FDISActiveEnhancement::GetLevelModifierOpValues() const
+{
+	return LevelModifierOpValues;
+}
+
+const TArray<FDISActiveEnhancementModChannel>& FDISActiveEnhancement::GetMaxLevelModifierOpValues() const
+{
+	return MaxLevelModifierOpValues;
 }
 
 bool FDISActiveEnhancement::operator==(const FDISActiveEnhancement& Other) const

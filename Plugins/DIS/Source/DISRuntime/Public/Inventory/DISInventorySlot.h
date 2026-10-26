@@ -27,6 +27,8 @@ class DISRUNTIME_API UDISInventorySlot : public UObject, public IDISEnhanceableI
 {
 	GENERATED_BODY()
 
+	friend class UDISInventory;
+
 	/* 생성자 */
 public:
 	UDISInventorySlot();
@@ -56,35 +58,27 @@ public:
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable, BlueprintPure)
 	int32 GetStackCount() const;
 
-	/* 슬롯의 최상단(사용 우선순위 최고 / 최저 내구도) 아이템 엔트리 반환 */
-	UFUNCTION(Category = "DIS|Slot", BlueprintCallable, BlueprintPure)
-	UDISItemEntry* GetItemEntry() const;
-
 	/* 슬롯이 참조하고 있는 아이템 스택 인스턴스 반환 (없으면 nullptr) */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable, BlueprintPure)
 	UDISItemStack* GetItemStack() const;
 
-	/* 슬롯에 아이템 스택 인스턴스 직접 바인딩 (공간 점유 다중 슬롯 공유 시 활용) */
-	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	void SetItemStack(UDISItemStack* InItemStack);
-
 	/* 아이템 상태 조작 */
 public:
-	/* 슬롯에 단일 아이템 엔트리 배치 (기존 아이템을 비우고 새로 설정) */
+	/* 슬롯에 아이템 스택 설정 (기존 스택을 비우고 새로 바인딩, InItemStack이 nullptr이면 ClearSlot 수행) */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	bool SetItemEntry(UDISItemEntry* InItemEntry);
+	bool SetItemStack(UDISItemStack* InItemStack);
 
-	/* 슬롯에 아이템 엔트리를 추가 (비어있으면 신규 배치, 이미 있으면 스택 결합) */
+	/* 슬롯에 아이템 스택을 추가 (비어있으면 신규 배치, 이미 있으면 스택 결합) */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	bool PushItemEntry(UDISItemEntry* InItemEntry);
+	bool PushItemStack(UDISItemStack* InItemStack);
 
-	/* 슬롯의 최상단 아이템 1개를 꺼내고 반환 */
+	/* 슬롯에서 지정된 수량만큼 아이템을 꺼내어 새 스택으로 반환 (SplitCount가 전체 수량 이상이면 ClearSlot 수행) */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	UDISItemEntry* PopItemEntry();
+	UDISItemStack* PopItemStack(int32 SplitCount = 1);
 
-	/* 슬롯을 완전히 비우고 최상단 아이템 엔트리 반환 */
+	/* 슬롯을 완전히 비우고 보관 중이던 아이템 스택 반환 */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	UDISItemEntry* ClearSlot();
+	UDISItemStack* ClearSlot();
 
 	/* 필터 관리 */
 public:
@@ -112,9 +106,9 @@ public:
 
 	/* 가상 필터링 평가 */
 public:
-	/* 지정된 아이템이 슬롯에 진입 가능한지 검증 (필터 검사 및 스택 결합 가능 여부 확인) */
+	/* 지정된 아이템 스택이 슬롯에 진입 가능한지 검증 (필터 검사 및 스택 결합 가능 여부 확인) */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable, BlueprintPure)
-	virtual bool CanAcceptItem(const UDISItemEntry* InItemEntry) const;
+	virtual bool CanAcceptItemStack(const UDISItemStack* InItemStack) const;
 
 	/* 내부 강화 대상 바인딩 헬퍼 */
 protected:

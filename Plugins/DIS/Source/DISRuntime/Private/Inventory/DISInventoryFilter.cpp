@@ -1,4 +1,5 @@
 #include "Inventory/DISInventoryFilter.h"
+#include "Item/DISItemStack.h"
 #include "Item/DISItemEntry.h"
 #include "Item/DISItemDefinition.h"
 
@@ -6,10 +7,10 @@ FDISInventoryFilter::FDISInventoryFilter()
 {
 }
 
-bool FDISInventoryFilter::PassesFilter(const UDISItemEntry* ItemEntry) const
+bool FDISInventoryFilter::PassesFilter(const UDISItemStack* ItemStack) const
 {
-	// 기본 필터는 유효한 아이템 엔트리인 경우 통과시킴
-	if (ItemEntry == nullptr)
+	// 기본 필터는 유효하며 비어있지 않은 아이템 스택인 경우 통과시킴
+	if (ItemStack == nullptr || ItemStack->IsEmpty() == true)
 	{
 		return false;
 	}
@@ -23,14 +24,20 @@ FDISTagInventoryFilter::FDISTagInventoryFilter() :
 {
 }
 
-bool FDISTagInventoryFilter::PassesFilter(const UDISItemEntry* ItemEntry) const
+bool FDISTagInventoryFilter::PassesFilter(const UDISItemStack* ItemStack) const
 {
-	if (ItemEntry == nullptr)
+	if (ItemStack == nullptr || ItemStack->IsEmpty() == true)
 	{
 		return false;
 	}
 
-	const UDISItemDefinition* ItemDef = ItemEntry->GetItemDefinition();
+	const UDISItemEntry* TopEntry = ItemStack->GetTopEntry();
+	if (TopEntry == nullptr)
+	{
+		return false;
+	}
+
+	const UDISItemDefinition* ItemDef = TopEntry->GetItemDefinition();
 	if (ItemDef == nullptr)
 	{
 		return false;

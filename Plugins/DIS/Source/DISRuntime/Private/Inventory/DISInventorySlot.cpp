@@ -50,21 +50,27 @@ int32 UDISInventorySlot::GetStackCount() const
 	return ItemStack != nullptr ? ItemStack->GetStackCount() : 0;
 }
 
-UDISItemEntry* UDISInventorySlot::GetItemEntry() const
-{
-	return ItemStack != nullptr ? ItemStack->GetTopEntry() : nullptr;
-}
-
 UDISItemStack* UDISInventorySlot::GetItemStack() const
 {
 	return ItemStack.Get();
 }
 
-void UDISInventorySlot::SetItemStack(UDISItemStack* InItemStack)
+bool UDISInventorySlot::SetItemStack(UDISItemStack* InItemStack)
 {
+	if (InItemStack == nullptr)
+	{
+		ClearSlot();
+		return true;
+	}
+
+	if (CanAcceptItemStack(InItemStack) == false && ItemStack != InItemStack)
+	{
+		return false;
+	}
+
 	if (ItemStack == InItemStack)
 	{
-		return;
+		return true;
 	}
 
 	// 이전 ItemStack 내부 아이템들을 슬롯 강화 컨테이너 대상에서 해제
@@ -74,87 +80,90 @@ void UDISInventorySlot::SetItemStack(UDISItemStack* InItemStack)
 
 	// 신규 ItemStack 내부 아이템들을 슬롯 강화 컨테이너 대상으로 등록
 	BindItemStackEnhancement(ItemStack);
-}
 
-bool UDISInventorySlot::SetItemEntry(UDISItemEntry* InItemEntry)
-{
-	if (InItemEntry != nullptr)
-	{
-		if (CanAcceptItem(InItemEntry) == false)
-		{
-			return false;
-		}
-
-		// 기존 스택 아이템들을 슬롯 강화 컨테이너 대상에서 해제
-		UnbindItemStackEnhancement(ItemStack);
-
-		if (ItemStack == nullptr)
-		{
-			ItemStack = NewObject<UDISItemStack>(this);
-		}
-		else
-		{
-			ItemStack->Clear();
-		}
-
-		const bool bPushed = ItemStack->PushEntry(InItemEntry);
-		if (bPushed == true)
-		{
-			BindItemEntryEnhancement(InItemEntry);
-		}
-		return bPushed;
-	}
-
-	ClearSlot();
 	return true;
 }
 
-bool UDISInventorySlot::PushItemEntry(UDISItemEntry* InItemEntry)
+bool UDISInventorySlot::PushItemStack(UDISItemStack* InItemStack)
 {
-	if (InItemEntry == nullptr)
+	if (InItemStack == nullptr || InItemStack->IsEmpty() == true)
 	{
 		return false;
 	}
 
-	if (CanAcceptItem(InItemEntry) == false)
+	if (CanAcceptItemStack(InItemStack) == false)
 	{
 		return false;
 	}
 
-	if (ItemStack == nullptr)
+	// 슬롯이 비어있는 경우 스택 직접 설정
+	if (ItemStack == nullptr || ItemStack->IsEmpty() == true)
 	{
-		ItemStack = NewObject<UDISItemStack>(this);
+		return SetItemStack(InItemStack);
 	}
 
-	const bool bPushed = ItemStack->PushEntry(InItemEntry);
-	if (bPushed == true)
+	// 기존 스택이 있는 경우: 합칠 수 있는지 검사
+	if (ItemStack->CanStackWith(InItemStack->GetTopEntry()) == false)
 	{
-		BindItemEntryEnhancement(InItemEntry);
+		return false;
 	}
-	return bPushed;
+
+	// InItemStack의 엔트리들을 꺼내어 현재 슬롯 스택으로 이전
+	bool bAnyPushed = false;
+	while (InItemStack->IsEmpty() == false && ItemStack->CanStackWith(InItemStack->GetTopEntry()) == true)
+	{
+		UDISItemEntry* Entry = InItemStack->PopEntry();
+		if (Entry != nullptr)
+		{
+			const bool bPushed = ItemStack->PushEntry(Entry);
+			if (bPushed == true)
+			{
+				BindItemEntryEnhancement(Entry);
+				bAnyPushed = true;
+			}
+			else
+			{
+				InItemStack->PushEntry(Entry);
+				break;
+			}
+		}
+	}
+
+	return bAnyPushed;
 }
 
-UDISItemEntry* UDISInventorySlot::PopItemEntry()
+UDISItemStack* UDISInventorySlot::PopItemStack(int32 SplitCount)
 {
-	if (ItemStack == nullptr)
+	if (ItemStack == nullptr || ItemStack->IsEmpty() == true || SplitCount <= 0)
 	{
 		return nullptr;
 	}
 
-	UDISItemEntry* Top = ItemStack->PopEntry();
-	if (Top != nullptr)
+	const int32 ActualCount = FMath::Min(SplitCount, ItemStack->GetStackCount());
+
+	// 지정된 수량만큼 새 스택을 생성하여 분할 추출
+	UDISItemStack* SplitStack = NewObject<UDISItemStack>(GetTransientPackage());
+	SplitStack->SetRotation(ItemStack->GetRotation());
+
+	for (int32 i = 0; i < ActualCount; ++i)
 	{
-		UnbindItemEntryEnhancement(Top);
+		UDISItemEntry* Entry = ItemStack->PopEntry();
+		if (Entry != nullptr)
+		{
+			UnbindItemEntryEnhancement(Entry);
+			SplitStack->PushEntry(Entry);
+		}
 	}
 
 	if (ItemStack->IsEmpty() == true)
 	{
 		ItemStack = nullptr;
 	}
-	return Top;
+
+	return SplitStack;
 }
 
-UDISItemEntry* UDISInventorySlot::ClearSlot()
+UDISItemStack* UDISInventorySlot::ClearSlot()
 {
 	if (ItemStack == nullptr)
 	{
@@ -164,10 +173,9 @@ UDISItemEntry* UDISInventorySlot::ClearSlot()
 	// 모든 내부 아이템들을 슬롯 강화 컨테이너 대상에서 해제
 	UnbindItemStackEnhancement(ItemStack);
 
-	UDISItemEntry* Top = ItemStack->GetTopEntry();
-	ItemStack->Clear();
+	UDISItemStack* RemovedStack = ItemStack.Get();
 	ItemStack = nullptr;
-	return Top;
+	return RemovedStack;
 }
 
 void UDISInventorySlot::AddFilter(const TInstancedStruct<FDISInventoryFilter>& InFilter)
@@ -193,9 +201,9 @@ TArray<TInstancedStruct<FDISInventoryFilter>>& UDISInventorySlot::GetMutableFilt
 	return Filters;
 }
 
-bool UDISInventorySlot::CanAcceptItem(const UDISItemEntry* InItemEntry) const
+bool UDISInventorySlot::CanAcceptItemStack(const UDISItemStack* InItemStack) const
 {
-	if (InItemEntry == nullptr)
+	if (InItemStack == nullptr || InItemStack->IsEmpty() == true)
 	{
 		return false;
 	}
@@ -206,7 +214,7 @@ bool UDISInventorySlot::CanAcceptItem(const UDISItemEntry* InItemEntry) const
 		if (Filter.IsValid() == true)
 		{
 			const FDISInventoryFilter& FilterRef = Filter.Get<FDISInventoryFilter>();
-			if (FilterRef.PassesFilter(InItemEntry) == false)
+			if (FilterRef.PassesFilter(InItemStack) == false)
 			{
 				return false;
 			}
@@ -219,7 +227,7 @@ bool UDISInventorySlot::CanAcceptItem(const UDISItemEntry* InItemEntry) const
 		return true;
 	}
 
-	return ItemStack->CanStackWith(InItemEntry);
+	return ItemStack->CanStackWith(InItemStack->GetTopEntry());
 }
 
 void UDISInventorySlot::BindItemEntryEnhancement(UDISItemEntry* InItemEntry)
@@ -240,13 +248,13 @@ void UDISInventorySlot::UnbindItemEntryEnhancement(UDISItemEntry* InItemEntry)
 
 void UDISInventorySlot::BindItemStackEnhancement(UDISItemStack* InItemStack)
 {
-	if (InItemStack != nullptr && EnhancementContainer != nullptr)
+	if (InItemStack != nullptr)
 	{
 		for (const TObjectPtr<UDISItemEntry>& Entry : InItemStack->GetEntries())
 		{
 			if (Entry != nullptr)
 			{
-				EnhancementContainer->AddEffectTarget(Entry.Get());
+				BindItemEntryEnhancement(Entry.Get());
 			}
 		}
 	}
@@ -254,13 +262,13 @@ void UDISInventorySlot::BindItemStackEnhancement(UDISItemStack* InItemStack)
 
 void UDISInventorySlot::UnbindItemStackEnhancement(UDISItemStack* InItemStack)
 {
-	if (InItemStack != nullptr && EnhancementContainer != nullptr)
+	if (InItemStack != nullptr)
 	{
 		for (const TObjectPtr<UDISItemEntry>& Entry : InItemStack->GetEntries())
 		{
 			if (Entry != nullptr)
 			{
-				EnhancementContainer->RemoveEffectTarget(Entry.Get());
+				UnbindItemEntryEnhancement(Entry.Get());
 			}
 		}
 	}

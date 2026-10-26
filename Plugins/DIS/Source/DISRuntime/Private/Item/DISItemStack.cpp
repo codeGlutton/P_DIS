@@ -1,6 +1,7 @@
 #include "Item/DISItemStack.h"
 #include "Item/DISItemEntry.h"
 #include "Item/DISItemDefinition.h"
+#include "Inventory/DISInventory.h"
 #include "Global/DISGlobalSubsystem.h"
 #include "Global/DISGlobalSettings.h"
 #include "Engine/GameInstance.h"
@@ -45,18 +46,30 @@ namespace
 
 UDISItemStack::UDISItemStack() :
 	Entries(),
-	Rotation(EDISItemRotation::Rotate0)
+	Rotation(EDISItemRotation::Rotate0),
+	OwningInventory(nullptr)
 {
 }
 
 bool UDISItemStack::IsEmpty() const
 {
-	return Entries.IsEmpty();
+	return Entries.IsEmpty() == true;
 }
 
 int32 UDISItemStack::GetStackCount() const
 {
 	return Entries.Num();
+}
+
+int32 UDISItemStack::GetMaxStackCount() const
+{
+	const UDISItemEntry* Top = GetTopEntry();
+	if (Top != nullptr)
+	{
+		return GetItemMaxStackCount(Top);
+	}
+
+	return 1;
 }
 
 UDISItemEntry* UDISItemStack::GetTopEntry() const
@@ -88,6 +101,20 @@ TArray<UDISItemEntry*> UDISItemStack::K2_GetEntries() const
 	}
 
 	return Result;
+}
+
+float UDISItemStack::GetTotalWeight() const
+{
+	float TotalWeight = 0.0f;
+	for (const TObjectPtr<UDISItemEntry>& Entry : Entries)
+	{
+		if (Entry != nullptr && Entry->GetItemDefinition() != nullptr)
+		{
+			TotalWeight += Entry->GetItemDefinition()->Weight;
+		}
+	}
+
+	return TotalWeight;
 }
 
 bool UDISItemStack::CanStackWith(const UDISItemEntry* InEntry) const
@@ -250,3 +277,18 @@ TArray<FIntPoint> UDISItemStack::GetOccupiedPoints() const
 
 	return Top->GetItemDefinition()->Shape.GetRotatedPoints(Rotation);
 }
+
+UDISInventory* UDISItemStack::GetOwningInventory() const
+{
+	return OwningInventory.Get();
+}
+
+void UDISItemStack::SetOwningInventory(UDISInventory* InInventory)
+{
+	if (OwningInventory.Get() != InInventory)
+	{
+		OwningInventory = InInventory;
+		OnOwningInventoryChanged.Broadcast(this, InInventory);
+	}
+}
+

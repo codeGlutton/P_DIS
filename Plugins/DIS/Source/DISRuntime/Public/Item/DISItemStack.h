@@ -13,6 +13,10 @@
 #include "DISItemStack.generated.h"
 
 class UDISItemEntry;
+class UDISInventory;
+
+/* 아이템 스택의 소유 인벤토리가 변경되거나 해제될 때 호출되는 델리게이트 (스택 포인터, 신규 소유 인벤토리 포인터) */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FDISOnItemStackOwnershipChanged, UDISItemStack*, ItemStack, UDISInventory*, NewOwningInventory);
 
 /**
  * 동일한 강화 스펙을 가진 아이템 엔트리들의 묶음을 관리하고, 공간 점유 슬롯 간 공유 가능한 UObject 스택 클래스
@@ -36,6 +40,10 @@ public:
 	UFUNCTION(Category = "DIS|Item Stack", BlueprintCallable, BlueprintPure)
 	int32 GetStackCount() const;
 
+	/* 현재 스택에 허용되는 최대 스택 수량 반환 (비어있거나 스택 불가 시 1 반환) */
+	UFUNCTION(Category = "DIS|Item Stack", BlueprintCallable, BlueprintPure)
+	int32 GetMaxStackCount() const;
+
 	/* 사용/소비 우선순위가 가장 높은 최상단(Top, 최저 내구도) 아이템 엔트리 반환 (비어있으면 nullptr) */
 	UFUNCTION(Category = "DIS|Item Stack", BlueprintCallable, BlueprintPure)
 	UDISItemEntry* GetTopEntry() const;
@@ -46,6 +54,10 @@ public:
 	/* 전체 보관 중인 아이템 엔트리 목록 반환 (블루프린트 지원용) */
 	UFUNCTION(Category = "DIS|Item Stack", BlueprintCallable, BlueprintPure, meta = (DisplayName = "Get Entries"))
 	TArray<UDISItemEntry*> K2_GetEntries() const;
+
+	/* 스택에 보관된 모든 아이템 엔트리의 무게 합계 반환 */
+	UFUNCTION(Category = "DIS|Item Stack", BlueprintCallable, BlueprintPure)
+	float GetTotalWeight() const;
 
 	/* 스태킹 조작 */
 public:
@@ -91,6 +103,21 @@ public:
 	UFUNCTION(Category = "DIS|Item Stack", BlueprintCallable, BlueprintPure)
 	TArray<FIntPoint> GetOccupiedPoints() const;
 
+	/* 소유권 관리 */
+public:
+	/* 현재 이 스택을 소유하고 있는 인벤토리 반환 (소유 중이지 않으면 nullptr) */
+	UFUNCTION(Category = "DIS|Item Stack", BlueprintCallable, BlueprintPure)
+	UDISInventory* GetOwningInventory() const;
+
+	/* 현재 스택을 소유하는 인벤토리 설정 및 소유권 변경 델리게이트 브로드캐스트 */
+	void SetOwningInventory(UDISInventory* InInventory);
+
+	/* 소유권 델리게이트 */
+public:
+	/* 소유 인벤토리가 변경되거나 해제될 때 브로드캐스트되는 델리게이트 */
+	UPROPERTY(Category = "Item Stack", BlueprintAssignable)
+	FDISOnItemStackOwnershipChanged OnOwningInventoryChanged;
+
 	/* 내부 프로퍼티 */
 protected:
 	/* 스택에 포함된 실제 아이템 엔트리 배열 (내구도 오름차순 정렬 유지) */
@@ -100,4 +127,8 @@ protected:
 	/* 현재 공간 그리드 상의 회전 각도 */
 	UPROPERTY(Category = "Item Stack", VisibleAnywhere, BlueprintReadOnly)
 	EDISItemRotation Rotation;
+
+	/* 스택을 소유하고 있는 인벤토리에 대한 약참조 (SharedInventory 제외) */
+	UPROPERTY(Category = "Item Stack", BlueprintReadOnly)
+	TWeakObjectPtr<UDISInventory> OwningInventory;
 };

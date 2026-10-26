@@ -11,10 +11,10 @@
 #include "GameplayTagContainer.h"
 #include "DISInventoryFilter.generated.h"
 
-class UDISItemEntry;
+class UDISItemStack;
 
 /**
- * 인벤토리 및 슬롯에 진입하는 아이템을 검증하기 위한 필터 베이스 구조체 (TInstancedStruct 다형성 지원)
+ * 인벤토리 및 슬롯에 진입하는 아이템 스택을 검증하기 위한 필터 베이스 구조체 (TInstancedStruct 다형성 지원)
  */
 USTRUCT(BlueprintType)
 struct DISRUNTIME_API FDISInventoryFilter
@@ -28,12 +28,12 @@ public:
 
 	/* 필터링 평가 메서드 */
 public:
-	/* 아이템이 해당 필터 조건을 통과하는지 여부 검증 (가상 함수 오버라이드 지원) */
-	virtual bool PassesFilter(const UDISItemEntry* ItemEntry) const;
+	/* 아이템 스택이 해당 필터 조건을 통과하는지 여부 검증 (가상 함수 오버라이드 지원) */
+	virtual bool PassesFilter(const UDISItemStack* ItemStack) const;
 };
 
 /**
- * GameplayTag 기반으로 아이템을 검증하는 기본 태그 필터 구조체
+ * GameplayTag 기반으로 아이템 스택을 검증하는 기본 태그 필터 구조체
  */
 USTRUCT(BlueprintType)
 struct DISRUNTIME_API FDISTagInventoryFilter : public FDISInventoryFilter
@@ -47,7 +47,7 @@ public:
 
 	/* FDISInventoryFilter 가상 함수 구현 */
 public:
-	virtual bool PassesFilter(const UDISItemEntry* ItemEntry) const override;
+	virtual bool PassesFilter(const UDISItemStack* ItemStack) const override;
 
 	/* 필터 태그 속성 */
 public:

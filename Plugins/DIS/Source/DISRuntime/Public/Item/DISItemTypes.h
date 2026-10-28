@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "UObject/PrimaryAssetId.h"
+#include "StructUtils/InstancedStruct.h"
 #include "DISAssetBundles.h"
 #include "DISItemTypes.generated.h"
 
@@ -55,6 +56,19 @@ namespace DISItemRotation
 }
 
 /**
+ * 아이템 타입 프로파일의 프로젝트별 확장을 위한 다형성 페이로드 베이스 구조체
+ */
+USTRUCT(BlueprintType)
+struct DISRUNTIME_API FDISItemTypeCustomData
+{
+	GENERATED_BODY()
+
+	/* 라이프사이클 */
+public:
+	virtual ~FDISItemTypeCustomData() = default;
+};
+
+/**
  * 아이템 타입별 기본 동작 규칙 및 표시 정보를 정의하는 프로파일 구조체
  */
 USTRUCT(BlueprintType)
@@ -62,10 +76,19 @@ struct DISRUNTIME_API FDISItemTypeProfile
 {
 	GENERATED_BODY()
 
+	/* 헬퍼 함수 */
 public:
 	/* 스택킹 가능 여부 헬퍼 (MaxStackCount가 2 이상인지 여부) */
 	bool CanStack() const { return MaxStackCount > 1; }
 
+	/* 커스텀 페이로드 타입 안전 조회 헬퍼 */
+	template<typename T>
+	const T* GetCustomData() const
+	{
+		return CustomData.GetPtr<T>();
+	}
+
+	/* 프로퍼티 */
 public:
 	/* 아이템 타입 표시 이름 */
 	UPROPERTY(Category = "Display", EditAnywhere, BlueprintReadWrite)
@@ -78,6 +101,10 @@ public:
 	/* 스택킹 최대 수량 (1 이하일 경우 스택 불가, 2 이상일 경우 스택 가능, 기본값 = 1) */
 	UPROPERTY(Category = "Stacking", EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "1", UIMin = "1"))
 	int32 MaxStackCount = 1;
+
+	/* 프로젝트 전용 확장 페이로드 (TInstancedStruct 다형성 지원) */
+	UPROPERTY(Category = "Extension", EditAnywhere, BlueprintReadWrite, meta = (ExcludeBaseStruct))
+	TInstancedStruct<FDISItemTypeCustomData> CustomData;
 };
 
 /**

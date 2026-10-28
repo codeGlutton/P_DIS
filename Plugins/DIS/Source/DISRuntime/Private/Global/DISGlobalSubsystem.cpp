@@ -70,7 +70,8 @@ void UDISGlobalSubsystem::Deinitialize()
 		CoreGlobalDefinitionHandle.Reset();
 	}
 
-	// 런타임 등록 데이터 정리
+	// 런타임 등록 데이터 및 캐시 정리
+	InvalidateProfileCache();
 	RegisteredItemTypeProfiles.Empty();
 	RegisteredRarityProfiles.Empty();
 	ActiveEnhancementEffectHandles.Empty();
@@ -122,6 +123,11 @@ bool UDISGlobalSubsystem::UnregisterGlobalDefinition(const UDISGlobalDefinition*
 	return true;
 }
 
+void UDISGlobalSubsystem::InvalidateProfileCache()
+{
+	ResolvedProfileCache.Empty();
+}
+
 bool UDISGlobalSubsystem::RegisterItemTypeProfile(const FGameplayTag& ItemTypeTag, const FDISItemTypeProfile& Profile)
 {
 	if (ItemTypeTag.IsValid() == false)
@@ -136,6 +142,7 @@ bool UDISGlobalSubsystem::RegisterItemTypeProfile(const FGameplayTag& ItemTypeTa
 	}
 
 	RegisteredItemTypeProfiles.Add(ItemTypeTag, Profile);
+	InvalidateProfileCache();
 	return true;
 }
 
@@ -148,20 +155,76 @@ bool UDISGlobalSubsystem::UnregisterItemTypeProfile(const FGameplayTag& ItemType
 
 	// 등록된 프로파일이 없거나 제거 실패 시 false 반환
 	const int32 RemovedCount = RegisteredItemTypeProfiles.Remove(ItemTypeTag);
-	return RemovedCount > 0;
+	if (RemovedCount > 0)
+	{
+		InvalidateProfileCache();
+		return true;
+	}
+
+	return false;
 }
 
 const FDISItemTypeProfile& UDISGlobalSubsystem::GetItemTypeProfile(const FGameplayTag& ItemTypeTag) const
 {
-	// 런타임에 등록된 프로파일 맵에서 우선 검색
-	const FDISItemTypeProfile* FoundProfile = RegisteredItemTypeProfiles.Find(ItemTypeTag);
-	if (FoundProfile != nullptr)
+	if (ItemTypeTag.IsValid() == false)
 	{
-		return *FoundProfile;
+		return FallbackItemProfile;
 	}
 
-	// 매핑된 프로파일이 없는 경우 기본 폴백 프로파일 반환
-	return FallbackItemProfile;
+	// 1. 이미 해석되어 캐시된 프로파일이 존재하는 경우 O(1) 즉각 반환
+	if (const FDISItemTypeProfile* const* CachedProfilePtr = ResolvedProfileCache.Find(ItemTypeTag))
+	{
+		if (*CachedProfilePtr != nullptr)
+		{
+			return **CachedProfilePtr;
+		}
+	}
+
+	// 2. 소분류부터 시작하여 부모 계층을 타고 올라가며 상속된 프로파일 탐색 (소분류 우선 순서 보장)
+	const FDISItemTypeProfile* ResolvedProfile = &FallbackItemProfile;
+	for (FGameplayTag CurrentTag = ItemTypeTag; CurrentTag.IsValid() == true; CurrentTag = CurrentTag.RequestDirectParent())
+	{
+		const FDISItemTypeProfile* FoundProfile = RegisteredItemTypeProfiles.Find(CurrentTag);
+		if (FoundProfile != nullptr)
+		{
+			ResolvedProfile = FoundProfile;
+			break;
+		}
+	}
+
+	// 3. 탐색 결과를 캐시에 등록하여 다음 호출부터 O(1) 조회 보장
+	ResolvedProfileCache.Add(ItemTypeTag, ResolvedProfile);
+	return *ResolvedProfile;
+}
+
+TArray<FGameplayTag> UDISGlobalSubsystem::GetItemTypeTagHierarchy(const FGameplayTag& ItemTypeTag) const
+{
+	TArray<FGameplayTag> HierarchyTags;
+	if (ItemTypeTag.IsValid() == false)
+	{
+		return HierarchyTags;
+	}
+
+	// 부모 태그를 포함한 모든 태그 컨테이너를 엔진 캐시 조회로 1회 획득
+	ItemTypeTag.GetGameplayTagParents().GetGameplayTagArray(HierarchyTags);
+
+	// Root -> Leaf 순서 보장 (부모 태그의 문자열 길이는 항상 자식 태그보다 짧음)
+	HierarchyTags.Sort([](const FGameplayTag& TagA, const FGameplayTag& TagB)
+	{
+		return TagA.GetTagName().GetStringLength() < TagB.GetTagName().GetStringLength();
+	});
+
+	return HierarchyTags;
+}
+
+bool UDISGlobalSubsystem::MatchesItemCategory(const FGameplayTag& ItemTypeTag, const FGameplayTag& CategoryTag)
+{
+	return ItemTypeTag.MatchesTag(CategoryTag);
+}
+
+bool UDISGlobalSubsystem::MatchesAnyItemCategory(const FGameplayTag& ItemTypeTag, const FGameplayTagContainer& CategoryContainer)
+{
+	return ItemTypeTag.MatchesAny(CategoryContainer);
 }
 
 bool UDISGlobalSubsystem::RegisterRarityProfile(const FGameplayTag& RarityTag, const FDISRarityProfile& Profile)

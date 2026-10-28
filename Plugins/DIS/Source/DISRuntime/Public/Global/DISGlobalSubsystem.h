@@ -50,10 +50,22 @@ public:
 	UFUNCTION(Category = "DIS|Item", BlueprintCallable)
 	bool UnregisterItemTypeProfile(const FGameplayTag& ItemTypeTag);
 
-	/* 아이템 프로파일 조회 */
+	/* 아이템 프로파일 조회 (부모 계층 태그 자동 폴백 및 캐싱 지원) */
 public:
 	UFUNCTION(Category = "DIS|Item", BlueprintCallable, BlueprintPure)
 	const FDISItemTypeProfile& GetItemTypeProfile(const FGameplayTag& ItemTypeTag) const;
+
+	/* 아이템 타입의 계층 구조 배열 반환 (루트 -> 리프 오름차순, UI 빵부스러기용) */
+	UFUNCTION(Category = "DIS|Item", BlueprintCallable, BlueprintPure)
+	TArray<FGameplayTag> GetItemTypeTagHierarchy(const FGameplayTag& ItemTypeTag) const;
+
+	/* 지정된 아이템 타입이 특정 상위 카테고리에 포함되는지 확인 */
+	UFUNCTION(Category = "DIS|Item", BlueprintCallable, BlueprintPure)
+	static bool MatchesItemCategory(const FGameplayTag& ItemTypeTag, const FGameplayTag& CategoryTag);
+
+	/* 지정된 아이템 타입이 복수 카테고리 컨테이너 중 하나라도 포함되는지 확인 */
+	UFUNCTION(Category = "DIS|Item", BlueprintCallable, BlueprintPure)
+	static bool MatchesAnyItemCategory(const FGameplayTag& ItemTypeTag, const FGameplayTagContainer& CategoryContainer);
 
 	/* 희귀도 프로파일 동적 등록 및 해제 (GameFeatures 지원) */
 public:
@@ -95,10 +107,18 @@ public:
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
 	class UDISEnhancementContainer* GetEnhancementContainerByEffectHandle(const FDISActiveEnhancementEffectHandle& Handle) const;
 
+	/* 캐시 관리 헬퍼 */
+protected:
+	void InvalidateProfileCache();
+
+	/* 런타임 데이터 저장소 */
 protected:
 	/* 런타임에 동적으로 등록된 아이템 타입 프로파일 맵 */
 	UPROPERTY(Transient)
 	TMap<FGameplayTag, FDISItemTypeProfile> RegisteredItemTypeProfiles;
+
+	/* 런타임 해석된 프로파일 포인터 캐시 (Game Thread 전용) */
+	mutable TMap<FGameplayTag, const FDISItemTypeProfile*> ResolvedProfileCache;
 
 	/* 등록되지 않은 아이템 타입 요청 시 반환할 기본 폴백 프로파일 (UDISGlobalSettings 기반) */
 	UPROPERTY(Transient)

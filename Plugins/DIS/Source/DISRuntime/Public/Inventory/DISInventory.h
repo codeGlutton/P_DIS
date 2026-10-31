@@ -93,8 +93,9 @@ public:
 	/* 초기화 */
 public:
 	/* 정적 인벤토리 정의 및 초기 슬롯 수량을 기반으로 인벤토리 인스턴스 초기화 */
-	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable)
+	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable, BlueprintNativeEvent)
 	void InitializeInventory(const UDISInventoryDefinition* InDefinition, int32 InitialSlotCount = -1);
+	virtual void InitializeInventory_Implementation(const UDISInventoryDefinition* InDefinition, int32 InitialSlotCount = -1);
 
 	/* 연결된 정적 인벤토리 정의(DataAsset) 반환 */
 	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable, BlueprintPure)
@@ -127,9 +128,8 @@ public:
 	template <typename TFilterType, typename... TArgs>
 	TFilterType& EmplaceFilter(TArgs&&... Args)
 	{
-		TInstancedStruct<FDISInventoryFilter> NewFilter = TInstancedStruct<FDISInventoryFilter>::Make<TFilterType>(Forward<TArgs>(Args)...);
-		Filters.Add(NewFilter);
-		return NewFilter.GetMutable<TFilterType>();
+		TInstancedStruct<FDISInventoryFilter>& AddedFilter = Filters.Add_GetRef(TInstancedStruct<FDISInventoryFilter>::Make<TFilterType>(Forward<TArgs>(Args)...));
+		return AddedFilter.GetMutable<TFilterType>();
 	}
 
 	/* 인벤토리의 모든 필터 제거 */

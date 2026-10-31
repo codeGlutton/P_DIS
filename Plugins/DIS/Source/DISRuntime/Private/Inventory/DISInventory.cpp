@@ -14,7 +14,7 @@ UDISInventory::UDISInventory() :
 {
 }
 
-void UDISInventory::InitializeInventory(const UDISInventoryDefinition* InDefinition, int32 InitialSlotCount)
+void UDISInventory::InitializeInventory_Implementation(const UDISInventoryDefinition* InDefinition, int32 InitialSlotCount)
 {
 	InventoryDefinition = InDefinition;
 

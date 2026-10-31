@@ -37,6 +37,7 @@ enum class EDISSlotIndexingDirection : uint8
 };
 
 class UDISInventorySlot;
+class FDataValidationContext;
 
 /**
  * 인벤토리의 불변(Immutable) 정적 스펙 및 초기화 규칙을 정의하는 PrimaryDataAsset
@@ -60,7 +61,7 @@ public:
 #if WITH_EDITOR
 	/* 데이터 유효성 검사 및 프로퍼티 변경 이벤트 */
 public:
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual void PostEditUndo() override;
 

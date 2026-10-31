@@ -1,6 +1,6 @@
 /*****************************************************************//**
  * @file   DISGlobalSubsystem.h
- * @brief  DIS 플러그인 전역 런타임 관리 및 레지스트리 서브시스템
+ * @brief  DIS 플러그인 전역 런타임 호스팅 서브시스템
  * @date   2026-09-28
  *********************************************************************/
 
@@ -8,18 +8,13 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "GameplayTagContainer.h"
-#include "Item/DISItemTypes.h"
-#include "Enhancement/DISActiveEnhancementEffect.h"
+#include "Global/DISGlobalLogic.h"
 #include "DISGlobalSubsystem.generated.h"
 
-struct FStreamableHandle;
-class UDISGlobalDefinition;
-
 /**
- * DIS 플러그인의 전역 런타임 관리 및 레지스트리를 담당하는 게임 인스턴스 서브시스템
- * 초기 실행 시 UDISGlobalDefinition을 로드하여 기본 규칙/프로파일을 초기화하며,
- * GameFeatures 플러그인의 동적 프로파일/규칙 주입 및 해제를 지원함
+ * DIS 플러그인의 전역 런타임 수명주기를 관리하는 게임 인스턴스 서브시스템
+ * UGameInstance 수명주기 동안 UDISGlobalLogic 인스턴스를 단일 관리하며,
+ * 어디서든 안전하게 전역 로직에 접근할 수 있는 멤버 및 정적 헬퍼를 제공함
  */
 UCLASS(DisplayName = "DIS Global Subsystem")
 class DISRUNTIME_API UDISGlobalSubsystem : public UGameInstanceSubsystem
@@ -34,116 +29,50 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	/* 전역 정의 에셋 동적 등록 및 해제 (GameFeatures 지원) */
+	/* 전역 로직 접근자 (멤버 함수) */
 public:
-	UFUNCTION(Category = "DIS|Global", BlueprintCallable)
-	bool RegisterGlobalDefinition(const UDISGlobalDefinition* GlobalDefinition);
+	/* 관리 중인 UDISGlobalLogic 인스턴스 반환 */
+	UFUNCTION(Category = "DIS|Global", BlueprintCallable, BlueprintPure)
+	UDISGlobalLogic* GetLogic() const;
 
-	UFUNCTION(Category = "DIS|Global", BlueprintCallable)
-	bool UnregisterGlobalDefinition(const UDISGlobalDefinition* GlobalDefinition);
+	/* 템플릿 기반 파생 UDISGlobalLogic 인스턴스 반환 */
+	template <typename T = UDISGlobalLogic>
+	T* GetLogic() const
+	{
+		return Cast<T>(GetLogic());
+	}
 
-	/* 아이템 프로파일 동적 등록 및 해제 (GameFeatures 지원) */
+	/* 전역 로직 접근자 (정적 헬퍼 함수) */
 public:
-	UFUNCTION(Category = "DIS|Item", BlueprintCallable)
-	bool RegisterItemTypeProfile(const FGameplayTag& ItemTypeTag, const FDISItemTypeProfile& Profile);
+	/**
+	 * 월드 컨텍스트 오브젝트를 기반으로 UDISGlobalLogic 인스턴스를 조회하는 정적 헬퍼
+	 * @param WorldContextObject 월드 검색에 활용될 UObject
+	 * @return 발견된 UDISGlobalLogic 인스턴스 (실패 시 nullptr)
+	 */
+	UFUNCTION(Category = "DIS|Global", BlueprintCallable, BlueprintPure, meta = (WorldContext = "WorldContextObject", DisplayName = "Get DIS Global Logic"))
+	static UDISGlobalLogic* GetDISGlobalLogic(const UObject* WorldContextObject);
 
-	UFUNCTION(Category = "DIS|Item", BlueprintCallable)
-	bool UnregisterItemTypeProfile(const FGameplayTag& ItemTypeTag);
+	/**
+	 * 월드 컨텍스트 기반 C++ 정적 헬퍼 오버로드
+	 */
+	static UDISGlobalLogic* GetLogic(const UObject* WorldContextObject)
+	{
+		return GetDISGlobalLogic(WorldContextObject);
+	}
 
-	/* 아이템 프로파일 조회 (부모 계층 태그 자동 폴백 및 캐싱 지원) */
-public:
-	UFUNCTION(Category = "DIS|Item", BlueprintCallable, BlueprintPure)
-	const FDISItemTypeProfile& GetItemTypeProfile(const FGameplayTag& ItemTypeTag) const;
+	/**
+	 * 월드 컨텍스트 기반 템플릿 정적 헬퍼
+	 * @param WorldContextObject 월드 검색에 활용될 UObject
+	 * @return 캐스팅된 파생 UDISGlobalLogic 인스턴스 (실패 시 nullptr)
+	 */
+	template <typename T = UDISGlobalLogic>
+	static T* GetLogic(const UObject* WorldContextObject)
+	{
+		return Cast<T>(GetDISGlobalLogic(WorldContextObject));
+	}
 
-	/* 아이템 타입의 계층 구조 배열 반환 (루트 -> 리프 오름차순, UI 빵부스러기용) */
-	UFUNCTION(Category = "DIS|Item", BlueprintCallable, BlueprintPure)
-	TArray<FGameplayTag> GetItemTypeTagHierarchy(const FGameplayTag& ItemTypeTag) const;
-
-	/* 지정된 아이템 타입이 특정 상위 카테고리에 포함되는지 확인 */
-	UFUNCTION(Category = "DIS|Item", BlueprintCallable, BlueprintPure)
-	static bool MatchesItemCategory(const FGameplayTag& ItemTypeTag, const FGameplayTag& CategoryTag);
-
-	/* 지정된 아이템 타입이 복수 카테고리 컨테이너 중 하나라도 포함되는지 확인 */
-	UFUNCTION(Category = "DIS|Item", BlueprintCallable, BlueprintPure)
-	static bool MatchesAnyItemCategory(const FGameplayTag& ItemTypeTag, const FGameplayTagContainer& CategoryContainer);
-
-	/* 희귀도 프로파일 동적 등록 및 해제 (GameFeatures 지원) */
-public:
-	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable)
-	bool RegisterRarityProfile(const FGameplayTag& RarityTag, const FDISRarityProfile& Profile);
-
-	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable)
-	bool UnregisterRarityProfile(const FGameplayTag& RarityTag);
-
-	/* 희귀도 프로파일 조회 및 서열(Rank) 비교 */
-public:
-	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable, BlueprintPure)
-	const FDISRarityProfile& GetRarityProfile(const FGameplayTag& RarityTag) const;
-
-	/* 지정된 희귀도 태그의 서열 반환 (미등록 시 0) */
-	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable, BlueprintPure)
-	int32 GetRarityRank(const FGameplayTag& RarityTag) const;
-
-	/* 두 희귀도의 서열 비교 (TagA > TagB: 1, TagA == TagB: 0, TagA < TagB: -1) */
-	UFUNCTION(Category = "DIS|Item|Rarity", BlueprintCallable, BlueprintPure)
-	int32 CompareRarity(const FGameplayTag& TagA, const FGameplayTag& TagB) const;
-
-
-	/* 강화 효과(Effect) 활성화 핸들 발급 및 관리 */
-public:
-	/* 전역에서 고유하게 증가하는 정수 래퍼 핸들을 발급하고 TMap에 등록 */
-	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
-	FDISActiveEnhancementEffectHandle AllocateEnhancementEffectHandle(class UDISEnhancementContainer* InOwnerContainer = nullptr);
-
-	/* 강화 효과 식별 핸들 등록 해제 */
-	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
-	bool ReleaseEnhancementEffectHandle(const FDISActiveEnhancementEffectHandle& Handle);
-
-	/* 지정된 핸들이 현재 서브시스템에 유효하게 등록되어 있는지 확인 */
-	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
-	bool IsEnhancementEffectHandleActive(const FDISActiveEnhancementEffectHandle& Handle) const;
-
-	/* 지정된 핸들을 소유하고 있는 컨테이너 조회 */
-	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
-	class UDISEnhancementContainer* GetEnhancementContainerByEffectHandle(const FDISActiveEnhancementEffectHandle& Handle) const;
-
-	/* 캐시 관리 헬퍼 */
-protected:
-	void InvalidateProfileCache();
-
-	/* 런타임 데이터 저장소 */
-protected:
-	/* 런타임에 동적으로 등록된 아이템 타입 프로파일 맵 */
-	UPROPERTY(Transient)
-	TMap<FGameplayTag, FDISItemTypeProfile> RegisteredItemTypeProfiles;
-
-	/* 런타임 해석된 프로파일 포인터 캐시 (Game Thread 전용) */
-	mutable TMap<FGameplayTag, const FDISItemTypeProfile*> ResolvedProfileCache;
-
-	/* 등록되지 않은 아이템 타입 요청 시 반환할 기본 폴백 프로파일 (UDISGlobalSettings 기반) */
-	UPROPERTY(Transient)
-	FDISItemTypeProfile FallbackItemProfile;
-
-	/* 런타임에 동적으로 등록된 희귀도 프로파일 맵 */
-	UPROPERTY(Transient)
-	TMap<FGameplayTag, FDISRarityProfile> RegisteredRarityProfiles;
-
-	/* 등록되지 않은 희귀도 요청 시 반환할 기본 폴백 프로파일 */
-	UPROPERTY(Transient)
-	FDISRarityProfile FallbackRarityProfile;
-
-	/* 현재 활성화된 강화 효과 핸들 및 소유 컨테이너 매핑 (TMap 중복 관리) */
-	UPROPERTY(Transient)
-	TMap<FDISActiveEnhancementEffectHandle, TWeakObjectPtr<class UDISEnhancementContainer>> ActiveEnhancementEffectHandles;
-
-	/* 전역 고유 증가용 강화 효과 핸들 정수 카운터 */
-	int32 NextEnhancementEffectHandleId;
-
+	/* 관리 중인 로직 서브오브젝트 인스턴스 */
 private:
-	/* 코어 Data 번들로 프리로드되어 상주 중인 전역 정의 PrimaryDataAsset 인스턴스 */
 	UPROPERTY(Transient)
-	TObjectPtr<const UDISGlobalDefinition> LoadedCoreGlobalDefinition;
-	
-	/* 코어 Data 번들 사전 로드 및 상시 유지를 위한 스트리밍 핸들 */
-	TSharedPtr<FStreamableHandle> CoreGlobalDefinitionHandle;
+	TObjectPtr<UDISGlobalLogic> LogicInstance;
 };

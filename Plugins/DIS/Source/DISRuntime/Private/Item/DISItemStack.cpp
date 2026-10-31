@@ -3,6 +3,7 @@
 #include "Item/DISItemDefinition.h"
 #include "Inventory/DISInventory.h"
 #include "Global/DISGlobalSubsystem.h"
+#include "Global/DISGlobalLogic.h"
 #include "Global/DISGlobalSettings.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Engine.h"
@@ -19,25 +20,28 @@ namespace
 
 		const FGameplayTag& TypeTag = InEntry->GetItemDefinition()->ItemTypeTag;
 
-		// 1. 활성 GameInstance의 전역 서브시스템에서 프로파일 검색 시도
+		// 1. 활성 GameInstance의 전역 로직 서브오브젝트에서 프로파일 검색 시도
 		if (GEngine != nullptr)
 		{
 			for (const FWorldContext& Context : GEngine->GetWorldContexts())
 			{
-				if (UGameInstance* GI = Context.OwningGameInstance)
+				UGameInstance* GameInstance = Context.OwningGameInstance;
+				if (GameInstance != nullptr)
 				{
-					if (UDISGlobalSubsystem* Subsystem = GI->GetSubsystem<UDISGlobalSubsystem>())
+					UDISGlobalLogic* Logic = UDISGlobalSubsystem::GetLogic(GameInstance);
+					if (Logic != nullptr)
 					{
-						return Subsystem->GetItemTypeProfile(TypeTag).MaxStackCount;
+						return Logic->GetItemTypeProfile(TypeTag).GetCustomDataChecked().MaxStackCount;
 					}
 				}
 			}
 		}
 
 		// 2. 전역 설정의 기본 프로파일 폴백
-		if (const UDISGlobalSettings* Settings = GetDefault<UDISGlobalSettings>())
+		const UDISGlobalSettings* Settings = GetDefault<UDISGlobalSettings>();
+		if (Settings != nullptr)
 		{
-			return Settings->DefaultItemProfile.MaxStackCount;
+			return Settings->DefaultItemProfile.GetCustomDataChecked().MaxStackCount;
 		}
 
 		return 1;

@@ -31,8 +31,9 @@ public:
 	/* 초기화 */
 public:
 	/* 아이템 정의 및 초기 내구도를 기반으로 인스턴스 초기화 */
-	UFUNCTION(Category = "DIS|Item Entry", BlueprintCallable)
+	UFUNCTION(Category = "DIS|Item Entry", BlueprintCallable, BlueprintNativeEvent)
 	void InitializeEntry(const UDISItemDefinition* InItemDefinition, float InDurability = -1.0f);
+	virtual void InitializeEntry_Implementation(const UDISItemDefinition* InItemDefinition, float InDurability = -1.0f);
 
 	/* IDISEnhanceableInterface 인터페이스 구현 */
 public:
@@ -68,9 +69,8 @@ public:
 	template <typename TRuleType, typename... TArgs>
 	TRuleType& EmplacePlacementRule(TArgs&&... Args)
 	{
-		TInstancedStruct<FDISItemPlacementRule> NewRule = TInstancedStruct<FDISItemPlacementRule>::Make<TRuleType>(Forward<TArgs>(Args)...);
-		PlacementRules.Add(NewRule);
-		return NewRule.GetMutable<TRuleType>();
+		TInstancedStruct<FDISItemPlacementRule>& AddedRule = PlacementRules.Add_GetRef(TInstancedStruct<FDISItemPlacementRule>::Make<TRuleType>(Forward<TArgs>(Args)...));
+		return AddedRule.GetMutable<TRuleType>();
 	}
 
 	/* 아이템의 모든 배치 제한 규칙 제거 */

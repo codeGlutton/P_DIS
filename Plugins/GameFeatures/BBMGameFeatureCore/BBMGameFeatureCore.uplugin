@@ -1,0 +1,27 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "BBMGameFeatureCore",
+	"Description": "비트 배낭 상인(BBM) 코어 게임 피처 플러그인",
+	"Category": "Game Features",
+	"CreatedBy": "codeGlutton",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "BBMGameFeatureCoreRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"ExplicitlyLoaded": true,
+	"BuiltInInitialFeatureState": "Active"
+}

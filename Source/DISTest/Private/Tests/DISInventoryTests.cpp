@@ -594,7 +594,10 @@ bool FDISItemStackDurabilityOrderTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("초기 스택은 비어있어야 함"), Stack->IsEmpty());
 
 	// 임시로 MaxStackCount를 5로 지정하여 삽입 가능하도록 설정
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 5;
+	const FDISItemTypeProfile OriginalDefaultProfile = GetDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	FDISItemTypeProfile& DefaultProfile = GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	DefaultProfile.bOverrideCustomData = true;
+	DefaultProfile.CustomData.InitializeAs<FDISItemTypeCustomData>(5);
 
 	// 80 -> 30 -> 60 순서로 삽입
 	TestTrue(TEXT("80 내구도 아이템 삽입 성공"), Stack->PushEntry(Entry80));
@@ -634,7 +637,7 @@ bool FDISItemStackDurabilityOrderTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("모두 꺼낸 후 스택은 비어있어야 함"), Stack->IsEmpty());
 
 	// 설정 복원
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 1;
+	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile = OriginalDefaultProfile;
 
 	return true;
 }
@@ -667,16 +670,19 @@ bool FDISItemProfileMaxStackTest::RunTest(const FString& Parameters)
 	}
 
 	// 1. 기본 설정 (MaxStackCount = 1): 스택 불가 검증
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 1;
-	TestFalse(TEXT("MaxStackCount가 1일 때 CanStack()은 false여야 함"), GetDefault<UDISGlobalSettings>()->DefaultItemProfile.CanStack());
+	const FDISItemTypeProfile OriginalDefaultProfile = GetDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	FDISItemTypeProfile& DefaultProfile = GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	DefaultProfile.bOverrideCustomData = true;
+	DefaultProfile.CustomData.InitializeAs<FDISItemTypeCustomData>(1);
+	TestFalse(TEXT("MaxStackCount가 1일 때 CanStack()은 false여야 함"), GetDefault<UDISGlobalSettings>()->DefaultItemProfile.GetCustomDataChecked().CanStack());
 
 	TestTrue(TEXT("비어있는 스택에는 첫 번째 아이템 배치 가능"), Stack->PushEntry(Entry1));
 	TestFalse(TEXT("MaxStackCount가 1일 때는 동일 아이템이라도 추가 스택 불가능해야 함"), Stack->PushEntry(Entry2));
 	TestEqual(TEXT("스택 수량은 1이어야 함"), Stack->GetStackCount(), 1);
 
 	// 2. MaxStackCount = 2로 변경 시 추가 스택 허용 검증
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 2;
-	TestTrue(TEXT("MaxStackCount가 2일 때 CanStack()은 true여야 함"), GetDefault<UDISGlobalSettings>()->DefaultItemProfile.CanStack());
+	DefaultProfile.CustomData.InitializeAs<FDISItemTypeCustomData>(2);
+	TestTrue(TEXT("MaxStackCount가 2일 때 CanStack()은 true여야 함"), GetDefault<UDISGlobalSettings>()->DefaultItemProfile.GetCustomDataChecked().CanStack());
 
 	TestTrue(TEXT("한도가 2로 늘어났으므로 두 번째 아이템 스택 추가 가능해야 함"), Stack->PushEntry(Entry2));
 	TestEqual(TEXT("스택 수량은 2여야 함"), Stack->GetStackCount(), 2);
@@ -687,7 +693,7 @@ bool FDISItemProfileMaxStackTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("최대 한도인 2에 도달했으므로 3번째 아이템 스택은 거부되어야 함"), Stack->PushEntry(Entry3));
 
 	// 설정 복원
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 1;
+	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile = OriginalDefaultProfile;
 
 	return true;
 }
@@ -814,7 +820,10 @@ bool FDISInventorySlotItemEnhancementTargetBindingTest::RunTest(const FString& P
 	TestTrue(TEXT("Entry1이 EffectTargets에 포함되어 있어야 함"), Container->GetEffectTargets().Contains(Entry1));
 
 	// 2. 임시로 MaxStackCount를 5로 늘리고 PushItemStack으로 두 번째 아이템 스택 추가 -> Entry2도 등록 검증
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 5;
+	const FDISItemTypeProfile OriginalDefaultProfile = GetDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	FDISItemTypeProfile& DefaultProfile = GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	DefaultProfile.bOverrideCustomData = true;
+	DefaultProfile.CustomData.InitializeAs<FDISItemTypeCustomData>(5);
 	UDISItemStack* Stack2 = NewObject<UDISItemStack>();
 	Stack2->PushEntry(Entry2);
 	Slot->PushItemStack(Stack2);
@@ -851,7 +860,7 @@ bool FDISInventorySlotItemEnhancementTargetBindingTest::RunTest(const FString& P
 	TestEqual(TEXT("SetItemStack(nullptr) 후 EffectTargets 개수 0 검증"), Container->GetEffectTargets().Num(), 0);
 
 	// 설정 복원
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 1;
+	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile = OriginalDefaultProfile;
 
 	return true;
 }
@@ -1039,8 +1048,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FDISInventoryPartialOverlapStackingTest::RunTest(const FString& Parameters)
 {
 	// 전역 MaxStackCount를 5로 임시 조정
-	const int32 OriginalMaxStack = GetDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount;
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 5;
+	const FDISItemTypeProfile OriginalDefaultProfile = GetDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	FDISItemTypeProfile& DefaultProfile = GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	DefaultProfile.bOverrideCustomData = true;
+	DefaultProfile.CustomData.InitializeAs<FDISItemTypeCustomData>(5);
 
 	UDISInventory* Inventory = NewObject<UDISInventory>();
 	UDISInventoryDefinition* InvenDef = NewObject<UDISInventoryDefinition>();
@@ -1256,7 +1267,7 @@ bool FDISInventoryPartialOverlapStackingTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("실패 상태는 Failed여야 함"), RejectResult.ResultType, EDISItemPlacementResult::Failed);
 
 	// 전역 MaxStackCount 복원
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = OriginalMaxStack;
+	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile = OriginalDefaultProfile;
 
 	return true;
 }

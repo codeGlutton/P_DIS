@@ -56,16 +56,37 @@ namespace DISItemRotation
 }
 
 /**
- * 아이템 타입 프로파일의 프로젝트별 확장을 위한 다형성 페이로드 베이스 구조체
+ * 아이템 타입 프로파일의 스택 규칙 및 프로젝트별 확장을 위한 다형성 페이로드 베이스 구조체
  */
 USTRUCT(BlueprintType)
 struct DISRUNTIME_API FDISItemTypeCustomData
 {
 	GENERATED_BODY()
 
-	/* 라이프사이클 */
+	/* 생성자 및 라이프사이클 */
 public:
+	FDISItemTypeCustomData() = default;
+
+	explicit FDISItemTypeCustomData(int32 InMaxStackCount) :
+		MaxStackCount(FMath::Max(1, InMaxStackCount))
+	{
+	}
+
 	virtual ~FDISItemTypeCustomData() = default;
+
+	/* 헬퍼 함수 */
+public:
+	/* 스택킹 가능 여부 헬퍼 (MaxStackCount가 2 이상인지 여부) */
+	bool CanStack() const
+	{
+		return MaxStackCount > 1;
+	}
+
+	/* 프로퍼티 */
+public:
+	/* 스택킹 최대 수량 (1 이하일 경우 스택 불가, 2 이상일 경우 스택 가능, 기본값 = 1) */
+	UPROPERTY(Category = "Stacking", EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0", UIMin = "0"))
+	int32 MaxStackCount = 0;
 };
 
 /**
@@ -78,14 +99,18 @@ struct DISRUNTIME_API FDISItemTypeProfile
 
 	/* 헬퍼 함수 */
 public:
-	/* 스택킹 가능 여부 헬퍼 (MaxStackCount가 2 이상인지 여부) */
-	bool CanStack() const { return MaxStackCount > 1; }
-
 	/* 커스텀 페이로드 타입 안전 조회 헬퍼 */
-	template<typename T>
+	template <typename T = FDISItemTypeCustomData>
 	const T* GetCustomData() const
 	{
 		return CustomData.GetPtr<T>();
+	}
+
+	template <typename T = FDISItemTypeCustomData>
+	const T& GetCustomDataChecked() const
+	{
+		checkf(CustomData.IsValid() == true, TEXT("nullptr Custom Data Type"));
+		return CustomData.Get<T>();
 	}
 
 	/* 프로퍼티 */
@@ -98,12 +123,12 @@ public:
 	UPROPERTY(Category = "Display", EditAnywhere, BlueprintReadWrite, meta = (AssetBundles = "UI"))
 	TSoftObjectPtr<UTexture2D> Icon;
 
-	/* 스택킹 최대 수량 (1 이하일 경우 스택 불가, 2 이상일 경우 스택 가능, 기본값 = 1) */
-	UPROPERTY(Category = "Stacking", EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "1", UIMin = "1"))
-	int32 MaxStackCount = 1;
+	/* 부모 프로파일의 CustomData를 상속받지 않고 현재 프로파일의 CustomData를 사용할지 여부 */
+	UPROPERTY(Category = "Extension", EditAnywhere, BlueprintReadWrite)
+	bool bOverrideCustomData = false;
 
-	/* 프로젝트 전용 확장 페이로드 (TInstancedStruct 다형성 지원) */
-	UPROPERTY(Category = "Extension", EditAnywhere, BlueprintReadWrite, meta = (ExcludeBaseStruct))
+	/* 아이템 타입 확장 규칙 페이로드 (MaxStackCount 및 프로젝트 전용 규칙 포함, TInstancedStruct 다형성 지원) */
+	UPROPERTY(Category = "Extension", EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "bOverrideCustomData"))
 	TInstancedStruct<FDISItemTypeCustomData> CustomData;
 };
 

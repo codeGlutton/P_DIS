@@ -10,7 +10,8 @@ public class DISEditorTarget : TargetRules
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
-		ExtraModuleNames.Add("DIS");
+		ExtraModuleNames.Add("BBM");
 		ExtraModuleNames.Add("DISTest");
+		ExtraModuleNames.Add("BBMEditor");
 	}
 }

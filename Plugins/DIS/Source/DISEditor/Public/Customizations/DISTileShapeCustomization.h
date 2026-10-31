@@ -14,6 +14,7 @@ class IPropertyHandle;
 class IPropertyUtilities;
 class SGridPanel;
 class SVerticalBox;
+struct FPropertyChangedEvent;
 
 /**
  * FDISTileShape 구조체를 에디터 디테일 패널에서 2D 타일 매트릭스 그리드로 표시/편집하는 커스터마이제이션
@@ -72,7 +73,7 @@ private:
 	FIntPoint GetMaxAllowedDimensions() const;
 
 	/* 외부 UObject의 프로퍼티 변경 감지 핸들러 */
-	void OnObjectPropertyChanged(UObject* InObject, struct FPropertyChangedEvent& InPropertyChangedEvent);
+	void OnObjectPropertyChanged(UObject* InObject, FPropertyChangedEvent& InPropertyChangedEvent);
 
 	/* 내부 프로퍼티 핸들 및 슬레이트 위젯 */
 private:

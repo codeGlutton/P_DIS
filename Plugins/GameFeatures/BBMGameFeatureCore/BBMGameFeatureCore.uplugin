@@ -2,8 +2,8 @@
 	"FileVersion": 3,
 	"Version": 1,
 	"VersionName": "1.0",
-	"FriendlyName": "DISGameFeatureCore",
-	"Description": "",
+	"FriendlyName": "BBMGameFeatureCore",
+	"Description": "비트 배낭 상인(BBM) 코어 게임 피처 플러그인",
 	"Category": "Game Features",
 	"CreatedBy": "codeGlutton",
 	"CreatedByURL": "",
@@ -17,7 +17,7 @@
 	"Installed": false,
 	"Modules": [
 		{
-			"Name": "DISGameFeatureCoreRuntime",
+			"Name": "BBMGameFeatureCoreRuntime",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}

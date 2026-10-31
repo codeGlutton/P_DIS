@@ -10,7 +10,7 @@ UDISItemEntry::UDISItemEntry() :
 {
 }
 
-void UDISItemEntry::InitializeEntry(const UDISItemDefinition* InItemDefinition, float InDurability)
+void UDISItemEntry::InitializeEntry_Implementation(const UDISItemDefinition* InItemDefinition, float InDurability)
 {
 	ItemDefinition = InItemDefinition;
 

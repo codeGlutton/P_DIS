@@ -12,5 +12,6 @@ public class DISEditorTarget : TargetRules
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
 		ExtraModuleNames.Add("DIS");
 		ExtraModuleNames.Add("DISTest");
+		ExtraModuleNames.Add("BBMEditor");
 	}
 }

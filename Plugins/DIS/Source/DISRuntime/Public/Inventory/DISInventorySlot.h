@@ -89,9 +89,8 @@ public:
 	template <typename TFilterType, typename... TArgs>
 	TFilterType& EmplaceFilter(TArgs&&... Args)
 	{
-		TInstancedStruct<FDISInventoryFilter> NewFilter = TInstancedStruct<FDISInventoryFilter>::Make<TFilterType>(Forward<TArgs>(Args)...);
-		Filters.Add(NewFilter);
-		return NewFilter.GetMutable<TFilterType>();
+		TInstancedStruct<FDISInventoryFilter>& AddedFilter = Filters.Add_GetRef(TInstancedStruct<FDISInventoryFilter>::Make<TFilterType>(Forward<TArgs>(Args)...));
+		return AddedFilter.GetMutable<TFilterType>();
 	}
 
 	/* 슬롯의 모든 필터 제거 */

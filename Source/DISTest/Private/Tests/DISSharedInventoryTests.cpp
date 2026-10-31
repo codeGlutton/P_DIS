@@ -26,8 +26,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FDISSharedInventoryCoreTest::RunTest(const FString& Parameters)
 {
 	// 전역 MaxStackCount 임시 확장 (스태킹 테스트용)
-	const int32 OriginalMaxStack = GetDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount;
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 5;
+	const FDISItemTypeProfile OriginalDefaultProfile = GetDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	FDISItemTypeProfile& DefaultProfile = GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	DefaultProfile.bOverrideCustomData = true;
+	DefaultProfile.CustomData.InitializeAs<FDISItemTypeCustomData>(5);
 
 	// 1. 초기화 및 고정 4칸 슬롯 생성 검증
 	UDISSharedInventoryDefinition* SharedDef = NewObject<UDISSharedInventoryDefinition>();
@@ -164,7 +166,7 @@ bool FDISSharedInventoryCoreTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("범위 초과 SwapSlots 실패"), SharedInventory->SwapSlots(0, 5));
 
 	// 전역 MaxStackCount 복원
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = OriginalMaxStack;
+	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile = OriginalDefaultProfile;
 
 	return true;
 }
@@ -180,8 +182,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FDISCrossInventoryOwnershipTest::RunTest(const FString& Parameters)
 {
-	const int32 OriginalMaxStack = GetDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount;
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = 5;
+	const FDISItemTypeProfile OriginalDefaultProfile = GetDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	FDISItemTypeProfile& DefaultProfile = GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	DefaultProfile.bOverrideCustomData = true;
+	DefaultProfile.CustomData.InitializeAs<FDISItemTypeCustomData>(5);
 
 	// 인벤토리 정의 생성 (4x4, 총 16칸)
 	UDISInventoryDefinition* InvDef = NewObject<UDISInventoryDefinition>();
@@ -327,7 +331,7 @@ bool FDISCrossInventoryOwnershipTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("SourceStack은 완전히 비워짐"), SourceStack->IsEmpty());
 	TestNull(TEXT("완전 병합 시 InvA 슬롯 2에서 완전히 제거됨"), InvA->GetSlotItemStack(2));
 
-	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile.MaxStackCount = OriginalMaxStack;
+	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile = OriginalDefaultProfile;
 	return true;
 }
 

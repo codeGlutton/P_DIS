@@ -15,6 +15,7 @@
 #include "DISItemDefinition.generated.h"
 
 class UTexture2D;
+class FDataValidationContext;
 
 /**
  * DIS 플러그인 전역에서 사용하는 PrimaryAssetType 식별자 모음
@@ -43,7 +44,7 @@ public:
 #if WITH_EDITOR
 	/* 데이터 유효성 검사 */
 public:
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif
 
 	/* 아이템 정의 속성 (프로퍼티) */
@@ -84,7 +85,7 @@ public:
 	UPROPERTY(Category = "Item Definition|Stats", EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float Weight;
 
-	/* 아이템 최대 내구도 (0.0일 경우 내구도 미적용/무제한) */
+	/* 아이템 최대 내구도 (0.0일 경우 내구도 미적용/무제한, 기본값 = 0.0) */
 	UPROPERTY(Category = "Item Definition|Stats", EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float MaxDurability;
 

@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class DISGameFeatureCoreRuntime : ModuleRules
+public class BBMGameFeatureCoreRuntime : ModuleRules
 {
-	public DISGameFeatureCoreRuntime(ReadOnlyTargetRules Target) : base(Target)
+	public BBMGameFeatureCoreRuntime(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		

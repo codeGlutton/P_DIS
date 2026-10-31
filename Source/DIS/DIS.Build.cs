@@ -7,15 +7,29 @@ public class DIS : ModuleRules
 	public DIS(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+
+		PublicIncludePaths.Add(ModuleDirectory);
 	
 		PublicDependencyModuleNames.AddRange(new string[] {
-			 "Core", 
-			 "CoreUObject", 
-			 "Engine", 
-			 "InputCore", 
-			 "EnhancedInput", 
-			 "DISRuntime" 
-			});
+			/* 기본 엔진 모듈 */
+			"Core", 
+			"CoreUObject", 
+			"Engine", 
+			"InputCore", 
+			"EnhancedInput", 
+
+			/* 게임플레이 및 모듈러 기능 모듈 */
+			"GameplayTags",
+			"ModularGameplay",
+			"GameFeatures",
+			"GameplayAbilities",
+			"GameplayTasks",
+			"AIModule",
+			"DeveloperSettings",
+
+			/* 인벤토리 플러그인 런타임 모듈 */
+			"DISRuntime" 
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			 });

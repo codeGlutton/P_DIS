@@ -18,7 +18,7 @@
 class UDISEnhancement;
 class UDISEnhancementEffect;
 class IDISEnhanceableInterface;
-class UDISGlobalSubsystem;
+class UDISGlobalLogic;
 class UDISEnhancementContainer;
 
 /**
@@ -179,8 +179,8 @@ public:
 
 	/* 내부 유틸리티 및 라이프사이클 디스패처 */
 protected:
-	/* 유효한 전역 서브시스템 참조 획득 시도 */
-	UDISGlobalSubsystem* GetGlobalSubsystem() const;
+	/* 유효한 전역 로직 서브오브젝트 참조 획득 시도 */
+	UDISGlobalLogic* GetGlobalLogic() const;
 
 protected:
 	/* 고유한 활성 강화 효과 핸들 발급 (서브시스템 또는 로컬 폴백) */

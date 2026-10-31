@@ -3,6 +3,7 @@
 #include "Enhancement/DISEnhancementEffect.h"
 #include "Enhancement/DISEnhanceableInterface.h"
 #include "Global/DISGlobalSubsystem.h"
+#include "Global/DISGlobalLogic.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 
@@ -646,17 +647,19 @@ UDISEnhancementContainer::FEffectIterator UDISEnhancementContainer::CreateEffect
 	return FEffectIterator(*this);
 }
 
-UDISGlobalSubsystem* UDISEnhancementContainer::GetGlobalSubsystem() const
+UDISGlobalLogic* UDISEnhancementContainer::GetGlobalLogic() const
 {
+	if (UDISGlobalLogic* Logic = UDISGlobalSubsystem::GetLogic(this))
+	{
+		return Logic;
+	}
+
 	const UObject* CurrentOuter = this;
 	while (CurrentOuter != nullptr)
 	{
-		if (const UWorld* World = CurrentOuter->GetWorld())
+		if (UDISGlobalLogic* Logic = UDISGlobalSubsystem::GetLogic(CurrentOuter))
 		{
-			if (const UGameInstance* GI = World->GetGameInstance())
-			{
-				return GI->GetSubsystem<UDISGlobalSubsystem>();
-			}
+			return Logic;
 		}
 		CurrentOuter = CurrentOuter->GetOuter();
 	}
@@ -665,9 +668,9 @@ UDISGlobalSubsystem* UDISEnhancementContainer::GetGlobalSubsystem() const
 
 FDISActiveEnhancementEffectHandle UDISEnhancementContainer::AllocateEffectHandle()
 {
-	if (UDISGlobalSubsystem* GlobalSubsystem = GetGlobalSubsystem())
+	if (UDISGlobalLogic* GlobalLogic = GetGlobalLogic())
 	{
-		return GlobalSubsystem->AllocateEnhancementEffectHandle(this);
+		return GlobalLogic->AllocateEnhancementEffectHandle(this);
 	}
 
 	return FDISActiveEnhancementEffectHandle();
@@ -680,9 +683,9 @@ void UDISEnhancementContainer::ReleaseEffectHandle(const FDISActiveEnhancementEf
 		return;
 	}
 
-	if (UDISGlobalSubsystem* GlobalSubsystem = GetGlobalSubsystem())
+	if (UDISGlobalLogic* GlobalLogic = GetGlobalLogic())
 	{
-		GlobalSubsystem->ReleaseEnhancementEffectHandle(Handle);
+		GlobalLogic->ReleaseEnhancementEffectHandle(Handle);
 	}
 }
 

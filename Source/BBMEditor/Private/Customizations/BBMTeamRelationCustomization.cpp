@@ -1,5 +1,5 @@
 #include "Customizations/BBMTeamRelationCustomization.h"
-#include "Combat/BBMTeamTypes.h"
+#include "Combat/Team/BBMTeamTypes.h"
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
 #include "DetailLayoutBuilder.h"

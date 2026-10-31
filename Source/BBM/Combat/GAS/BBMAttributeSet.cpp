@@ -1,4 +1,4 @@
-#include "Combat/BBMAttributeSet.h"
+#include "Combat/GAS/BBMAttributeSet.h"
 #include "GameplayEffectExtension.h"
 
 UBBMAttributeSet::UBBMAttributeSet() :

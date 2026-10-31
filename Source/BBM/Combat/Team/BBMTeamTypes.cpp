@@ -1,4 +1,4 @@
-#include "Combat/BBMTeamTypes.h"
+#include "Combat/Team/BBMTeamTypes.h"
 #include "UObject/EnumProperty.h"
 
 int32 FBBMTeamRelation::FillMissingTeams(EBBMTeamType ContextTeam)

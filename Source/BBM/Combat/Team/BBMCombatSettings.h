@@ -1,4 +1,4 @@
-﻿/*****************************************************************//**
+/*****************************************************************//**
  * @file   BBMCombatSettings.h
  * @brief  BBM 전투 및 팀 관계 전역 개발자 환경설정 클래스 정의
  * @details Project Settings를 통해 팀 간 관계(Friendly/Hostile/Neutral)를 관리하며 FGenericTeamId 태도 해석기를 제공함
@@ -9,7 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
-#include "Combat/BBMTeamTypes.h"
+#include "Combat/Team/BBMTeamTypes.h"
 #include "BBMCombatSettings.generated.h"
 
 /**

@@ -1,4 +1,4 @@
-﻿/*****************************************************************//**
+/*****************************************************************//**
  * @file   BBMCombatantBase.h
  * @brief  BBM(비트 배낭 상인) 전투원 캐릭터 베이스 폰 클래스 정의
  * @details GAS, UBBMCharacterDefinition 정적 정의, FGenericTeamId 팀 시스템 및 1D 레인 진형을 지원함
@@ -11,7 +11,7 @@
 #include "GameFramework/Pawn.h"
 #include "AbilitySystemInterface.h"
 #include "GenericTeamAgentInterface.h"
-#include "Combat/BBMTeamTypes.h"
+#include "Combat/Team/BBMTeamTypes.h"
 #include "BBMCombatantBase.generated.h"
 
 /* 독립 전방 선언 (상단에 단독 배치) */

@@ -1,4 +1,4 @@
-#include "Combat/BBMAbilitySystemGlobals.h"
+#include "Combat/GAS/BBMAbilitySystemGlobals.h"
 #include "Engine/CurveTable.h"
 
 UBBMAbilitySystemGlobals::UBBMAbilitySystemGlobals()

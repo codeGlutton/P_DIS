@@ -1,4 +1,4 @@
-﻿/*****************************************************************//**
+/*****************************************************************//**
  * @file   BBMBeatTypes.h
  * @brief  BBM(비트 배낭 상인) 비트 시퀀스, 연출 타임라인 및 효과 타입 정의
  * @date   2026-10-30
@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Item/BBMItemGameplayEffectTypes.h"
 #include "BBMBeatTypes.generated.h"
 
 /**
@@ -185,4 +186,87 @@ public:
 	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
 	TArray<FBBMBeatAnimationConfig> Animations;
 };
+
+/**
+ * 특정 비트 구간 [StartBeat, EndBeat) 동안 캐릭터(ASC)에 부여 및 유지될 GameplayEffect 범위 스케줄 구조체
+ */
+USTRUCT(BlueprintType)
+struct BBM_API FBBMBeatEffectRange
+{
+	GENERATED_BODY()
+
+	/* 생성자 */
+public:
+	FBBMBeatEffectRange();
+	FBBMBeatEffectRange(int32 InStartBeat, int32 InEndBeat, FName InRangeName = NAME_None);
+
+	/* 비트 구간 판별 헬퍼 */
+public:
+	/* 특정 비트 인덱스에서 효과가 활성화 상태인지 확인 (StartBeat <= BeatIndex < EndBeat) */
+	FORCEINLINE bool IsActiveAtBeat(int32 BeatIndex) const
+	{
+		return BeatIndex >= StartBeat && BeatIndex < EndBeat;
+	}
+
+	/* 특정 비트 인덱스가 효과의 시작 비트인지 확인 (부여 타이밍) */
+	FORCEINLINE bool IsStartingAtBeat(int32 BeatIndex) const
+	{
+		return BeatIndex == StartBeat;
+	}
+
+	/* 특정 비트 인덱스 종료 시 효과가 회수되어야 하는지 확인 (해제 타이밍, BeatIndex + 1 == EndBeat) */
+	FORCEINLINE bool IsEndingAtBeat(int32 BeatIndex) const
+	{
+		return (BeatIndex + 1) == EndBeat;
+	}
+
+	/* 유효한 비트 범위인지 검사 (0 <= StartBeat < EndBeat <= 8) */
+	bool IsValid() const;
+
+	/* 프로퍼티 */
+public:
+	/* 디버깅 및 에디터 식별용 구간 명칭 (예: "WeaponGrantedBuff", "RagePhase") */
+	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
+	FName RangeName;
+
+	/* 효과 부여 시작 비트 인덱스 (0~7, 0은 1번째 비트 시작 시점) */
+	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0", ClampMax = "7"))
+	int32 StartBeat;
+
+	/* 효과 회수 종료 비트 인덱스 (1~8, 1-based Exclusive, 8은 8번째 비트 종료 시점) */
+	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "1", ClampMax = "8"))
+	int32 EndBeat;
+
+	/* 해당 비트 구간 동안 캐릭터에 부여될 GameplayEffect 및 SetByCaller 수치 설정 목록 */
+	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
+	TArray<FBBMItemGameplayEffectConfig> GrantedEffects;
+};
+
+/**
+ * 1턴(8비트) 동안 실행될 비트 시퀀스 및 비트 구간별 활성 효과 스케줄을 담는 공통 기반 구조체
+ * 플레이어(배낭 인벤토리 배치 결과)와 AI(몬스터 행동 패턴의 실행 본체) 모두 동일한 데이터 규격으로 사용함
+ */
+USTRUCT(BlueprintType)
+struct BBM_API FBBMBeatSequence
+{
+	GENERATED_BODY()
+
+	/* 생성자 및 헬퍼 */
+public:
+	FBBMBeatSequence();
+
+	/* 8비트 규격 및 유효성 검사 (Beats.Num() == 8 && 모든 EffectRanges의 IsValid() == true) */
+	bool IsValid() const;
+
+	/* 프로퍼티 */
+public:
+	/* 8비트 시퀀스 정의 목록 (GDD 3.3 규격에 따라 8개 비트) */
+	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
+	TArray<FBBMBeatDefinition> Beats;
+
+	/* 비트 구간별 활성화되는 GameplayEffect 스케줄 목록 */
+	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
+	TArray<FBBMBeatEffectRange> EffectRanges;
+};
+
 

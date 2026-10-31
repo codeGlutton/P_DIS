@@ -6,14 +6,18 @@
  *********************************************************************/
 
 #include "Misc/AutomationTest.h"
+#include "Misc/DataValidation.h"
 #include "AbilitySystemGlobals.h"
-#include "Combat/BBMAbilitySystemGlobals.h"
-#include "Combat/BBMCombatantBase.h"
-#include "Combat/BBMCharacterDefinition.h"
-#include "Combat/BBMTeamTypes.h"
-#include "Combat/BBMCombatSettings.h"
+#include "Combat/GAS/BBMAbilitySystemGlobals.h"
+#include "Combat/Pawn/BBMCombatantBase.h"
+#include "Combat/Pawn/BBMPlayerMerchantBase.h"
+#include "Combat/Pawn/BBMAICombatantBase.h"
+#include "Combat/Pawn/BBMCharacterDefinition.h"
+#include "Combat/Pawn/BBMAICombatantDefinition.h"
+#include "Combat/Team/BBMTeamTypes.h"
+#include "Combat/Team/BBMCombatSettings.h"
 #include "Combat/BBMCombatSimulator.h"
-#include "Combat/BBMAttributeSet.h"
+#include "Combat/GAS/BBMAttributeSet.h"
 #include "GameFeatures/GameFeatureAction_AddBBMGlobalDefinition.h"
 #include "Item/BBMItemDefinition.h"
 #include "Item/BBMItemEntry.h"
@@ -154,6 +158,12 @@ bool FBBMCombatantCompositeCurveTableTest::RunTest(const FString& Parameters)
 	CharDef->TableKeyName = FName(TEXT("Player"));
 	CharDef->DisplayName = FText::FromString(TEXT("테스트 주인공"));
 	CharDef->DefaultTeam = EBBMTeamType::Player;
+
+	// PrimaryAssetId 검증
+	const FPrimaryAssetId AssetId = CharDef->GetPrimaryAssetId();
+	TestEqual(TEXT("PrimaryAssetType은 BBMCharacter여야 함"), AssetId.PrimaryAssetType, FPrimaryAssetType(BBMPrimaryAssetTypes::Character));
+	TestEqual(TEXT("PrimaryAssetName은 CharDef 이름이어야 함"), AssetId.PrimaryAssetName, CharDef->GetFName());
+
 	Combatant->SetCharacterDefinition(CharDef);
 
 	TestEqual(TEXT("CharacterDefinition 설정 후 기본 팀 동기화 검증"), Combatant->GetTeamType(), EBBMTeamType::Player);
@@ -423,6 +433,199 @@ bool FBBMTeamRelationFillMissingTeamsTest::RunTest(const FString& Parameters)
 
 	TestEqual(TEXT("이미 모든 팀이 등록되어 있으므로 추가된 개수는 0이어야 함"), SecondAddedCount, 0);
 	TestEqual(TEXT("기존에 설정한 Hostile 태도가 보존되어야 함"), Relation.Attitudes.FindRef(EBBMTeamType::Monster), TEnumAsByte<ETeamAttitude::Type>(ETeamAttitude::Hostile));
+
+	return true;
+}
+
+// 6. BBMCombatantBase 파생 객체(PlayerMerchant, AICombatant) 및 소환수/몬스터 팀 동기화 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMCombatantSubclassesTest,
+	"DIS.BBM.Combat.CombatantSubclasses",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMCombatantSubclassesTest::RunTest(const FString& Parameters)
+{
+	FBBMScopedTestWorld TestWorld;
+	TestNotNull(TEXT("테스트 월드 생성 검증"), TestWorld.World);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	// 1. 플레이어 상인 스폰 및 기본 팀(Player) 검증
+	ABBMPlayerMerchantBase* Merchant = TestWorld.World->SpawnActor<ABBMPlayerMerchantBase>();
+	TestNotNull(TEXT("ABBMPlayerMerchantBase 스폰 검증"), Merchant);
+	if (Merchant != nullptr)
+	{
+		TestEqual(TEXT("플레이어 상인의 기본 팀은 Player여야 함"), Merchant->GetTeamType(), EBBMTeamType::Player);
+		TestNotNull(TEXT("플레이어 상인의 ASC 검증"), Merchant->GetAbilitySystemComponent());
+		TestNotNull(TEXT("플레이어 상인의 AttributeSet 검증"), Merchant->GetAttributeSet());
+	}
+
+	// 2. 적군 AI 몬스터 스폰 및 팀(Monster) 검증
+	ABBMAICombatantBase* Monster = TestWorld.World->SpawnActor<ABBMAICombatantBase>();
+	TestNotNull(TEXT("ABBMAICombatantBase(적군 몬스터) 스폰 검증"), Monster);
+	if (Monster != nullptr)
+	{
+		TestEqual(TEXT("몬스터의 기본 팀은 Monster여야 함"), Monster->GetTeamType(), EBBMTeamType::Monster);
+		TestNotNull(TEXT("몬스터의 ASC 검증"), Monster->GetAbilitySystemComponent());
+		TestNotNull(TEXT("몬스터의 AttributeSet 검증"), Monster->GetAttributeSet());
+	}
+
+	// 3. 아군 AI 동료 소환수 스폰 및 Definition 통한 Player 팀 동기화 검증
+	ABBMAICombatantBase* Companion = TestWorld.World->SpawnActor<ABBMAICombatantBase>();
+	TestNotNull(TEXT("ABBMAICombatantBase(아군 동료) 스폰 검증"), Companion);
+	if (Companion != nullptr)
+	{
+		UBBMCharacterDefinition* CompanionDef = NewObject<UBBMCharacterDefinition>();
+		CompanionDef->DisplayName = FText::FromString(TEXT("동료 슬라임"));
+		CompanionDef->DefaultTeam = EBBMTeamType::Player;
+		Companion->SetCharacterDefinition(CompanionDef);
+
+		TestEqual(TEXT("소환수 Definition 주입 후 팀이 Player로 자동 동기화되어야 함"), Companion->GetTeamType(), EBBMTeamType::Player);
+	}
+
+	// 4. 상호 태도 검증: 플레이어 vs 몬스터 -> Hostile / 플레이어 vs 동료 소환수 -> Friendly
+	if (Merchant != nullptr && Monster != nullptr)
+	{
+		TestEqual(TEXT("Merchant -> Monster 태도는 Hostile이어야 함"), Merchant->GetTeamAttitudeTowards(*Monster), ETeamAttitude::Hostile);
+		TestEqual(TEXT("Monster -> Merchant 태도는 Hostile이어야 함"), Monster->GetTeamAttitudeTowards(*Merchant), ETeamAttitude::Hostile);
+	}
+
+	if (Merchant != nullptr && Companion != nullptr)
+	{
+		TestEqual(TEXT("Merchant -> Companion 태도는 Friendly여야 함"), Merchant->GetTeamAttitudeTowards(*Companion), ETeamAttitude::Friendly);
+		TestEqual(TEXT("Companion -> Merchant 태도는 Friendly여야 함"), Companion->GetTeamAttitudeTowards(*Merchant), ETeamAttitude::Friendly);
+	}
+
+	return true;
+}
+
+// 7. UBBMAICombatantDefinition 8비트 패턴 풀 및 FRandomStream 기반 가중치/연속방지 추첨 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMAICombatantDefinitionPatternTest,
+	"DIS.BBM.Combat.AICombatantDefinitionPattern",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMAICombatantDefinitionPatternTest::RunTest(const FString& Parameters)
+{
+	UBBMAICombatantDefinition* AIDef = NewObject<UBBMAICombatantDefinition>();
+	TestNotNull(TEXT("UBBMAICombatantDefinition 생성 검증"), AIDef);
+	if (AIDef == nullptr)
+	{
+		return false;
+	}
+
+	// 1. 기본 식별자 및 팀 검증
+	const FPrimaryAssetId AssetId = AIDef->GetPrimaryAssetId();
+	TestEqual(TEXT("PrimaryAssetType은 BBMAICombatant여야 함"), AssetId.PrimaryAssetType, FPrimaryAssetType(BBMPrimaryAssetTypes::AICombatant));
+	TestEqual(TEXT("기본 팀은 Monster여야 함"), AIDef->GetDefaultTeam(), EBBMTeamType::Monster);
+
+	// 2. 패턴 풀 구성: PatternA (가중치 0, 선택 불가), PatternB (가중치 10, 연속불가), PatternC (가중치 90, 연속가능)
+	FBBMAIBeatSequence PatternA;
+	PatternA.PatternName = FName(TEXT("PatternA_Zero"));
+	PatternA.SelectionWeight = 0.0f;
+	PatternA.Sequence.Beats.SetNum(8);
+
+	FBBMAIBeatSequence PatternB;
+	PatternB.PatternName = FName(TEXT("PatternB_Rare"));
+	PatternB.SelectionWeight = 10.0f;
+	PatternB.bCanRepeatConsecutively = false;
+	PatternB.Sequence.Beats.SetNum(8);
+
+	// PatternC는 비트 2~5 구간에 활성화되는 EffectRange를 포함하도록 설정
+	FBBMAIBeatSequence PatternC;
+	PatternC.PatternName = FName(TEXT("PatternC_Common"));
+	PatternC.SelectionWeight = 90.0f;
+	PatternC.bCanRepeatConsecutively = true;
+	PatternC.Sequence.Beats.SetNum(8);
+	PatternC.Sequence.EffectRanges.Add(FBBMBeatEffectRange(2, 5, FName(TEXT("RageBuffRange"))));
+
+	AIDef->PatternPool.Add(PatternA);
+	AIDef->PatternPool.Add(PatternB);
+	AIDef->PatternPool.Add(PatternC);
+
+	// 3. FRandomStream 기반 추첨 검증
+	FRandomStream Stream(42);
+	const FBBMAIBeatSequence* Selected = AIDef->SelectPattern(Stream, NAME_None);
+	TestNotNull(TEXT("패턴 선택 결과 검증"), Selected);
+	if (Selected != nullptr)
+	{
+		TestNotEqual(TEXT("가중치 0인 PatternA는 절대 선택되지 않아야 함"), Selected->PatternName, PatternA.PatternName);
+	}
+
+	// 4. 연속 방지 검증: LastPatternName을 PatternB로 전달 시, bCanRepeatConsecutively = false이므로 PatternC만 당첨되어야 함
+	for (int32 i = 0; i < 10; ++i)
+	{
+		const FBBMAIBeatSequence* NoRepeatSelected = AIDef->SelectPattern(Stream, FName(TEXT("PatternB_Rare")));
+		TestNotNull(TEXT("연속 방지 추첨 결과 검증"), NoRepeatSelected);
+		if (NoRepeatSelected != nullptr)
+		{
+			TestEqual(TEXT("PatternB는 연속 사용이 금지되어 있으므로 반드시 PatternC가 나와야 함"), NoRepeatSelected->PatternName, PatternC.PatternName);
+		}
+	}
+
+	// 5. FBBMBeatEffectRange 및 FBBMBeatSequence 컴포지션 단위 검증
+	{
+		const FBBMBeatEffectRange Range(2, 5, FName(TEXT("TestRange")));
+		TestTrue(TEXT("0 <= 2 < 5 <= 8 범위는 IsValid() == true 여야 함"), Range.IsValid());
+
+		// IsActiveAtBeat [2, 5)
+		TestFalse(TEXT("Beat 1은 범위 밖"), Range.IsActiveAtBeat(1));
+		TestTrue(TEXT("Beat 2는 활성"), Range.IsActiveAtBeat(2));
+		TestTrue(TEXT("Beat 4는 활성"), Range.IsActiveAtBeat(4));
+		TestFalse(TEXT("Beat 5는 범위 밖 (Exclusive)"), Range.IsActiveAtBeat(5));
+
+		// IsStartingAtBeat (Beat 2에서 부여 시작)
+		TestFalse(TEXT("Beat 1은 시작 비트 아님"), Range.IsStartingAtBeat(1));
+		TestTrue(TEXT("Beat 2는 시작 비트"), Range.IsStartingAtBeat(2));
+		TestFalse(TEXT("Beat 3은 시작 비트 아님"), Range.IsStartingAtBeat(3));
+
+		// IsEndingAtBeat (Beat 4 종료 시 회수 타이밍: 4 + 1 == 5)
+		TestFalse(TEXT("Beat 3 종료 시는 회수 타이밍 아님"), Range.IsEndingAtBeat(3));
+		TestTrue(TEXT("Beat 4 종료 시는 회수 타이밍"), Range.IsEndingAtBeat(4));
+		TestFalse(TEXT("Beat 5는 회수 타이밍 아님"), Range.IsEndingAtBeat(5));
+
+		// 비정상 범위 검증
+		const FBBMBeatEffectRange InvertedRange(5, 2, FName(TEXT("InvertedRange")));
+		TestFalse(TEXT("Start > End 범위는 IsValid() == false 여야 함"), InvertedRange.IsValid());
+
+		const FBBMBeatEffectRange OutOfBoundsRange(0, 9, FName(TEXT("OutOfBoundsRange")));
+		TestFalse(TEXT("End > 8 범위는 IsValid() == false 여야 함"), OutOfBoundsRange.IsValid());
+	}
+
+#if WITH_EDITOR
+	// 6. IsDataValid 8비트 규격 및 EffectRange 검증: 7비트 패턴 포함 시 Invalid 검증
+	FDataValidationContext Context;
+	const EDataValidationResult ValidResult = AIDef->IsDataValid(Context);
+	TestEqual(TEXT("정상 8비트 패턴들은 Valid 판정이어야 함"), ValidResult, EDataValidationResult::Valid);
+
+	// 8비트가 아닌 비정상 패턴 추가
+	FBBMAIBeatSequence InvalidPattern;
+	InvalidPattern.PatternName = FName(TEXT("InvalidPattern_7Beats"));
+	InvalidPattern.SelectionWeight = 1.0f;
+	InvalidPattern.Sequence.Beats.SetNum(7); // 7비트 (규격 위반)
+	AIDef->PatternPool.Add(InvalidPattern);
+
+	FDataValidationContext InvalidContext;
+	const EDataValidationResult InvalidResult = AIDef->IsDataValid(InvalidContext);
+	TestEqual(TEXT("7비트 패턴 포함 시 Invalid 판정이어야 함"), InvalidResult, EDataValidationResult::Invalid);
+
+	// 비정상 EffectRange가 포함된 패턴 검증
+	AIDef->PatternPool.Pop(); // InvalidPattern 제거
+	FBBMAIBeatSequence BadRangePattern;
+	BadRangePattern.PatternName = FName(TEXT("BadRangePattern"));
+	BadRangePattern.SelectionWeight = 1.0f;
+	BadRangePattern.Sequence.Beats.SetNum(8);
+	BadRangePattern.Sequence.EffectRanges.Add(FBBMBeatEffectRange(4, 2, FName(TEXT("BadRange")))); // Start > End
+	AIDef->PatternPool.Add(BadRangePattern);
+
+	FDataValidationContext BadRangeContext;
+	const EDataValidationResult BadRangeResult = AIDef->IsDataValid(BadRangeContext);
+	TestEqual(TEXT("비정상 EffectRange 포함 시 Invalid 판정이어야 함"), BadRangeResult, EDataValidationResult::Invalid);
+#endif
 
 	return true;
 }

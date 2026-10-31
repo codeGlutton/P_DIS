@@ -1,4 +1,4 @@
-﻿/*****************************************************************//**
+/*****************************************************************//**
  * @file   BBMCharacterDefinition.h
  * @brief  BBM(비트 배낭 상인) 캐릭터 기본 정적 정의 데이터 에셋 클래스 정의
  * @details 캐릭터 표시명, GAS CurveTable 행 파싱 키 이름(TableKeyName), 기본 소속 팀 등을 정의함
@@ -9,8 +9,17 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "Combat/BBMTeamTypes.h"
+#include "Combat/Team/BBMTeamTypes.h"
 #include "BBMCharacterDefinition.generated.h"
+
+/**
+ * BBM 호스트 게임 전역에서 사용하는 PrimaryAssetType 식별자 모음
+ */
+namespace BBMPrimaryAssetTypes
+{
+	/* BBM 캐릭터 정의 에셋 식별자 ("BBMCharacter") */
+	constexpr const TCHAR* Character = TEXT("BBMCharacter");
+}
 
 /**
  * BBM 캐릭터 기본 정적 정의 데이터 에셋 클래스
@@ -24,6 +33,10 @@ class BBM_API UBBMCharacterDefinition : public UPrimaryDataAsset
 	/* 생성자 */
 public:
 	UBBMCharacterDefinition();
+
+	/* PrimaryAssetId 오버라이드 */
+public:
+	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
 
 	/* Getter 헬퍼 */
 public:
@@ -50,4 +63,3 @@ public:
 	UPROPERTY(Category = "Character|Team", EditDefaultsOnly, BlueprintReadOnly)
 	EBBMTeamType DefaultTeam;
 };
-

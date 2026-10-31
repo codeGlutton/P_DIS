@@ -81,3 +81,52 @@ bool FBBMBeatDefinition::HasAnimations() const
 	return Animations.IsEmpty() == false;
 }
 
+FBBMBeatEffectRange::FBBMBeatEffectRange() :
+	RangeName(NAME_None),
+	StartBeat(0),
+	EndBeat(1),
+	GrantedEffects()
+{
+}
+
+FBBMBeatEffectRange::FBBMBeatEffectRange(int32 InStartBeat, int32 InEndBeat, FName InRangeName) :
+	RangeName(InRangeName),
+	StartBeat(InStartBeat),
+	EndBeat(InEndBeat),
+	GrantedEffects()
+{
+}
+
+bool FBBMBeatEffectRange::IsValid() const
+{
+	// 0 <= StartBeat < EndBeat <= 8 범위 검증
+	return (StartBeat >= 0) && (EndBeat <= 8) && (StartBeat < EndBeat);
+}
+
+FBBMBeatSequence::FBBMBeatSequence() :
+	Beats(),
+	EffectRanges()
+{
+}
+
+bool FBBMBeatSequence::IsValid() const
+{
+	// GDD 3.3 규격: 정확히 8개의 비트로 구성되어야 함
+	if (Beats.Num() != 8)
+	{
+		return false;
+	}
+
+	// 모든 EffectRange가 유효한 비트 범위인지 검증
+	for (const FBBMBeatEffectRange& Range : EffectRanges)
+	{
+		if (Range.IsValid() == false)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+

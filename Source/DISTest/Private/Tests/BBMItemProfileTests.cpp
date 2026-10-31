@@ -10,7 +10,7 @@
 #include "Item/BBMItemEntry.h"
 #include "Item/BBMItemProfileTypes.h"
 #include "Item/BBMItemGameplayEffectTypes.h"
-#include "Combat/BBMAttributeSet.h"
+#include "Combat/GAS/BBMAttributeSet.h"
 #include "Item/DISItemDefinition.h"
 #include "Item/DISItemEntry.h"
 #include "Item/DISItemStack.h"

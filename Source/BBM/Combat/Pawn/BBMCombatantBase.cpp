@@ -4,10 +4,10 @@
  * @date   2026-10-31
  *********************************************************************/
 
-#include "Combat/BBMCombatantBase.h"
-#include "Combat/BBMAttributeSet.h"
-#include "Combat/BBMCharacterDefinition.h"
-#include "Combat/BBMAbilitySystemGlobals.h"
+#include "Combat/Pawn/BBMCombatantBase.h"
+#include "Combat/GAS/BBMAttributeSet.h"
+#include "Combat/Pawn/BBMCharacterDefinition.h"
+#include "Combat/GAS/BBMAbilitySystemGlobals.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 

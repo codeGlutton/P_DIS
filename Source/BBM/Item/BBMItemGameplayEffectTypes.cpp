@@ -1,5 +1,5 @@
 #include "Item/BBMItemGameplayEffectTypes.h"
-#include "Combat/BBMAttributeSet.h"
+#include "Combat/GAS/BBMAttributeSet.h"
 #include "GameplayTagsManager.h"
 
 FBBMItemGameplayEffectConfig::FBBMItemGameplayEffectConfig() :

@@ -4,7 +4,7 @@
  * @date   2026-10-31
  *********************************************************************/
 
-#include "Combat/BBMCombatSettings.h"
+#include "Combat/Team/BBMCombatSettings.h"
 
 UBBMCombatSettings::UBBMCombatSettings(const FObjectInitializer& ObjectInitializer) :
 	Super(ObjectInitializer)

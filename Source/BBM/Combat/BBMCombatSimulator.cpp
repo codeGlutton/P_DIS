@@ -1,6 +1,6 @@
 #include "Combat/BBMCombatSimulator.h"
-#include "Combat/BBMCombatantBase.h"
-#include "Combat/BBMAttributeSet.h"
+#include "Combat/Pawn/BBMCombatantBase.h"
+#include "Combat/GAS/BBMAttributeSet.h"
 #include "Item/BBMItemEntry.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayEffect.h"

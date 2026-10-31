@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMCombatSimulator.h
  * @brief  BBM(비트 배낭 상인) 전투 시뮬레이터 및 교전 해결기 클래스 정의
  * @details 비트 단위 아이템 GAS GameplayEffect 적용/해제 및 GDD 5.3 4단계 피해 처리를 전담함
@@ -24,7 +24,7 @@ class UBBMEffectBase;
  * 3. GDD 5.3 규격에 따른 엄격한 4단계 피해 처리(패링 -> 액티브 가드 -> 쌓아둔 방어도 -> 체력)
  */
 UCLASS(BlueprintType, meta = (DisplayName = "BBM Combat Simulator"))
-class DIS_API UBBMCombatSimulator : public UObject
+class BBM_API UBBMCombatSimulator : public UObject
 {
 	GENERATED_BODY()
 

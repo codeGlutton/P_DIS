@@ -1,6 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "DIS.h"
+#include "BBM.h"
 #include "Modules/ModuleManager.h"
 
-IMPLEMENT_PRIMARY_GAME_MODULE( FDefaultGameModuleImpl, DIS, "DIS" );
+IMPLEMENT_PRIMARY_GAME_MODULE( FDefaultGameModuleImpl, BBM, "BBM" );

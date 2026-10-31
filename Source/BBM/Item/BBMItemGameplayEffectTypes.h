@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMItemGameplayEffectTypes.h
  * @brief  BBM(비트 배낭 상인) 아이템의 GAS GameplayEffect 및 SetByCaller 설정 타입 정의
  * @date   2026-10-30
@@ -15,7 +15,7 @@
  * 아이템이 비트 시작 시 캐릭터(ASC)에 부여할 GameplayEffect 및 SetByCaller 수치 파라미터 구성 구조체
  */
 USTRUCT(BlueprintType)
-struct DIS_API FBBMItemGameplayEffectConfig
+struct BBM_API FBBMItemGameplayEffectConfig
 {
 	GENERATED_BODY()
 
@@ -45,7 +45,7 @@ public:
  * AttackPower, DefensePower, Armor 어트리뷰트를 SetByCallerMagnitude로 동적 조절함
  */
 UCLASS(BlueprintType, meta = (DisplayName = "BBM Item Stat Gameplay Effect"))
-class DIS_API UBBMItemStatGameplayEffect : public UGameplayEffect
+class BBM_API UBBMItemStatGameplayEffect : public UGameplayEffect
 {
 	GENERATED_BODY()
 

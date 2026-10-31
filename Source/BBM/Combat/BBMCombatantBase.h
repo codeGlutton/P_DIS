@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMCombatantBase.h
  * @brief  BBM(비트 배낭 상인) 전투원 캐릭터 베이스 폰 클래스 정의
  * @details GAS, UBBMCharacterDefinition 정적 정의, FGenericTeamId 팀 시스템 및 1D 레인 진형을 지원함
@@ -25,7 +25,7 @@ struct FGameplayAttribute;
  * 언리얼 공식 GAS 및 GenericTeamAgentInterface를 구현하며, 정적 Definition 기반 스탯 초기화를 전담함
  */
 UCLASS(BlueprintType, Blueprintable, meta = (DisplayName = "BBM Combatant Base"))
-class DIS_API ABBMCombatantBase : public APawn, public IAbilitySystemInterface, public IGenericTeamAgentInterface
+class BBM_API ABBMCombatantBase : public APawn, public IAbilitySystemInterface, public IGenericTeamAgentInterface
 {
 	GENERATED_BODY()
 

@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMCombatSettings.h
  * @brief  BBM 전투 및 팀 관계 전역 개발자 환경설정 클래스 정의
  * @details Project Settings를 통해 팀 간 관계(Friendly/Hostile/Neutral)를 관리하며 FGenericTeamId 태도 해석기를 제공함
@@ -16,7 +16,7 @@
  * BBM 전투 및 팀 관계 개발자 설정 클래스
  */
 UCLASS(Config = Game, defaultconfig, meta = (DisplayName = "BBM Combat Settings"))
-class DIS_API UBBMCombatSettings : public UDeveloperSettings
+class BBM_API UBBMCombatSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 

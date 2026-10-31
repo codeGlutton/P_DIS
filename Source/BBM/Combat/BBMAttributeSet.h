@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMAttributeSet.h
  * @brief  BBM(비트 배낭 상인) 전투 핵심 GAS 어트리뷰트 세트 클래스 정의
  * @date   2026-10-30
@@ -21,7 +21,7 @@
  * BBM 캐릭터 및 전투원의 5대 핵심 전투 스탯을 관리하는 AttributeSet
  */
 UCLASS(BlueprintType)
-class DIS_API UBBMAttributeSet : public UAttributeSet
+class BBM_API UBBMAttributeSet : public UAttributeSet
 {
 	GENERATED_BODY()
 

@@ -19,7 +19,7 @@ public class DISTest : ModuleRules
 			"GameplayTasks",
 			"AIModule",
 			"DISRuntime",
-			"DIS"
+			"BBM"
 		});
 
 		/* 비공개 의존성 모듈 (자동화 테스트 및 에디터 서브시스템) */

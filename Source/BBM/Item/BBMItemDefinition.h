@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMItemDefinition.h
  * @brief  BBM(비트 배낭 상인) 확장 아이템 정의 클래스 정의
  * @date   2026-10-30
@@ -22,7 +22,7 @@ class UAnimInstance;
  * 단일 아이템에 복수의 그룹 태그, 가격, 비트 구성, 링크드 애님 레이어 및 기본 GAS Effect를 지정할 수 있음
  */
 UCLASS(BlueprintType, Const, meta = (DisplayName = "BBM Item Definition"))
-class DIS_API UBBMItemDefinition : public UDISItemDefinition
+class BBM_API UBBMItemDefinition : public UDISItemDefinition
 {
 	GENERATED_BODY()
 

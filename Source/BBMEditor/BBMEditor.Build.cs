@@ -17,7 +17,7 @@ public class BBMEditor : ModuleRules
 				"Engine",
 
 				/* 호스트 게임 런타임 모듈 */
-				"DIS"
+				"BBM"
 			}
 		);
 

@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMGlobalLogic.h
  * @brief  BBM(비트 배낭 상인) 전역 로직 서브오브젝트 클래스
  * @date   2026-10-28
@@ -20,7 +20,7 @@ class UBBMGlobalDefinition;
  * 기본 DIS 전역 로직 외에 아이템 그룹 프로파일 레지스트리를 추가 관리함
  */
 UCLASS(Blueprintable, BlueprintType, DisplayName = "BBM Global Logic")
-class DIS_API UBBMGlobalLogic : public UDISGlobalLogic
+class BBM_API UBBMGlobalLogic : public UDISGlobalLogic
 {
 	GENERATED_BODY()
 

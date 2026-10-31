@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMGlobalDefinition.h
  * @brief  BBM(비트 배낭 상인) 전역 정의 에셋 클래스
  * @date   2026-10-28
@@ -16,7 +16,7 @@
  * 기본 아이템/희귀도 프로파일 외에 아이템 그룹 프로파일 매핑 테이블을 보유함
  */
 UCLASS(BlueprintType, Const, meta = (DisplayName = "BBM Global Definition"))
-class DIS_API UBBMGlobalDefinition : public UDISGlobalDefinition
+class BBM_API UBBMGlobalDefinition : public UDISGlobalDefinition
 {
 	GENERATED_BODY()
 

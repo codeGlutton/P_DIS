@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMTeamTypes.h
  * @brief  BBM(비트 배낭 상인) 전투 팀 및 태도 타입 정의
  * @date   2026-10-31
@@ -25,7 +25,7 @@ enum class EBBMTeamType : uint8
  * 특정 팀을 기준으로 타 팀들에 대한 태도(Friendly, Hostile, Neutral) 매핑 구조체
  */
 USTRUCT(BlueprintType)
-struct DIS_API FBBMTeamRelation
+struct BBM_API FBBMTeamRelation
 {
 	GENERATED_BODY()
 

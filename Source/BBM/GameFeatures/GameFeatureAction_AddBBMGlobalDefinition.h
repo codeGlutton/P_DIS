@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   GameFeatureAction_AddBBMGlobalDefinition.h
  * @brief  GameFeature 활성화 시 전역 정의 에셋 및 BBM 그룹 프로파일을 동적 주입하는 GameFeatureAction 클래스
  * @date   2026-10-28
@@ -19,7 +19,7 @@ class UGameInstance;
  * GameFeature 활성화/비활성화 시 전역 정의 에셋들을 UDISGlobalLogic 및 UBBMGlobalLogic에 동적으로 등록/해제하는 액션
  */
 UCLASS(meta = (DisplayName = "Add BBM Global Definition"))
-class DIS_API UGameFeatureAction_AddBBMGlobalDefinition : public UGameFeatureAction
+class BBM_API UGameFeatureAction_AddBBMGlobalDefinition : public UGameFeatureAction
 {
 	GENERATED_BODY()
 

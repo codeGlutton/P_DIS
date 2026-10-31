@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMItemEntry.h
  * @brief  BBM(비트 배낭 상인) 런타임 개별 아이템 인스턴스 엔트리 클래스 정의
  * @details 런타임 가변 비트 구성(DynamicBeats) 및 강화 가능한 GAS Effect(DynamicGrantedEffects)를 소유함
@@ -22,7 +22,7 @@ class UBBMItemDefinition;
  * 아이템 강화 시 비트 Effect 추가/교체 및 GameplayEffect SetByCaller 수치 증폭을 전담함
  */
 UCLASS(BlueprintType, meta = (DisplayName = "BBM Item Entry"))
-class DIS_API UBBMItemEntry : public UDISItemEntry
+class BBM_API UBBMItemEntry : public UDISItemEntry
 {
 	GENERATED_BODY()
 

@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMItemProfileTypes.h
  * @brief  BBM(비트 배낭 상인) 아이템 타입 네이티브 태그 및 프로파일 커스텀 데이터 정의
  * @date   2026-10-29
@@ -23,26 +23,26 @@ namespace BBMItemProfileDefaults
 namespace BBMItemTypeTags
 {
 	// 무기 대분류 및 세부 타입 (내구도 없음, 스태킹 불가, 매 턴 반복 사용 가능)
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Shield);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_OneHandSword);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Spear);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Staff);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Bow);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Dagger);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Shield);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_OneHandSword);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Spear);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Staff);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Bow);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Weapon_Dagger);
 
 	// 장비 대분류 및 세부 타입 (내구도 없음, 스태킹 불가, 전투당 1회 사용 후 별도 칸 보관)
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment_Gloves);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment_Clothes);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment_Shoes);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment_Pants);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment_Gloves);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment_Clothes);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment_Shoes);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Equipment_Pants);
 
 	// 소모품 대분류 및 세부 타입 (내구도 없음, 스태킹 가능, 효과 발동 후 사라짐)
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable_Potion);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable_Throwable);
-	DIS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable_Scroll);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable_Potion);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable_Throwable);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable_Scroll);
 }
 
 /**
@@ -66,7 +66,7 @@ enum class EBBMItemUsageRule : uint8
  * 부모 FDISItemTypeCustomData의 MaxStackCount와 함께 BBM 전투 사용 규칙을 보유함
  */
 USTRUCT(BlueprintType, meta = (DisplayName = "BBM Item Type Custom Data"))
-struct DIS_API FBBMItemTypeCustomData : public FDISItemTypeCustomData
+struct BBM_API FBBMItemTypeCustomData : public FDISItemTypeCustomData
 {
 	GENERATED_BODY()
 

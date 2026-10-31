@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMBeatTypes.h
  * @brief  BBM(비트 배낭 상인) 비트 시퀀스, 연출 타임라인 및 효과 타입 정의
  * @date   2026-10-30
@@ -55,7 +55,7 @@ enum class EBBMVisualWindow : uint8
  * 다형성 인스턴스 구조체(TInstancedStruct)의 기본 타입으로, 6대 논리 실행 범주(EffectCategory)만 소유함
  */
 USTRUCT(BlueprintType)
-struct DIS_API FBBMEffectBase
+struct BBM_API FBBMEffectBase
 {
 	GENERATED_BODY()
 
@@ -81,7 +81,7 @@ public:
  * 대상 범위(TargetScope), 캐릭터 스탯 계수(Coefficient), 기본 수치(BaseValue)를 소유함
  */
 USTRUCT(BlueprintType)
-struct DIS_API FBBMCombatEffect : public FBBMEffectBase
+struct BBM_API FBBMCombatEffect : public FBBMEffectBase
 {
 	GENERATED_BODY()
 
@@ -114,7 +114,7 @@ public:
  * 이동할 칸 수(StepCount)만 소유함
  */
 USTRUCT(BlueprintType)
-struct DIS_API FBBMMovementEffect : public FBBMEffectBase
+struct BBM_API FBBMMovementEffect : public FBBMEffectBase
 {
 	GENERATED_BODY()
 
@@ -134,7 +134,7 @@ public:
  * 한 비트 내에서 실행될 애니메이션 연출 구성
  */
 USTRUCT(BlueprintType)
-struct DIS_API FBBMBeatAnimationConfig
+struct BBM_API FBBMBeatAnimationConfig
 {
 	GENERATED_BODY()
 
@@ -161,7 +161,7 @@ public:
  * 단일 비트의 효과(TInstancedStruct 목록) 및 애니메이션 연출 구성
  */
 USTRUCT(BlueprintType)
-struct DIS_API FBBMBeatDefinition
+struct BBM_API FBBMBeatDefinition
 {
 	GENERATED_BODY()
 

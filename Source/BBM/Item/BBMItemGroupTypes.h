@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMItemGroupTypes.h
  * @brief  BBM(비트 배낭 상인) 아이템 그룹 시스템 타입 및 프로파일 정의
  * @date   2026-10-28
@@ -14,7 +14,7 @@
  * BBM(비트 배낭 상인) 아이템 그룹의 표시 및 메타 정보를 정의하는 프로파일 구조체
  */
 USTRUCT(BlueprintType)
-struct DIS_API FBBMItemGroupProfile
+struct BBM_API FBBMItemGroupProfile
 {
 	GENERATED_BODY()
 

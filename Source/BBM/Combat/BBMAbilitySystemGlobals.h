@@ -1,4 +1,4 @@
-/*****************************************************************//**
+﻿/*****************************************************************//**
  * @file   BBMAbilitySystemGlobals.h
  * @brief  BBM(비트 배낭 상인) 전역 GAS 싱글톤 클래스 정의
  * @details DLC 및 테스트 환경에서의 동적 CurveTable 주입을 지원하며 Initter 안전성을 보장함
@@ -19,7 +19,7 @@ class UCurveTable;
  * DLC 및 테스트 환경에서의 동적 CurveTable 주입을 지원하며 Initter 안전성을 보장함
  */
 UCLASS(Config = Game)
-class DIS_API UBBMAbilitySystemGlobals : public UAbilitySystemGlobals
+class BBM_API UBBMAbilitySystemGlobals : public UAbilitySystemGlobals
 {
 	GENERATED_BODY()
 

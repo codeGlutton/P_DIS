@@ -1,49 +1,49 @@
 #include "Item/BBMBeatTypes.h"
 
-FBBMEffectBase::FBBMEffectBase() :
-	EffectCategory(EBBMEffectCategory::Damage)
+FBBMBeatAction::FBBMBeatAction() :
+	ActionCategory(EBBMActionCategory::Damage)
 {
 }
 
-FBBMEffectBase::FBBMEffectBase(EBBMEffectCategory InCategory) :
-	EffectCategory(InCategory)
+FBBMBeatAction::FBBMBeatAction(EBBMActionCategory InCategory) :
+	ActionCategory(InCategory)
 {
 }
 
-EBBMEffectCategory FBBMEffectBase::GetEffectCategory() const
+EBBMActionCategory FBBMBeatAction::GetActionCategory() const
 {
-	return EffectCategory;
+	return ActionCategory;
 }
 
-FBBMCombatEffect::FBBMCombatEffect() :
-	FBBMEffectBase(EBBMEffectCategory::Damage),
+FBBMCombatAction::FBBMCombatAction() :
+	FBBMBeatAction(EBBMActionCategory::Damage),
 	TargetScope(EBBMTargetScope::EnemyFrontline),
 	Coefficient(1.0f),
 	BaseValue(0.0f)
 {
 }
 
-FBBMCombatEffect::FBBMCombatEffect(EBBMEffectCategory InCategory, EBBMTargetScope InScope, float InCoefficient, float InBaseValue) :
-	FBBMEffectBase(InCategory),
+FBBMCombatAction::FBBMCombatAction(EBBMActionCategory InCategory, EBBMTargetScope InScope, float InCoefficient, float InBaseValue) :
+	FBBMBeatAction(InCategory),
 	TargetScope(InScope),
 	Coefficient(InCoefficient),
 	BaseValue(InBaseValue)
 {
 }
 
-float FBBMCombatEffect::CalculateMagnitude(float InAttributeValue) const
+float FBBMCombatAction::CalculateMagnitude(float InAttributeValue) const
 {
 	return (InAttributeValue * Coefficient) + BaseValue;
 }
 
-FBBMMovementEffect::FBBMMovementEffect() :
-	FBBMEffectBase(EBBMEffectCategory::PreMovement),
+FBBMMovementAction::FBBMMovementAction() :
+	FBBMBeatAction(EBBMActionCategory::PreMovement),
 	StepCount(1)
 {
 }
 
-FBBMMovementEffect::FBBMMovementEffect(EBBMEffectCategory InCategory, int32 InStepCount) :
-	FBBMEffectBase(InCategory),
+FBBMMovementAction::FBBMMovementAction(EBBMActionCategory InCategory, int32 InStepCount) :
+	FBBMBeatAction(InCategory),
 	StepCount(InStepCount)
 {
 }
@@ -66,14 +66,14 @@ bool FBBMBeatAnimationConfig::IsValid() const
 }
 
 FBBMBeatDefinition::FBBMBeatDefinition() :
-	Effects(),
+	Actions(),
 	Animations()
 {
 }
 
-bool FBBMBeatDefinition::HasEffects() const
+bool FBBMBeatDefinition::HasActions() const
 {
-	return Effects.IsEmpty() == false;
+	return Actions.IsEmpty() == false;
 }
 
 bool FBBMBeatDefinition::HasAnimations() const
@@ -82,15 +82,13 @@ bool FBBMBeatDefinition::HasAnimations() const
 }
 
 FBBMBeatEffectRange::FBBMBeatEffectRange() :
-	RangeName(NAME_None),
 	StartBeat(0),
 	EndBeat(1),
 	GrantedEffects()
 {
 }
 
-FBBMBeatEffectRange::FBBMBeatEffectRange(int32 InStartBeat, int32 InEndBeat, FName InRangeName) :
-	RangeName(InRangeName),
+FBBMBeatEffectRange::FBBMBeatEffectRange(int32 InStartBeat, int32 InEndBeat) :
 	StartBeat(InStartBeat),
 	EndBeat(InEndBeat),
 	GrantedEffects()
@@ -111,8 +109,8 @@ FBBMBeatSequence::FBBMBeatSequence() :
 
 bool FBBMBeatSequence::IsValid() const
 {
-	// GDD 3.3 규격: 정확히 8개의 비트로 구성되어야 함
-	if (Beats.Num() != 8)
+	// 최대 8비트 이하의 비트 시퀀스여야 함 (아이템은 1~8비트 가변, 턴/AI는 8비트)
+	if (Beats.Num() > 8)
 	{
 		return false;
 	}
@@ -127,6 +125,12 @@ bool FBBMBeatSequence::IsValid() const
 	}
 
 	return true;
+}
+
+bool FBBMBeatSequence::IsFullEightBeats() const
+{
+	// GDD 3.3 규격: 완전한 1턴 실행을 위해서는 정확히 8개의 비트로 구성되어야 함
+	return (Beats.Num() == 8) && (IsValid() == true);
 }
 
 

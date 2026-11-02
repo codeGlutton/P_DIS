@@ -100,6 +100,24 @@ public:
 	/* 요청 명세(Spec) 반환 */
 	const FDISEnhancementEffectSpec& GetSpec() const;
 
+	/* 효과를 부여한 주체 객체 반환 */
+	UObject* GetInstigator() const { return Spec.Instigator.Get(); }
+
+	/* 효과 인스턴스에 부여된 동적 게임플레이 태그 컨테이너 반환 */
+	const FGameplayTagContainer& GetDynamicTags() const { return Spec.DynamicGrantedTags; }
+
+	/* 특정 게임플레이 태그를 소유하고 있는지 확인 */
+	bool HasMatchingGameplayTag(const FGameplayTag& TagToCheck) const
+	{
+		return Spec.DynamicGrantedTags.HasTag(TagToCheck);
+	}
+
+	/* 주어진 태그 컨테이너와 일치하는 태그가 하나라도 있는지 확인 */
+	bool HasAnyMatchingGameplayTags(const FGameplayTagContainer& TagContainer) const
+	{
+		return Spec.DynamicGrantedTags.HasAny(TagContainer);
+	}
+
 	/* 삭제 대기 상태인지 확인 */
 	bool IsPendingRemove() const { return bPendingRemove; }
 

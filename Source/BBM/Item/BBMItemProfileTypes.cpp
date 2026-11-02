@@ -25,6 +25,15 @@ namespace BBMItemTypeTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Consumable_Scroll, "Item.Consumable.Scroll", "소모품 - 일회성 주문서");
 }
 
+namespace BBMItemRarityTags
+{
+	// 아이템 4대 표준 희귀도 네이티브 태그 정의
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Rarity_Common, "Item.Rarity.Common", "아이템 희귀도 - 일반(Common)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Rarity_Rare, "Item.Rarity.Rare", "아이템 희귀도 - 희귀(Rare)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Rarity_Epic, "Item.Rarity.Epic", "아이템 희귀도 - 영웅(Epic)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Rarity_Legendary, "Item.Rarity.Legendary", "아이템 희귀도 - 전설(Legendary)");
+}
+
 FBBMItemTypeCustomData::FBBMItemTypeCustomData() :
 	FDISItemTypeCustomData(BBMItemProfileDefaults::NonStackableCount),
 	UsageRule(EBBMItemUsageRule::Unlimited)

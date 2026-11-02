@@ -1,6 +1,6 @@
 /*****************************************************************//**
  * @file   BBMBeatTypes.h
- * @brief  BBM(비트 배낭 상인) 비트 시퀀스, 연출 타임라인 및 효과 타입 정의
+ * @brief  BBM(비트 배낭 상인) 비트 시퀀스, 액션 및 애니메이션 타임라인 타입 정의
  * @date   2026-10-30
  *********************************************************************/
 
@@ -13,10 +13,10 @@
 #include "BBMBeatTypes.generated.h"
 
 /**
- * 효과가 실행되는 6대 논리 실행 범주 (6-Phase Logical Pipeline)
+ * 액션이 실행되는 6대 논리 실행 범주 (6-Phase Logical Action Pipeline)
  */
 UENUM(BlueprintType)
-enum class EBBMEffectCategory : uint8
+enum class EBBMActionCategory : uint8
 {
 	PreMovement		= 0 UMETA(DisplayName = "1. 선 Movement"),
 	PreBuffDebuff	= 1 UMETA(DisplayName = "2. 선 버프/디버프"),
@@ -27,7 +27,7 @@ enum class EBBMEffectCategory : uint8
 };
 
 /**
- * 비트 효과의 대상 적용 범위 (1D 라인 전투 타깃 규격)
+ * 비트 액션의 대상 적용 범위 (1D 라인 전투 타깃 규격)
  */
 UENUM(BlueprintType)
 enum class EBBMTargetScope : uint8
@@ -52,44 +52,44 @@ enum class EBBMVisualWindow : uint8
 };
 
 /**
- * BBM 비트 효과 베이스 구조체
- * 다형성 인스턴스 구조체(TInstancedStruct)의 기본 타입으로, 6대 논리 실행 범주(EffectCategory)만 소유함
+ * BBM 비트 액션 베이스 구조체
+ * 다형성 인스턴스 구조체(TInstancedStruct)의 기본 타입으로, 6대 논리 실행 범주(ActionCategory)를 소유함
  */
 USTRUCT(BlueprintType)
-struct BBM_API FBBMEffectBase
+struct BBM_API FBBMBeatAction
 {
 	GENERATED_BODY()
 
 	/* 생성자 및 가상 소멸자 */
 public:
-	FBBMEffectBase();
-	explicit FBBMEffectBase(EBBMEffectCategory InCategory);
-	virtual ~FBBMEffectBase() = default;
+	FBBMBeatAction();
+	explicit FBBMBeatAction(EBBMActionCategory InCategory);
+	virtual ~FBBMBeatAction() = default;
 
-	/* 효과 범주 조회 */
+	/* 액션 범주 조회 */
 public:
-	EBBMEffectCategory GetEffectCategory() const;
+	EBBMActionCategory GetActionCategory() const;
 
 	/* 프로퍼티 */
 public:
-	/* 효과가 속한 6대 논리 실행 범주 */
-	UPROPERTY(Category = "BBM|Effect", EditAnywhere, BlueprintReadWrite)
-	EBBMEffectCategory EffectCategory;
+	/* 액션이 속한 6대 논리 실행 범주 */
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
+	EBBMActionCategory ActionCategory;
 };
 
 /**
- * 전투 교전 효과 구조체 (공격/방어/가드 등)
+ * 전투 교전 액션 구조체 (공격/방어/가드 등)
  * 대상 범위(TargetScope), 캐릭터 스탯 계수(Coefficient), 기본 수치(BaseValue)를 소유함
  */
 USTRUCT(BlueprintType)
-struct BBM_API FBBMCombatEffect : public FBBMEffectBase
+struct BBM_API FBBMCombatAction : public FBBMBeatAction
 {
 	GENERATED_BODY()
 
 	/* 생성자 */
 public:
-	FBBMCombatEffect();
-	FBBMCombatEffect(EBBMEffectCategory InCategory, EBBMTargetScope InScope, float InCoefficient = 1.0f, float InBaseValue = 0.0f);
+	FBBMCombatAction();
+	FBBMCombatAction(EBBMActionCategory InCategory, EBBMTargetScope InScope, float InCoefficient = 1.0f, float InBaseValue = 0.0f);
 
 	/* 수치 계산 헬퍼 (InAttributeValue * Coefficient + BaseValue) */
 public:
@@ -97,37 +97,37 @@ public:
 
 	/* 프로퍼티 */
 public:
-	/* 효과의 대상 적용 범위 */
-	UPROPERTY(Category = "BBM|Effect", EditAnywhere, BlueprintReadWrite)
+	/* 액션의 대상 적용 범위 */
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
 	EBBMTargetScope TargetScope;
 
 	/* 캐릭터 어트리뷰트 스탯에 곱해질 계수 */
-	UPROPERTY(Category = "BBM|Effect", EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
 	float Coefficient;
 
 	/* 기본 고정 가산 수치 */
-	UPROPERTY(Category = "BBM|Effect", EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
 	float BaseValue;
 };
 
 /**
- * 이동 및 진형 변경 효과 구조체 (선 이동, 후 넉백/후퇴 등)
+ * 이동 및 진형 변경 액션 구조체 (선 이동, 후 넉백/후퇴 등)
  * 이동할 칸 수(StepCount)만 소유함
  */
 USTRUCT(BlueprintType)
-struct BBM_API FBBMMovementEffect : public FBBMEffectBase
+struct BBM_API FBBMMovementAction : public FBBMBeatAction
 {
 	GENERATED_BODY()
 
 	/* 생성자 */
 public:
-	FBBMMovementEffect();
-	explicit FBBMMovementEffect(EBBMEffectCategory InCategory, int32 InStepCount = 1);
+	FBBMMovementAction();
+	explicit FBBMMovementAction(EBBMActionCategory InCategory, int32 InStepCount = 1);
 
 	/* 프로퍼티 */
 public:
 	/* 이동할 레인 칸 수 */
-	UPROPERTY(Category = "BBM|Effect", EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
 	int32 StepCount;
 };
 
@@ -159,7 +159,7 @@ public:
 };
 
 /**
- * 단일 비트의 효과(TInstancedStruct 목록) 및 애니메이션 연출 구성
+ * 단일 비트의 액션(TInstancedStruct 목록) 및 애니메이션 연출 구성
  */
 USTRUCT(BlueprintType)
 struct BBM_API FBBMBeatDefinition
@@ -170,17 +170,17 @@ struct BBM_API FBBMBeatDefinition
 public:
 	FBBMBeatDefinition();
 
-	/* 효과 등록 여부 확인 */
-	bool HasEffects() const;
+	/* 액션 등록 여부 확인 */
+	bool HasActions() const;
 
 	/* 애니메이션 설정 등록 여부 확인 */
 	bool HasAnimations() const;
 
 	/* 프로퍼티 */
 public:
-	/* 한 비트에 영향을 주는 Effect 인스턴스 구조체 목록 */
+	/* 한 비트에 실행될 Action 인스턴스 구조체 목록 */
 	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
-	TArray<TInstancedStruct<FBBMEffectBase>> Effects;
+	TArray<TInstancedStruct<FBBMBeatAction>> Actions;
 
 	/* 한 비트에 실행될 애니메이션 구성 목록 */
 	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
@@ -198,7 +198,7 @@ struct BBM_API FBBMBeatEffectRange
 	/* 생성자 */
 public:
 	FBBMBeatEffectRange();
-	FBBMBeatEffectRange(int32 InStartBeat, int32 InEndBeat, FName InRangeName = NAME_None);
+	FBBMBeatEffectRange(int32 InStartBeat, int32 InEndBeat);
 
 	/* 비트 구간 판별 헬퍼 */
 public:
@@ -225,10 +225,6 @@ public:
 
 	/* 프로퍼티 */
 public:
-	/* 디버깅 및 에디터 식별용 구간 명칭 (예: "WeaponGrantedBuff", "RagePhase") */
-	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
-	FName RangeName;
-
 	/* 효과 부여 시작 비트 인덱스 (0~7, 0은 1번째 비트 시작 시점) */
 	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0", ClampMax = "7"))
 	int32 StartBeat;
@@ -243,8 +239,8 @@ public:
 };
 
 /**
- * 1턴(8비트) 동안 실행될 비트 시퀀스 및 비트 구간별 활성 효과 스케줄을 담는 공통 기반 구조체
- * 플레이어(배낭 인벤토리 배치 결과)와 AI(몬스터 행동 패턴의 실행 본체) 모두 동일한 데이터 규격으로 사용함
+ * 1턴(최대 8비트) 동안 실행될 비트 시퀀스 및 비트 구간별 활성 효과 스케줄을 담는 공통 기반 구조체
+ * 아이템 정의(1~8비트 가변), 플레이어 턴(배낭 인벤토리 배치 결과), AI(몬스터 행동 패턴의 실행 본체) 모두 동일한 데이터 규격으로 사용함
  */
 USTRUCT(BlueprintType)
 struct BBM_API FBBMBeatSequence
@@ -255,12 +251,15 @@ struct BBM_API FBBMBeatSequence
 public:
 	FBBMBeatSequence();
 
-	/* 8비트 규격 및 유효성 검사 (Beats.Num() == 8 && 모든 EffectRanges의 IsValid() == true) */
+	/* 비트 규격 및 유효성 검사 (Beats.Num() <= 8 && 모든 EffectRanges의 IsValid() == true) */
 	bool IsValid() const;
+
+	/* 완전한 8비트 시퀀스 구성 여부 검증 (턴 실행/AI 패턴용) */
+	bool IsFullEightBeats() const;
 
 	/* 프로퍼티 */
 public:
-	/* 8비트 시퀀스 정의 목록 (GDD 3.3 규격에 따라 8개 비트) */
+	/* 비트 시퀀스 정의 목록 (최대 8개 비트, 아이템은 점유 타일 수에 따라 가변) */
 	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
 	TArray<FBBMBeatDefinition> Beats;
 

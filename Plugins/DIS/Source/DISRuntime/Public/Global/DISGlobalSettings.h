@@ -35,6 +35,9 @@ public:
 	/* 유효한 전역 로직 서브오브젝트 클래스 반환 (미지정 시 기본 UDISGlobalLogic 반환) */
 	UClass* GetGlobalLogicClass() const;
 
+	/* 아이템 스태킹 판정 시 제외할 강화 효과 태그 컨테이너 반환 */
+	const FGameplayTagContainer& GetStackingIgnoredEnhancementTags() const { return StackingIgnoredEnhancementTags; }
+
 	/* 설정 프로퍼티 */
 public:
 	/* 프로젝트에서 사용할 전역 DIS 로직 서브오브젝트 클래스 (C++ 및 Blueprint 파생 클래스 지정 가능) */
@@ -52,4 +55,8 @@ public:
 	/* 프로젝트 전역 단일 아이템 최대 점유 타일 크기 (Width, Height) */
 	UPROPERTY(Category = "Item Spatial", EditAnywhere, BlueprintReadOnly, Config, meta = (ClampMin = "1", UIMin = "1"))
 	FIntPoint MaxItemTileDimensions;
+
+	/* 아이템 스태킹(CanStackWith / HasIdenticalEnhancements) 판정 시 레벨 계산에서 제외할 강화 효과 태그 컨테이너 */
+	UPROPERTY(Category = "Enhancement|Stacking", EditAnywhere, BlueprintReadOnly, Config)
+	FGameplayTagContainer StackingIgnoredEnhancementTags;
 };

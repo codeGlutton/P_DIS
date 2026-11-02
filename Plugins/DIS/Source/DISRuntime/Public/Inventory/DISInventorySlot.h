@@ -37,7 +37,7 @@ public:
 public:
 	/* 슬롯 고유 인덱스를 기반으로 슬롯 인스턴스 초기화 */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	void InitializeSlot(int32 InSlotIndex);
+	virtual void InitializeSlot(int32 InSlotIndex);
 
 	/* IDISEnhanceableInterface 인터페이스 구현 (슬롯 자체 강화) */
 public:
@@ -66,19 +66,19 @@ public:
 public:
 	/* 슬롯에 아이템 스택 설정 (기존 스택을 비우고 새로 바인딩, InItemStack이 nullptr이면 ClearSlot 수행) */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	bool SetItemStack(UDISItemStack* InItemStack);
+	virtual bool SetItemStack(UDISItemStack* InItemStack);
 
 	/* 슬롯에 아이템 스택을 추가 (비어있으면 신규 배치, 이미 있으면 스택 결합) */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	bool PushItemStack(UDISItemStack* InItemStack);
+	virtual bool PushItemStack(UDISItemStack* InItemStack);
 
 	/* 슬롯에서 지정된 수량만큼 아이템을 꺼내어 새 스택으로 반환 (SplitCount가 전체 수량 이상이면 ClearSlot 수행) */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	UDISItemStack* PopItemStack(int32 SplitCount = 1);
+	virtual UDISItemStack* PopItemStack(int32 SplitCount = 1);
 
 	/* 슬롯을 완전히 비우고 보관 중이던 아이템 스택 반환 */
 	UFUNCTION(Category = "DIS|Slot", BlueprintCallable)
-	UDISItemStack* ClearSlot();
+	virtual UDISItemStack* ClearSlot();
 
 	/* 필터 관리 */
 public:
@@ -112,16 +112,16 @@ public:
 	/* 내부 강화 대상 바인딩 헬퍼 */
 protected:
 	/* 특정 아이템 엔트리를 슬롯 강화 컨테이너의 EffectTarget으로 등록 */
-	void BindItemEntryEnhancement(UDISItemEntry* InItemEntry);
+	virtual void BindItemEntryEnhancement(UDISItemEntry* InItemEntry);
 
 	/* 특정 아이템 엔트리를 슬롯 강화 컨테이너의 EffectTarget에서 해제 */
-	void UnbindItemEntryEnhancement(UDISItemEntry* InItemEntry);
+	virtual void UnbindItemEntryEnhancement(UDISItemEntry* InItemEntry);
 
 	/* 특정 아이템 스택의 모든 엔트리들을 슬롯 강화 컨테이너의 EffectTargets로 일괄 등록 */
-	void BindItemStackEnhancement(UDISItemStack* InItemStack);
+	virtual void BindItemStackEnhancement(UDISItemStack* InItemStack);
 
 	/* 특정 아이템 스택의 모든 엔트리들을 슬롯 강화 컨테이너의 EffectTargets에서 일괄 해제 */
-	void UnbindItemStackEnhancement(UDISItemStack* InItemStack);
+	virtual void UnbindItemStackEnhancement(UDISItemStack* InItemStack);
 
 	/* 런타임 멤버 상태 프로퍼티 */
 protected:

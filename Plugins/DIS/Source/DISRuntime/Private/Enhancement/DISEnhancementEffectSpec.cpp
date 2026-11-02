@@ -3,16 +3,22 @@
 
 FDISEnhancementEffectSpec::FDISEnhancementEffectSpec() :
 	EffectClass(nullptr),
-	OverallMagnitude(1.0f)
+	OverallMagnitude(1.0f),
+	Instigator(nullptr),
+	DynamicGrantedTags()
 {
 }
 
 FDISEnhancementEffectSpec::FDISEnhancementEffectSpec(
 	TSubclassOf<UDISEnhancementEffect> InEffectClass,
-	float InOverallMagnitude
+	float InOverallMagnitude,
+	UObject* InInstigator,
+	const FGameplayTagContainer& InDynamicTags
 ) :
 	EffectClass(InEffectClass),
-	OverallMagnitude(InOverallMagnitude)
+	OverallMagnitude(InOverallMagnitude),
+	Instigator(InInstigator),
+	DynamicGrantedTags(InDynamicTags)
 {
 }
 

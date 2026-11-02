@@ -18,54 +18,57 @@ bool UBBMCombatSimulator::ApplyItemGrantedEffects(ABBMCombatantBase* TargetComba
 		return false;
 	}
 
-	const TArray<FBBMItemGameplayEffectConfig>& GrantedEffects = ItemEntry->GetDynamicGrantedEffects();
-	for (const FBBMItemGameplayEffectConfig& Config : GrantedEffects)
+	// [TODO] 본 시뮬레이터 로직은 향후 전투 시스템 아키텍처 개편 시 전면 재설계될 예정이므로, 현재는 EffectRanges 순회로 임시 처리함
+	for (const FBBMBeatEffectRange& Range : ItemEntry->GetEffectRanges())
 	{
-		TSubclassOf<UGameplayEffect> EffectClass = Config.EffectClass.Get();
-		if (EffectClass == nullptr)
+		for (const FBBMItemGameplayEffectConfig& Config : Range.GrantedEffects)
 		{
-			EffectClass = Config.EffectClass.LoadSynchronous();
-		}
-
-		if (EffectClass == nullptr)
-		{
-			continue;
-		}
-
-		FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
-		ContextHandle.AddInstigator(TargetCombatant, TargetCombatant);
-
-		FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(EffectClass, 1.0f, ContextHandle);
-		if (SpecHandle.IsValid() == true && SpecHandle.Data.IsValid() == true)
-		{
-			// 필수 기본 스탯 태그가 설정되어 있다면 0.0f로 초기화하여 SetByCaller 미지정 에러 방지
-			static const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(FName("BBM.Combat.AttackPower"), false);
-			static const FGameplayTag DefenseTag = FGameplayTag::RequestGameplayTag(FName("BBM.Combat.DefensePower"), false);
-			static const FGameplayTag ArmorTag = FGameplayTag::RequestGameplayTag(FName("BBM.Combat.Armor"), false);
-
-			if (AttackTag.IsValid() == true)
+			TSubclassOf<UGameplayEffect> EffectClass = Config.EffectClass.Get();
+			if (EffectClass == nullptr)
 			{
-				SpecHandle.Data->SetSetByCallerMagnitude(AttackTag, 0.0f);
-			}
-			if (DefenseTag.IsValid() == true)
-			{
-				SpecHandle.Data->SetSetByCallerMagnitude(DefenseTag, 0.0f);
-			}
-			if (ArmorTag.IsValid() == true)
-			{
-				SpecHandle.Data->SetSetByCallerMagnitude(ArmorTag, 0.0f);
+				EffectClass = Config.EffectClass.LoadSynchronous();
 			}
 
-			// SetByCallerMagnitude 동적 주입
-			for (const TPair<FGameplayTag, float>& Pair : Config.SetByCallerMagnitudes)
+			if (EffectClass == nullptr)
 			{
-				SpecHandle.Data->SetSetByCallerMagnitude(Pair.Key, Pair.Value);
+				continue;
 			}
 
-			FActiveGameplayEffectHandle ActiveHandle = ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-			if (ActiveHandle.IsValid() == true)
+			FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
+			ContextHandle.AddInstigator(TargetCombatant, TargetCombatant);
+
+			FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(EffectClass, 1.0f, ContextHandle);
+			if (SpecHandle.IsValid() == true && SpecHandle.Data.IsValid() == true)
 			{
-				OutHandles.Add(ActiveHandle);
+				// 필수 기본 스탯 태그가 설정되어 있다면 0.0f로 초기화하여 SetByCaller 미지정 에러 방지
+				static const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(FName("BBM.Combat.AttackPower"), false);
+				static const FGameplayTag DefenseTag = FGameplayTag::RequestGameplayTag(FName("BBM.Combat.DefensePower"), false);
+				static const FGameplayTag ArmorTag = FGameplayTag::RequestGameplayTag(FName("BBM.Combat.Armor"), false);
+
+				if (AttackTag.IsValid() == true)
+				{
+					SpecHandle.Data->SetSetByCallerMagnitude(AttackTag, 0.0f);
+				}
+				if (DefenseTag.IsValid() == true)
+				{
+					SpecHandle.Data->SetSetByCallerMagnitude(DefenseTag, 0.0f);
+				}
+				if (ArmorTag.IsValid() == true)
+				{
+					SpecHandle.Data->SetSetByCallerMagnitude(ArmorTag, 0.0f);
+				}
+
+				// SetByCallerMagnitude 동적 주입
+				for (const TPair<FGameplayTag, float>& Pair : Config.SetByCallerMagnitudes)
+				{
+					SpecHandle.Data->SetSetByCallerMagnitude(Pair.Key, Pair.Value);
+				}
+
+				FActiveGameplayEffectHandle ActiveHandle = ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+				if (ActiveHandle.IsValid() == true)
+				{
+					OutHandles.Add(ActiveHandle);
+				}
 			}
 		}
 	}

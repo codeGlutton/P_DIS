@@ -1,4 +1,4 @@
-﻿/*****************************************************************//**
+/*****************************************************************//**
  * @file   BBMItemDefinition.h
  * @brief  BBM(비트 배낭 상인) 확장 아이템 정의 클래스 정의
  * @date   2026-10-30
@@ -42,6 +42,13 @@ public:
 	UFUNCTION(Category = "BBM|Item|Beat", BlueprintCallable, BlueprintPure)
 	int32 GetBeatCount() const;
 
+	/* 아이템의 비트 시퀀스 정의 반환 */
+	UFUNCTION(Category = "BBM|Item|Beat", BlueprintCallable, BlueprintPure)
+	const FBBMBeatSequence& GetBeatSequence() const;
+
+	/* 비트 목록 반환 (하위 호환 및 편의 접근자) */
+	const TArray<FBBMBeatDefinition>& GetBeats() const;
+
 	/* 그룹 소속 여부 확인 헬퍼 */
 public:
 	/* 특정 그룹 태그에 소속되어 있는지 여부 검사 */
@@ -58,17 +65,13 @@ public:
 	UPROPERTY(Category = "Item Definition|Economy", EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0", UIMin = "0"))
 	int32 Price;
 
-	/* 비트 단위 실행 시퀀스 정의 목록 (점유 타일 수와 크기가 동일해야 함) */
+	/* 비트 단위 실행 시퀀스 정의 (점유 타일 수와 비트 수가 일치해야 함) */
 	UPROPERTY(Category = "Item Definition|Beat", EditDefaultsOnly, BlueprintReadOnly)
-	TArray<FBBMBeatDefinition> Beats;
+	FBBMBeatSequence BeatSequence;
 
 	/* 아이템 실행 시 캐릭터에 동적 바인딩할 링크드 애님 레이어 클래스 목록 (World 번들, 비동기 프리로드 지원) */
 	UPROPERTY(Category = "Item Definition|Animation", EditDefaultsOnly, BlueprintReadOnly, meta = (AssetBundles = "World"))
 	TArray<TSoftClassPtr<UAnimInstance>> LinkedAnimLayers;
-
-	/* 비트 시작 시 캐릭터(ASC)에 부여할 기본 GameplayEffect 및 SetByCaller 수치 목록 (Data 번들, 비동기 프리로드 지원) */
-	UPROPERTY(Category = "Item Definition|Combat", EditDefaultsOnly, BlueprintReadOnly, meta = (AssetBundles = "Data"))
-	TArray<FBBMItemGameplayEffectConfig> DefaultGrantedEffects;
 
 	/* 아이템이 속한 그룹 태그 컨테이너 (복수 그룹 지원, 예: Group.Noble, Group.Undead) */
 	UPROPERTY(Category = "Item Definition|Group", EditDefaultsOnly, BlueprintReadOnly, AssetRegistrySearchable)

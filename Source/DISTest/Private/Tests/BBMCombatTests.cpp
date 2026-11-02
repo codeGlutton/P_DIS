@@ -232,7 +232,10 @@ bool FBBMCombatItemEffectLifecycleTest::RunTest(const FString& Parameters)
 	const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(FName("BBM.Combat.AttackPower"));
 	FBBMItemGameplayEffectConfig BuffConfig(UBBMItemStatGameplayEffect::StaticClass());
 	BuffConfig.SetByCallerMagnitudes.Add(AttackTag, 25.0f);
-	ItemEntry->AddDynamicGrantedEffect(BuffConfig);
+
+	FBBMBeatEffectRange BuffRange(0, 2);
+	BuffRange.GrantedEffects.Add(BuffConfig);
+	ItemEntry->AddEffectRange(BuffRange);
 
 	// 3. 비트 시작: 아이템 효과 캐릭터 ASC에 적용
 	TArray<FActiveGameplayEffectHandle> ActiveHandles;
@@ -541,7 +544,7 @@ bool FBBMAICombatantDefinitionPatternTest::RunTest(const FString& Parameters)
 	PatternC.SelectionWeight = 90.0f;
 	PatternC.bCanRepeatConsecutively = true;
 	PatternC.Sequence.Beats.SetNum(8);
-	PatternC.Sequence.EffectRanges.Add(FBBMBeatEffectRange(2, 5, FName(TEXT("RageBuffRange"))));
+	PatternC.Sequence.EffectRanges.Add(FBBMBeatEffectRange(2, 5));
 
 	AIDef->PatternPool.Add(PatternA);
 	AIDef->PatternPool.Add(PatternB);
@@ -569,7 +572,7 @@ bool FBBMAICombatantDefinitionPatternTest::RunTest(const FString& Parameters)
 
 	// 5. FBBMBeatEffectRange 및 FBBMBeatSequence 컴포지션 단위 검증
 	{
-		const FBBMBeatEffectRange Range(2, 5, FName(TEXT("TestRange")));
+		const FBBMBeatEffectRange Range(2, 5);
 		TestTrue(TEXT("0 <= 2 < 5 <= 8 범위는 IsValid() == true 여야 함"), Range.IsValid());
 
 		// IsActiveAtBeat [2, 5)
@@ -589,10 +592,10 @@ bool FBBMAICombatantDefinitionPatternTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("Beat 5는 회수 타이밍 아님"), Range.IsEndingAtBeat(5));
 
 		// 비정상 범위 검증
-		const FBBMBeatEffectRange InvertedRange(5, 2, FName(TEXT("InvertedRange")));
+		const FBBMBeatEffectRange InvertedRange(5, 2);
 		TestFalse(TEXT("Start > End 범위는 IsValid() == false 여야 함"), InvertedRange.IsValid());
 
-		const FBBMBeatEffectRange OutOfBoundsRange(0, 9, FName(TEXT("OutOfBoundsRange")));
+		const FBBMBeatEffectRange OutOfBoundsRange(0, 9);
 		TestFalse(TEXT("End > 8 범위는 IsValid() == false 여야 함"), OutOfBoundsRange.IsValid());
 	}
 
@@ -619,7 +622,7 @@ bool FBBMAICombatantDefinitionPatternTest::RunTest(const FString& Parameters)
 	BadRangePattern.PatternName = FName(TEXT("BadRangePattern"));
 	BadRangePattern.SelectionWeight = 1.0f;
 	BadRangePattern.Sequence.Beats.SetNum(8);
-	BadRangePattern.Sequence.EffectRanges.Add(FBBMBeatEffectRange(4, 2, FName(TEXT("BadRange")))); // Start > End
+	BadRangePattern.Sequence.EffectRanges.Add(FBBMBeatEffectRange(4, 2)); // Start > End
 	AIDef->PatternPool.Add(BadRangePattern);
 
 	FDataValidationContext BadRangeContext;

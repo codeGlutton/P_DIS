@@ -3,6 +3,12 @@
 #include "Item/BBMBeatEnhancementEffect.h"
 #include "Item/DISItemEntry.h"
 #include "Enhancement/DISEnhancementContainer.h"
+#include "GameplayTagContainer.h"
+
+namespace BBMEnhancementTags
+{
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(BBM_Item_Enhancement_Slot, "BBM.Item.Enhancement.Slot", "BBM 슬롯에 의해 아이템에 부여된 일시적 모디파이어 식별 태그");
+}
 
 UBBMSlotEnhancement::UBBMSlotEnhancement() :
 	GrantedBeatEffectClass(nullptr)
@@ -32,9 +38,9 @@ void UBBMSlotEnhancement::OnEnhancementActivated_Implementation(UObject* Target,
 
 	if (UDISEnhancementContainer* ItemContainer = ItemEntry->GetEnhancementContainer())
 	{
-		ItemContainer->ApplyEnhancementEffectSpec(
-			FDISEnhancementEffectSpec(GrantedBeatEffectClass, static_cast<float>(ActiveEnhancement.GetLevel()), Slot)
-		);
+		FDISEnhancementEffectSpec Spec(GrantedBeatEffectClass, static_cast<float>(ActiveEnhancement.GetLevel()), Slot);
+		Spec.DynamicGrantedTags.AddTag(BBMEnhancementTags::BBM_Item_Enhancement_Slot);
+		ItemContainer->ApplyEnhancementEffectSpec(Spec);
 	}
 }
 
@@ -99,9 +105,9 @@ void UBBMSlotEnhancement::OnEnhancementLevelChanged_Implementation(UObject* Targ
 		// 신규 레벨 > 0 이면 재적용
 		if (NewLevel > 0)
 		{
-			ItemContainer->ApplyEnhancementEffectSpec(
-				FDISEnhancementEffectSpec(GrantedBeatEffectClass, static_cast<float>(NewLevel), Slot)
-			);
+			FDISEnhancementEffectSpec Spec(GrantedBeatEffectClass, static_cast<float>(NewLevel), Slot);
+			Spec.DynamicGrantedTags.AddTag(BBMEnhancementTags::BBM_Item_Enhancement_Slot);
+			ItemContainer->ApplyEnhancementEffectSpec(Spec);
 		}
 	}
 }

@@ -19,7 +19,10 @@
 #include "Item/DISItemTypes.h"
 #include "Inventory/BBMSlotEnhancement.h"
 #include "Inventory/BBMSlotEnhancementEffect.h"
+#include "Item/BBMBeatEnhancementEffect.h"
 #include "Enhancement/DISEnhancementContainer.h"
+#include "Global/DISGlobalSettings.h"
+#include "Item/BBMItemProfileTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -308,6 +311,104 @@ bool FBBMInventoryBlockedTileTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("정상 슬롯에 배치 가능"), Inventory->CanAcceptItemStackAtSlot(TestStack, 0) == true);
 	FDISItemPlacementResult NormalResult = Inventory->SetSlotItemStack(0, TestStack);
 	TestTrue(TEXT("정상 슬롯 배치 성공"), NormalResult.bSuccess == true);
+
+	return true;
+}
+
+/**
+ * 테스트 5: 슬롯 강화가 적용된 아이템의 스태킹(CanStackWith) 정상 동작 검증
+ * - 슬롯 강화를 받고 있는 아이템 스택과 슬롯 밖(미강화) 동일 아이템 스택 간 CanStackWith == true 검증
+ * - PushItemStack으로 정상 병합되고, 합쳐진 새 엔트리에도 슬롯 강화가 전파되는지 검증
+ * - 실제 영구 강화 수치가 다른 아이템 간에는 여전히 CanStackWith == false 검증
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMInventorySlotEnhancementStackingTest,
+	"DIS.BBM.Inventory.SlotEnhancementStacking",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMInventorySlotEnhancementStackingTest::RunTest(const FString& Parameters)
+{
+	// 전역 설정에 BBM.Item.Enhancement.Slot 태그 등록 보장 및 MaxStackCount 임시 설정 (스태킹 허용)
+	const FDISItemTypeProfile OriginalDefaultProfile = GetDefault<UDISGlobalSettings>()->DefaultItemProfile;
+	UDISGlobalSettings* Settings = GetMutableDefault<UDISGlobalSettings>();
+	TestNotNull(TEXT("UDISGlobalSettings 유효"), Settings);
+	Settings->StackingIgnoredEnhancementTags.AddTag(BBMEnhancementTags::BBM_Item_Enhancement_Slot);
+	Settings->DefaultItemProfile.bOverrideCustomData = true;
+	Settings->DefaultItemProfile.CustomData.InitializeAs<FDISItemTypeCustomData>(5);
+
+	// 16슬롯(4x4) 인벤토리 생성 및 (1, 1) 좌표에 슬롯 강화 설정
+	UBBMInventoryDefinition* Def = BBMInventoryTestHelpers::CreateTestInventoryDefinition(GetTransientPackage(), 16, 4);
+	FBBMSlotEffectSpecList SpecList;
+	SpecList.Effects.Add(FDISEnhancementEffectSpec(UBBMSlotEffectRangeEnhancementEffect::StaticClass(), 2.0f));
+	Def->SlotEnhancements.Add(FIntPoint(1, 1), SpecList);
+
+	UBBMInventory* Inventory = NewObject<UBBMInventory>(GetTransientPackage());
+	Inventory->InitializeInventory(Def);
+
+	// 스택 가능(MaxStackCount > 1)한 아이템 정의 생성
+	UBBMItemDefinition* StackableItemDef = NewObject<UBBMItemDefinition>(Inventory);
+	StackableItemDef->ItemTypeTag = BBMItemTypeTags::Item_Consumable;
+	StackableItemDef->ItemName = FText::FromString(TEXT("TestPotion"));
+	StackableItemDef->MaxDurability = 0.0f; // 내구도 무제한
+
+	// 1번 스택(슬롯에 배치할 스택)
+	UDISItemStack* StackInSlot = NewObject<UDISItemStack>(Inventory);
+	UBBMItemEntry* Entry1 = NewObject<UBBMItemEntry>(StackInSlot);
+	Entry1->InitializeEntry(StackableItemDef);
+	StackInSlot->PushEntry(Entry1);
+
+	// 슬롯 5(좌표 1, 1)에 배치 -> Entry1에 슬롯 강화(+2) 적용됨
+	Inventory->SetSlotItemStack(5, StackInSlot);
+	TestEqual(TEXT("슬롯 배치 후 Entry1의 슬롯 보너스는 2"), Entry1->GetSlotEnhancementBonusLevel(UBBMEffectRangeBeatEnhancement::StaticClass()), 2);
+	const UDISEnhancementContainer* Container1 = Entry1->GetEnhancementContainer();
+	TestNotNull(TEXT("Container1 유효"), Container1);
+	const FDISActiveEnhancement* Active1 = Container1->FindActiveEnhancement(UBBMEffectRangeBeatEnhancement::StaticClass());
+	TestNotNull(TEXT("Active1 유효"), Active1);
+	TestEqual(TEXT("슬롯 배치 후 Entry1의 GetLevel은 2"), Active1->GetLevel(), 2);
+	TestEqual(TEXT("슬롯 배치 후 Entry1의 GetStackingLevel은 0(슬롯 강화 제외)"), Active1->GetStackingLevel(), 0);
+
+	// 2번 스택(슬롯 밖의 동일 아이템)
+	UDISItemStack* StackOutside = NewObject<UDISItemStack>(Inventory);
+	UBBMItemEntry* Entry2 = NewObject<UBBMItemEntry>(StackOutside);
+	Entry2->InitializeEntry(StackableItemDef);
+	StackOutside->PushEntry(Entry2);
+
+	// 슬롯 밖의 Entry2는 슬롯 보너스가 없음 (GetLevel == 0, GetStackingLevel == 0)
+	TestEqual(TEXT("슬롯 밖 Entry2의 슬롯 보너스는 0"), Entry2->GetSlotEnhancementBonusLevel(UBBMEffectRangeBeatEnhancement::StaticClass()), 0);
+
+	// 핵심 검증 1: 슬롯 강화가 적용된 StackInSlot과 슬롯 밖의 Entry2 간에 CanStackWith가 true여야 함!
+	TestTrue(TEXT("슬롯 강화를 받고 있어도 순수 레벨이 같으므로 CanStackWith == true"), StackInSlot->CanStackWith(Entry2) == true);
+	TestTrue(TEXT("반대 방향도 CanStackWith == true"), StackOutside->CanStackWith(Entry1) == true);
+
+	// 핵심 검증 2: 슬롯의 PushItemStack을 통해 슬롯 내 스택으로 병합
+	UDISInventorySlot* Slot5 = Inventory->GetSlot(5);
+	TestNotNull(TEXT("Slot5 유효"), Slot5);
+	const bool bPushed = Slot5->PushItemStack(StackOutside);
+	TestTrue(TEXT("PushItemStack 병합 성공"), bPushed == true);
+	TestEqual(TEXT("병합 후 슬롯 내 스택 수량은 2"), StackInSlot->GetStackCount(), 2);
+
+	// 핵심 검증 3: 새로 스택에 들어온 Entry2에도 슬롯 강화(+2)가 즉시 자동 전파되어야 함!
+	TestEqual(TEXT("새로 합쳐진 Entry2에도 슬롯 보너스 2 전파됨"), Entry2->GetSlotEnhancementBonusLevel(UBBMEffectRangeBeatEnhancement::StaticClass()), 2);
+
+	// 핵심 검증 4: 실제 영구 강화 수치가 다른 아이템과의 스태킹 거부 검증
+	UBBMItemEntry* PermanentEnhancedEntry = NewObject<UBBMItemEntry>(Inventory);
+	PermanentEnhancedEntry->InitializeEntry(StackableItemDef);
+	// 영구 강화 효과 부여 (슬롯 태그 없이 일반 효과로 +1 부여)
+	PermanentEnhancedEntry->GetEnhancementContainer()->ApplyEnhancementEffectSpec(
+		FDISEnhancementEffectSpec(UBBMEffectRangeBeatEnhancementEffect::StaticClass(), 1.0f)
+	);
+	const UDISEnhancementContainer* PermContainer = PermanentEnhancedEntry->GetEnhancementContainer();
+	TestNotNull(TEXT("PermContainer 유효"), PermContainer);
+	const FDISActiveEnhancement* PermActive = PermContainer->FindActiveEnhancement(UBBMEffectRangeBeatEnhancement::StaticClass());
+	TestNotNull(TEXT("PermActive 유효"), PermActive);
+	TestEqual(TEXT("영구 강화 아이템의 StackingLevel은 1"), PermActive->GetStackingLevel(), 1);
+
+	// 영구 강화 수치가 다르므로 스태킹이 거부되어야 함!
+	TestFalse(TEXT("영구 강화 수치가 다른 아이템은 스태킹 거부"), StackInSlot->CanStackWith(PermanentEnhancedEntry) == true);
+
+	// 전역 설정 복원
+	GetMutableDefault<UDISGlobalSettings>()->DefaultItemProfile = OriginalDefaultProfile;
 
 	return true;
 }

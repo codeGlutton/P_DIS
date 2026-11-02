@@ -8,6 +8,7 @@
 
 #include "CoreMinimal.h"
 #include "Templates/SubclassOf.h"
+#include "GameplayTagContainer.h"
 #include "DISEnhancementEffectSpec.generated.h"
 
 class UDISEnhancementEffect;
@@ -26,7 +27,8 @@ public:
 	explicit FDISEnhancementEffectSpec(
 		TSubclassOf<UDISEnhancementEffect> InEffectClass,
 		float InOverallMagnitude = 1.0f,
-		UObject* InInstigator = nullptr
+		UObject* InInstigator = nullptr,
+		const FGameplayTagContainer& InDynamicTags = FGameplayTagContainer()
 	);
 
 	/* 명세 유효성 검사 */
@@ -46,4 +48,8 @@ public:
 	/* 효과를 부여한 주체 객체 (옵션, 예: 슬롯 등) */
 	UPROPERTY(Category = "Enhancement Effect Spec", BlueprintReadWrite)
 	TWeakObjectPtr<UObject> Instigator;
+
+	/* 효과 인스턴스를 식별 및 필터링하기 위한 동적 게임플레이 태그 컨테이너 */
+	UPROPERTY(Category = "Enhancement Effect Spec", EditAnywhere, BlueprintReadWrite)
+	FGameplayTagContainer DynamicGrantedTags;
 };

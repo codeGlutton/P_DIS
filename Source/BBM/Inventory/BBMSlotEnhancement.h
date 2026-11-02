@@ -8,12 +8,19 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "NativeGameplayTags.h"
 #include "Enhancement/DISEnhancement.h"
 #include "Enhancement/DISActiveEnhancementEffect.h"
 #include "BBMSlotEnhancement.generated.h"
 
 class UDISItemEntry;
 class UDISEnhancementEffect;
+
+namespace BBMEnhancementTags
+{
+	/* BBM 슬롯에 의해 아이템에 부여된 일시적 모디파이어 식별 네이티브 태그 */
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(BBM_Item_Enhancement_Slot);
+}
 
 /**
  * 슬롯 자체에 부여되는 강화 스탯 기본 베이스 클래스

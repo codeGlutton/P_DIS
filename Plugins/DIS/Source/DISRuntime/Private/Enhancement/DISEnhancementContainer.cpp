@@ -424,7 +424,8 @@ bool UDISEnhancementContainer::HasIdenticalEnhancements(const UDISEnhancementCon
 					continue;
 				}
 
-				const int32 Level = ActiveEnhancement.GetLevel();
+				// 스태킹 판정 시 스태킹 무시 태그가 제외된 순수 고유 레벨(StackingLevel)을 수집
+				const int32 Level = ActiveEnhancement.GetStackingLevel();
 				// Level이 0 이하인 강화는 실질적인 효과가 없으므로 수집하지 않음 (타 컨테이너에 미등록 상태와 동등하게 일치 간주)
 				if (Level > 0)
 				{

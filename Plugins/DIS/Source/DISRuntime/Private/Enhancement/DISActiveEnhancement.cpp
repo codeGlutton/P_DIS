@@ -1,6 +1,7 @@
 #include "Enhancement/DISActiveEnhancement.h"
 #include "Enhancement/DISEnhancement.h"
 #include "Enhancement/DISEnhancementContainer.h"
+#include "Global/DISGlobalSettings.h"
 
 /* FDISActiveEnhancementModEntry */
 
@@ -104,6 +105,9 @@ FDISActiveEnhancement::FDISActiveEnhancement() :
 	CachedCalculatedRawLevel(0.0f),
 	CachedCalculatedMaxLevel(0.0f),
 	CachedCalculatedValue(0.0f),
+	CachedCalculatedStackingRawLevel(0.0f),
+	CachedCalculatedStackingMaxLevel(0.0f),
+	CachedCalculatedStackingValue(0.0f),
 	OwnerContainer(nullptr)
 {
 	ResetModifiers();
@@ -121,6 +125,9 @@ FDISActiveEnhancement::FDISActiveEnhancement(
 	CachedCalculatedRawLevel(0.0f),
 	CachedCalculatedMaxLevel(static_cast<float>(InBaseMaxLevel)),
 	CachedCalculatedValue(0.0f),
+	CachedCalculatedStackingRawLevel(0.0f),
+	CachedCalculatedStackingMaxLevel(static_cast<float>(InBaseMaxLevel)),
+	CachedCalculatedStackingValue(0.0f),
 	OwnerContainer(nullptr)
 {
 	ResetModifiers();
@@ -314,11 +321,159 @@ void FDISActiveEnhancement::UpdateCalculatedValue()
 
 	// 3. MaxLevel 상한 클램핑
 	CachedCalculatedValue = FMath::Clamp(CachedCalculatedRawLevel, 0.0f, CachedCalculatedMaxLevel);
+
+	// 4. 스태킹용 계산값 동시 사전 캐싱 (StackingIgnoredEnhancementTags를 가진 효과 제외)
+	TSet<FDISActiveEnhancementEffectHandle> StackingIgnoredHandles;
+	const UDISEnhancementContainer* Container = GetContainer();
+	const UDISGlobalSettings* Settings = GetDefault<UDISGlobalSettings>();
+	const FGameplayTagContainer& IgnoredTags = (Settings != nullptr) ? Settings->GetStackingIgnoredEnhancementTags() : FGameplayTagContainer::EmptyContainer;
+
+	if (Container != nullptr && IgnoredTags.IsEmpty() == false)
+	{
+		for (UDISEnhancementContainer::FConstEffectIterator It(*Container); It; ++It)
+		{
+			if (It->HasAnyMatchingGameplayTags(IgnoredTags) == true)
+			{
+				StackingIgnoredHandles.Add(It->GetHandle());
+			}
+		}
+	}
+
+	if (StackingIgnoredHandles.Num() == 0)
+	{
+		CachedCalculatedStackingRawLevel = CachedCalculatedRawLevel;
+		CachedCalculatedStackingMaxLevel = CachedCalculatedMaxLevel;
+		CachedCalculatedStackingValue = CachedCalculatedValue;
+	}
+	else
+	{
+		// 4-1. Stacking MaxLevel 계산
+		if (MaxLevelModifierOpValues.IsValidIndex(OverrideIndex) == true && MaxLevelModifierOpValues[OverrideIndex].IsEmpty() == false)
+		{
+			const TArray<FDISActiveEnhancementModEntry>& OverrideEntries = MaxLevelModifierOpValues[OverrideIndex].GetEntries();
+			float FoundOverride = -1.0f;
+			for (int32 i = OverrideEntries.Num() - 1; i >= 0; --i)
+			{
+				if (StackingIgnoredHandles.Contains(OverrideEntries[i].Handle) == false)
+				{
+					FoundOverride = OverrideEntries[i].Magnitude;
+					break;
+				}
+			}
+
+			if (FoundOverride >= 0.0f)
+			{
+				CachedCalculatedStackingMaxLevel = FMath::Max(0.0f, FoundOverride);
+			}
+			else
+			{
+				CachedCalculatedStackingMaxLevel = static_cast<float>(BaseMaxLevel);
+			}
+		}
+		else
+		{
+			float StackingMaxAddSum = static_cast<float>(BaseMaxLevel);
+			if (MaxLevelModifierOpValues.IsValidIndex(AddIndex) == true)
+			{
+				for (const FDISActiveEnhancementModEntry& Entry : MaxLevelModifierOpValues[AddIndex].GetEntries())
+				{
+					if (StackingIgnoredHandles.Contains(Entry.Handle) == false)
+					{
+						StackingMaxAddSum += Entry.Magnitude;
+					}
+				}
+			}
+
+			float StackingMaxMultiplier = 1.0f;
+			if (MaxLevelModifierOpValues.IsValidIndex(MultiplyIndex) == true)
+			{
+				for (const FDISActiveEnhancementModEntry& Entry : MaxLevelModifierOpValues[MultiplyIndex].GetEntries())
+				{
+					if (StackingIgnoredHandles.Contains(Entry.Handle) == false)
+					{
+						StackingMaxMultiplier *= Entry.Magnitude;
+					}
+				}
+			}
+
+			CachedCalculatedStackingMaxLevel = FMath::Max(0.0f, StackingMaxAddSum * StackingMaxMultiplier);
+		}
+
+		// 4-2. Stacking CurrentLevel 계산
+		if (LevelModifierOpValues.IsValidIndex(OverrideIndex) == true && LevelModifierOpValues[OverrideIndex].IsEmpty() == false)
+		{
+			const TArray<FDISActiveEnhancementModEntry>& OverrideEntries = LevelModifierOpValues[OverrideIndex].GetEntries();
+			float FoundOverride = -1.0f;
+			for (int32 i = OverrideEntries.Num() - 1; i >= 0; --i)
+			{
+				if (StackingIgnoredHandles.Contains(OverrideEntries[i].Handle) == false)
+				{
+					FoundOverride = OverrideEntries[i].Magnitude;
+					break;
+				}
+			}
+
+			if (FoundOverride >= 0.0f)
+			{
+				CachedCalculatedStackingRawLevel = FoundOverride;
+			}
+			else
+			{
+				CachedCalculatedStackingRawLevel = 0.0f;
+			}
+		}
+		else
+		{
+			float StackingAddSum = 0.0f;
+			if (LevelModifierOpValues.IsValidIndex(AddIndex) == true)
+			{
+				for (const FDISActiveEnhancementModEntry& Entry : LevelModifierOpValues[AddIndex].GetEntries())
+				{
+					if (StackingIgnoredHandles.Contains(Entry.Handle) == false)
+					{
+						StackingAddSum += Entry.Magnitude;
+					}
+				}
+			}
+
+			float StackingMultiplier = 1.0f;
+			if (LevelModifierOpValues.IsValidIndex(MultiplyIndex) == true)
+			{
+				for (const FDISActiveEnhancementModEntry& Entry : LevelModifierOpValues[MultiplyIndex].GetEntries())
+				{
+					if (StackingIgnoredHandles.Contains(Entry.Handle) == false)
+					{
+						StackingMultiplier *= Entry.Magnitude;
+					}
+				}
+			}
+
+			CachedCalculatedStackingRawLevel = StackingAddSum * StackingMultiplier;
+		}
+
+		// 4-3. Stacking MaxLevel 상한 클램핑
+		CachedCalculatedStackingValue = FMath::Clamp(CachedCalculatedStackingRawLevel, 0.0f, CachedCalculatedStackingMaxLevel);
+	}
 }
 
 float FDISActiveEnhancement::GetCalculatedValue() const
 {
 	return CachedCalculatedValue;
+}
+
+float FDISActiveEnhancement::GetCalculatedStackingValue() const
+{
+	return CachedCalculatedStackingValue;
+}
+
+int32 FDISActiveEnhancement::GetStackingLevel() const
+{
+	return FMath::RoundToInt(CachedCalculatedStackingValue);
+}
+
+float FDISActiveEnhancement::GetCalculatedStackingMaxValue() const
+{
+	return CachedCalculatedStackingMaxLevel;
 }
 
 float FDISActiveEnhancement::GetRawCalculatedValue() const

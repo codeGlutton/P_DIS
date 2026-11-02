@@ -161,6 +161,15 @@ public:
 	/* 최종 최대 강화 레벨(int32, 0 이상) 반환 */
 	int32 GetMaxLevel() const;
 
+	/* 스태킹 무시 태그가 제외된 순수 고유 레벨(int32, 0 이상 MaxLevel 이하) 반환 */
+	int32 GetStackingLevel() const;
+
+	/* 스태킹 무시 태그가 제외된 최종 스태킹 실수 계산값 반환 */
+	float GetCalculatedStackingValue() const;
+
+	/* 스태킹 무시 태그가 제외된 최대 레벨 실수 계산값 반환 */
+	float GetCalculatedStackingMaxValue() const;
+
 	/* 특정 타깃(현재 레벨 vs 최대 레벨)에 덮어쓰기(Override) 모디파이어가 등록되어 있는지 여부 반환 */
 	bool HasOverride(EDISEnhancementModifierTarget InTarget = EDISEnhancementModifierTarget::CurrentLevel) const;
 
@@ -240,6 +249,18 @@ public:
 	/* MaxLevel로 클램핑된 최종 실수 계산값 */
 	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
 	float CachedCalculatedValue;
+
+	/* 스태킹 제외 태그가 적용된 클램프 이전 현재 레벨 실수 계산값 */
+	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
+	float CachedCalculatedStackingRawLevel;
+
+	/* 스태킹 제외 태그가 적용된 최대 레벨 실수 계산값 */
+	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
+	float CachedCalculatedStackingMaxLevel;
+
+	/* 스태킹 제외 태그가 적용되어 MaxLevel로 클램핑된 최종 스태킹 실수 계산값 */
+	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
+	float CachedCalculatedStackingValue;
 
 	/* 이 활성 스탯을 소유하고 있는 강화 컨테이너 약참조 */
 	UPROPERTY(Transient)

@@ -13,6 +13,7 @@
 #include "DISActiveEnhancement.generated.h"
 
 class UDISEnhancement;
+class UDISEnhancementContainer;
 
 /**
  * 활성 강화 스탯에 적용된 개별 강화 효과(Effect)의 모디파이어 인스턴스 데이터
@@ -116,6 +117,12 @@ public:
 
 	/* 강화 클래스 반환 */
 	TSubclassOf<UDISEnhancement> GetEnhancementClass() const;
+
+	/* 소유 강화 컨테이너 포인터 반환 (없거나 파괴되었으면 nullptr) */
+	UDISEnhancementContainer* GetContainer() const;
+
+	/* 소유 강화 컨테이너 설정 */
+	void SetContainer(UDISEnhancementContainer* InContainer);
 
 	/* 기본 최대 레벨 설정 및 조회 */
 public:
@@ -233,4 +240,8 @@ public:
 	/* MaxLevel로 클램핑된 최종 실수 계산값 */
 	UPROPERTY(Category = "Enhancement", VisibleAnywhere, BlueprintReadOnly)
 	float CachedCalculatedValue;
+
+	/* 이 활성 스탯을 소유하고 있는 강화 컨테이너 약참조 */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UObject> OwnerContainer;
 };

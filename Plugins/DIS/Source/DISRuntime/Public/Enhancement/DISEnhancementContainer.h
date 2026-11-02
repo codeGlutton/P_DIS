@@ -66,15 +66,15 @@ public:
 
 	/* 효과 적용 대상 추가 (기존 활성 강화 스탯 라이프사이클 바인딩 전파) */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
-	void AddEffectTarget(UObject* InEffectTarget);
+	virtual void AddEffectTarget(UObject* InEffectTarget);
 
 	/* 효과 적용 대상 제거 (활성 강화 스탯 라이프사이클 언바인딩 전파) */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
-	bool RemoveEffectTarget(UObject* InEffectTarget);
+	virtual bool RemoveEffectTarget(UObject* InEffectTarget);
 
 	/* 모든 효과 적용 대상 일괄 제거 */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
-	void ClearEffectTargets();
+	virtual void ClearEffectTargets();
 
 	/* 현재 등록된 유효한 모든 효과 적용 대상 목록 반환 */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
@@ -82,11 +82,11 @@ public:
 
 	/* 효과 적용 대상 목록 일괄 설정 (신규 추가 및 제외 대상 라이프사이클 동기화) */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
-	void SetEffectTargets(const TArray<UObject*>& InEffectTargets);
+	virtual void SetEffectTargets(const TArray<UObject*>& InEffectTargets);
 
 	/* 효과 적용 대상 단일 설정 (기존 대상을 모두 비우고 단일 대상만 설정하는 편의 래퍼) */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
-	void SetEffectTarget(UObject* InEffectTarget);
+	virtual void SetEffectTarget(UObject* InEffectTarget);
 
 	/* 첫 번째 유효 효과 적용 대상 반환 (단일 대상 편의 래퍼) */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
@@ -96,19 +96,23 @@ public:
 public:
 	/* 효과 클래스를 기반으로 강화 효과를 적용하고 고유 핸들 반환 */
 	UFUNCTION(Category = "DIS|Enhancement|Effect", BlueprintCallable)
-	FDISActiveEnhancementEffectHandle ApplyEnhancementEffectByClass(TSubclassOf<UDISEnhancementEffect> InEffectClass);
+	virtual FDISActiveEnhancementEffectHandle ApplyEnhancementEffectByClass(TSubclassOf<UDISEnhancementEffect> InEffectClass);
 
 	/* 명세(Spec)를 기반으로 강화 효과를 적용하고 고유 핸들 반환 */
 	UFUNCTION(Category = "DIS|Enhancement|Effect", BlueprintCallable)
-	FDISActiveEnhancementEffectHandle ApplyEnhancementEffectSpec(const FDISEnhancementEffectSpec& InSpec);
+	virtual FDISActiveEnhancementEffectHandle ApplyEnhancementEffectSpec(const FDISEnhancementEffectSpec& InSpec);
 
 	/* 고유 핸들에 해당하는 활성 강화 효과 제거 */
 	UFUNCTION(Category = "DIS|Enhancement|Effect", BlueprintCallable)
-	bool RemoveEnhancementEffect(const FDISActiveEnhancementEffectHandle& InHandle);
+	virtual bool RemoveEnhancementEffect(const FDISActiveEnhancementEffectHandle& InHandle);
 
 	/* 지정된 효과 클래스에 해당하는 모든 활성 강화 효과를 일괄 제거하고 제거된 수량 반환 */
 	UFUNCTION(Category = "DIS|Enhancement|Effect", BlueprintCallable)
-	int32 RemoveEnhancementEffectsByClass(TSubclassOf<UDISEnhancementEffect> InEffectClass);
+	virtual int32 RemoveEnhancementEffectsByClass(TSubclassOf<UDISEnhancementEffect> InEffectClass);
+
+	/* 특정 부여자(Instigator)가 부여한 모든 활성 강화 효과(또는 특정 효과 클래스)를 일괄 제거하고 제거된 수량 반환 */
+	UFUNCTION(Category = "DIS|Enhancement|Effect", BlueprintCallable)
+	virtual int32 RemoveEnhancementEffectsByInstigator(const UObject* InInstigator, TSubclassOf<UDISEnhancementEffect> InEffectClass = nullptr);
 
 	/* 핸들을 기반으로 활성 강화 효과 인스턴스 검색 (외부 수정 방지 const 포인터 반환, 없으면 nullptr) */
 	const FDISActiveEnhancementEffect* FindActiveEnhancementEffect(const FDISActiveEnhancementEffectHandle& Handle) const;
@@ -133,6 +137,9 @@ public:
 	/* 현재 관리 중인 모든 활성 강화 스탯 목록 반환 */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
 	const TArray<FDISActiveEnhancement>& GetActiveEnhancements() const;
+
+	/* 락 상태(지연 추가/삭제 대기)를 고려하여 현재 유효한 모든 활성 강화 스탯을 안전하게 순회 */
+	void ForEachActiveEnhancement(TFunctionRef<void(const FDISActiveEnhancement&)> Predicate) const;
 
 	/* 다른 강화 컨테이너와 활성 강화 종류 및 각 레벨이 완전히 동일한지 비교 검증 */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
@@ -218,10 +225,10 @@ protected:
 	void OnEnhancementLevelChange(FDISActiveEnhancement& Enhancement, int32 OldLevel, int32 NewLevel);
 
 	/* 신규 대상 객체에 현재 활성화된 모든 강화 스탯 라이프사이클 전파 */
-	void OnTargetAdded(UObject* InTarget);
+	virtual void OnTargetAdded(UObject* InTarget);
 
 	/* 제거되는 대상 객체에서 활성화되어 있던 모든 강화 스탯 라이프사이클 해제 전파 */
-	void OnTargetRemoved(UObject* InTarget);
+	virtual void OnTargetRemoved(UObject* InTarget);
 
 	/* 런타임 멤버 상태 프로퍼티 */
 protected:

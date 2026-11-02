@@ -1,4 +1,4 @@
-﻿/*****************************************************************//**
+/*****************************************************************//**
  * @file   BBMItemProfileTypes.h
  * @brief  BBM(비트 배낭 상인) 아이템 타입 네이티브 태그 및 프로파일 커스텀 데이터 정의
  * @date   2026-10-29
@@ -43,6 +43,24 @@ namespace BBMItemTypeTags
 	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable_Potion);
 	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable_Throwable);
 	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Consumable_Scroll);
+}
+
+namespace BBMItemRarityTags
+{
+	// 아이템 4대 표준 희귀도 네이티브 태그 (Common -> Rare -> Epic -> Legendary)
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Rarity_Common);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Rarity_Rare);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Rarity_Epic);
+	BBM_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Rarity_Legendary);
+}
+
+namespace BBMItemRarityDefaults
+{
+	// 희귀도 기본 서열(Rank) 상수 (숫자가 클수록 상위 희귀도)
+	constexpr int32 CommonRank = 10;
+	constexpr int32 RareRank = 20;
+	constexpr int32 EpicRank = 30;
+	constexpr int32 LegendaryRank = 40;
 }
 
 /**

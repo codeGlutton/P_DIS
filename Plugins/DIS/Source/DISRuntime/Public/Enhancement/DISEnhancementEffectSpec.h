@@ -25,7 +25,8 @@ public:
 	FDISEnhancementEffectSpec();
 	explicit FDISEnhancementEffectSpec(
 		TSubclassOf<UDISEnhancementEffect> InEffectClass,
-		float InOverallMagnitude = 1.0f
+		float InOverallMagnitude = 1.0f,
+		UObject* InInstigator = nullptr
 	);
 
 	/* 명세 유효성 검사 */
@@ -41,4 +42,8 @@ public:
 	/* 전체적인 크기/배율 계수 (기본값 1.0, EffectClass CDO 내부의 각 Modifier Magnitude에 곱해짐) */
 	UPROPERTY(Category = "Enhancement Effect Spec", EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float OverallMagnitude;
+
+	/* 효과를 부여한 주체 객체 (옵션, 예: 슬롯 등) */
+	UPROPERTY(Category = "Enhancement Effect Spec", BlueprintReadWrite)
+	TWeakObjectPtr<UObject> Instigator;
 };

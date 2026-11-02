@@ -377,14 +377,20 @@ classDiagram
         +FGameplayAttributeData AttackPower
         +FGameplayAttributeData DefensePower
     }
-    class UBBMEffectBase {
-        +EBBMEffectCategory EffectCategory
+    class FBBMBeatAction {
+        +EBBMActionCategory ActionCategory
+        +GetActionCategory() EBBMActionCategory
+    }
+    class FBBMCombatAction {
+        +EBBMActionCategory ActionCategory
         +EBBMTargetScope TargetScope
         +float Coefficient
         +float BaseValue
-        +GetEffectCategory() EBBMEffectCategory
-        +GetTargetScope() EBBMTargetScope
         +CalculateMagnitude(InAttributeValue) float
+    }
+    class FBBMMovementAction {
+        +EBBMActionCategory ActionCategory
+        +int32 StepCount
     }
     class FBBMBeatAnimationConfig {
         +EBBMVisualWindow VisualWindow
@@ -392,9 +398,9 @@ classDiagram
         +IsValid() bool
     }
     class FBBMBeatDefinition {
-        +TArray~TSoftClassPtr~UBBMEffectBase~~ Effects
+        +TArray~TInstancedStruct~FBBMBeatAction~~ Actions
         +TArray~FBBMBeatAnimationConfig~ Animations
-        +HasEffects() bool
+        +HasActions() bool
         +HasAnimations() bool
     }
     class ABBMCombatantBase {
@@ -432,7 +438,7 @@ classDiagram
     UBBMItemDefinition ..> UBBMItemEntry : 인스턴스화 시 정적 템플릿 복사
     UBBMItemDefinition --> FBBMBeatDefinition : 비트 시퀀스 보유
     UBBMItemDefinition --> FBBMItemGameplayEffectConfig : 기본 GAS Effect 보유
-    FBBMBeatDefinition --> UBBMEffectBase : CDO 효과 참조
+    FBBMBeatDefinition --> FBBMBeatAction : 다형성 액션 목록 소유
     FBBMBeatDefinition --> FBBMBeatAnimationConfig : 윈도우별 연출 보유
     ABBMCombatantBase --> UBBMAttributeSet : GAS 스탯 관리
 ```
@@ -448,7 +454,7 @@ struct FBBMSimulationBeatQueues
 	UPROPERTY(BlueprintReadOnly, Category = "Battle")
 	TArray<FBBMQueuedEffect> PhaseQueues[6];
 
-	TArray<FBBMQueuedEffect>& GetQueue(EBBMEffectCategory Category)
+	TArray<FBBMQueuedEffect>& GetQueue(EBBMActionCategory Category)
 	{
 		return PhaseQueues[static_cast<uint8>(Category)];
 	}
@@ -470,7 +476,7 @@ struct FBBMSimulationBeatQueues
 ### 기반 마일스톤: 아이템 프로파일 아키텍처 및 사후 보관 데이터 규격
 - [x] DIS `UDISItemDefinition::MaxDurability` 기본값 `0.0f`(내구도 무제한) 전환 및 `FDISItemTypeProfile::bOverrideCustomData` 선택적 상속 구조 구현.
 - [x] BBM 3대 아이템 프로파일(`Weapon` 6종 — 방패 포함, `Equipment` 4종 — 전투당 1회 사용 후 별도 칸 보관, `Consumable` 3종 — 기본 5스택 및 사용 후 소멸) 네이티브 태그 및 `FBBMItemTypeCustomData` 구현.
-- [x] BBM 아이템 비트 시퀀스(점유 칸 수와 동일한 Beats 배열 및 IsDataValid 검증), 링크드 애님 레이어(`LinkedAnimLayers`), 상품 가격(`Price`), CDO 기반 `UBBMEffectBase` 및 4대 윈도우 애니메이션 구성(`FBBMBeatAnimationConfig`) 구현.
+- [x] BBM 아이템 비트 시퀀스(점유 칸 수와 동일한 Beats 배열 및 IsDataValid 검증), 링크드 애님 레이어(`LinkedAnimLayers`), 상품 가격(`Price`), TInstancedStruct 기반 `FBBMBeatAction` 및 4대 윈도우 애니메이션 구성(`FBBMBeatAnimationConfig`) 구현.
 - [x] 단위 테스트: 프로파일 계층 상속/Override 검증, 장비 별도 보관 칸 이관 및 소모품 5스택 소진 검증, 비트 수/타일 점유 수 일치 및 애님 레이어 유효성 검증.
 
 ### GAS 캐릭터 스탯 및 교전 해결기 마일스톤
@@ -481,7 +487,7 @@ struct FBBMSimulationBeatQueues
 - [x] 단위 테스트: `DIS.BBM.Combat.*` 3종 테스트 추가 (CompositeCurveTable 스탯 초기화, 비트 아이템 GE 라이프사이클 원복, 4단계 교전 피해 해결 파이프라인 100% 통과).
 
 ### 마일스톤 1: 1D 전투 데이터 모델 및 비트 큐 분배기
-- [ ] `EBBMTargetScope`, `EBBMEffectCategory`, `FBBMActionEffect`, `FBBMSimulationBeatQueues` 구조체 구현.
+- [ ] `EBBMTargetScope`, `EBBMActionCategory`, `FBBMActionEffect`, `FBBMSimulationBeatQueues` 구조체 구현.
 - [ ] `UBBMCombatSimulator` 큐 분배기 구현 (캐릭터 미분류 데이터 $\rightarrow$ 6대 큐 분배 및 주인공-적 정렬).
 - [ ] 단위 테스트: 6대 큐 정렬 검증, 사망자 큐 스킵 검증, 조기 종료 플러시 검증.
 

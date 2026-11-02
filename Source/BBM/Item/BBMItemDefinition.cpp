@@ -8,9 +8,8 @@
 
 UBBMItemDefinition::UBBMItemDefinition() :
 	Price(0),
-	Beats(),
+	BeatSequence(),
 	LinkedAnimLayers(),
-	DefaultGrantedEffects(),
 	ItemGroupTags()
 {
 }
@@ -32,12 +31,12 @@ EDataValidationResult UBBMItemDefinition::IsDataValid(FDataValidationContext& Co
 
 	// 비트 구성 TArray 크기와 점유 타일 수(Shape.Points.Num())의 일치 여부 검증
 	const int32 OccupiedTileCount = Shape.Points.Num();
-	if (Beats.Num() != OccupiedTileCount)
+	if (BeatSequence.Beats.Num() != OccupiedTileCount)
 	{
 		Context.AddError(FText::Format(
 			LOCTEXT("BBMItemBeatCountMismatchError", "BBM 아이템 '{0}'의 비트 구성 수({1})가 점유 타일 수({2})와 일치하지 않습니다. (점유 타일 1칸당 1비트 구성 필수)"),
 			FText::FromName(GetFName()),
-			FText::AsNumber(Beats.Num()),
+			FText::AsNumber(BeatSequence.Beats.Num()),
 			FText::AsNumber(OccupiedTileCount)
 		));
 		Result = EDataValidationResult::Invalid;
@@ -56,6 +55,16 @@ EDataValidationResult UBBMItemDefinition::IsDataValid(FDataValidationContext& Co
 int32 UBBMItemDefinition::GetBeatCount() const
 {
 	return Shape.Points.Num();
+}
+
+const FBBMBeatSequence& UBBMItemDefinition::GetBeatSequence() const
+{
+	return BeatSequence;
+}
+
+const TArray<FBBMBeatDefinition>& UBBMItemDefinition::GetBeats() const
+{
+	return BeatSequence.Beats;
 }
 
 bool UBBMItemDefinition::HasItemGroup(const FGameplayTag& InGroupTag) const

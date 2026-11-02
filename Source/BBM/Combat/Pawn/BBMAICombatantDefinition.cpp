@@ -132,10 +132,9 @@ EDataValidationResult UBBMAICombatantDefinition::IsDataValid(FDataValidationCont
 			if (Range.IsValid() == false)
 			{
 				Context.AddError(FText::Format(
-					LOCTEXT("InvalidEffectRangeError", "패턴 [{0}]의 EffectRange [{1}] (이름: {2}) 범위가 유효하지 않습니다 (Start: {3}, End: {4}). 0 <= Start < End <= 8 이어야 합니다."),
+					LOCTEXT("InvalidEffectRangeError", "패턴 [{0}]의 EffectRange [{1}] 범위가 유효하지 않습니다 (Start: {2}, End: {3}). 0 <= Start < End <= 8 이어야 합니다."),
 					FText::FromName(Pattern.PatternName),
 					FText::AsNumber(RangeIndex),
-					FText::FromName(Range.RangeName),
 					FText::AsNumber(Range.StartBeat),
 					FText::AsNumber(Range.EndBeat)
 				));

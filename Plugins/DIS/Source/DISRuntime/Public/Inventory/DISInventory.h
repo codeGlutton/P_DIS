@@ -231,19 +231,19 @@ public:
 
 	/* 특정 슬롯에 아이템 스택 배치 또는 스태킹 병합 시도 후 상세 결과 반환 */
 	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable)
-	FDISItemPlacementResult SetSlotItemStack(int32 SlotIndex, UDISItemStack* InItemStack, UDISItemStack* PreferredTargetStack = nullptr);
+	virtual FDISItemPlacementResult SetSlotItemStack(int32 SlotIndex, UDISItemStack* InItemStack, UDISItemStack* PreferredTargetStack = nullptr);
 
 	/* 원본 아이템 스택(SourceStack)의 수량을 대상 아이템 스택(TargetStack)으로 이전 병합하고 슬롯 강화를 동기화 (병합된 수량 반환) */
 	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable)
-	int32 MergeItemStackInto(UDISItemStack* SourceStack, UDISItemStack* TargetStack);
+	virtual int32 MergeItemStackInto(UDISItemStack* SourceStack, UDISItemStack* TargetStack);
 
 	/* 특정 슬롯을 비우고 보관 중이던 아이템 스택 반환 (다중 슬롯 점유 시 모든 점유 타일에서 일괄 분리) */
 	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable)
-	UDISItemStack* ClearSlot(int32 SlotIndex);
+	virtual UDISItemStack* ClearSlot(int32 SlotIndex);
 
 	/* 특정 아이템 스택이 점유하고 있는 모든 슬롯을 일괄 해제하고 소유권 분리 (해제 성공 시 true 반환) */
 	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable)
-	bool ClearItemStack(UDISItemStack* InItemStack);
+	virtual bool ClearItemStack(UDISItemStack* InItemStack);
 
 	/* 특정 슬롯이 블록된(막힌) 칸인지 여부 반환 */
 	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable, BlueprintPure)
@@ -269,11 +269,11 @@ public:
 
 	/* 특정 아이템 스택을 현재 좌상단 슬롯 위치를 기준으로 회전 명령 (성공 시 true, 불가 시 false) */
 	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable)
-	bool RotateItemStack(UDISItemStack* InItemStack, bool bClockwise = true);
+	virtual bool RotateItemStack(UDISItemStack* InItemStack, bool bClockwise = true);
 
 	/* 특정 슬롯에 보관된 아이템 스택을 현재 좌상단 슬롯 위치를 기준으로 회전 명령 */
 	UFUNCTION(Category = "DIS|Inventory", BlueprintCallable)
-	bool RotateItemStackAtSlot(int32 SlotIndex, bool bClockwise = true);
+	virtual bool RotateItemStackAtSlot(int32 SlotIndex, bool bClockwise = true);
 
 	/* 공간 위치 판별 및 검증 */
 public:

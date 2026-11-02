@@ -2,6 +2,7 @@
 #include "PropertyEditorModule.h"
 #include "Customizations/BBMTeamRelationCustomization.h"
 #include "Customizations/BBMBeatSequenceCustomization.h"
+#include "Customizations/BBMInventoryDefinitionCustomization.h"
 
 #define LOCTEXT_NAMESPACE "FBBMEditorModule"
 
@@ -20,6 +21,12 @@ void FBBMEditorModule::StartupModule()
 		"BBMBeatSequence",
 		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FBBMBeatSequenceCustomization::MakeInstance)
 	);
+
+	// UBBMInventoryDefinition 클래스 디테일 커스터마이제이션 등록 (2D 인터랙티브 그리드 매트릭스)
+	PropertyModule.RegisterCustomClassLayout(
+		"BBMInventoryDefinition",
+		FOnGetDetailCustomizationInstance::CreateStatic(&FBBMInventoryDefinitionCustomization::MakeInstance)
+	);
 }
 
 void FBBMEditorModule::ShutdownModule()
@@ -28,6 +35,7 @@ void FBBMEditorModule::ShutdownModule()
 	if (FModuleManager::Get().IsModuleLoaded("PropertyEditor") == true)
 	{
 		FPropertyEditorModule& PropertyModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		PropertyModule.UnregisterCustomClassLayout("BBMInventoryDefinition");
 		PropertyModule.UnregisterCustomPropertyTypeLayout("BBMBeatSequence");
 		PropertyModule.UnregisterCustomPropertyTypeLayout("BBMTeamRelation");
 	}

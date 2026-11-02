@@ -43,8 +43,8 @@ private:
 	/* Track 1: EffectRanges 구간 표기 위젯 생성 */
 	TSharedRef<SWidget> BuildEffectRangesTrack(const FBBMBeatSequence* Sequence);
 
-	/* Track 2: 8비트 로직 Effects 가로 바 생성 */
-	TSharedRef<SWidget> BuildEffectsTrack(const FBBMBeatSequence* Sequence);
+	/* Track 2: 8비트 로직 Actions 가로 바 생성 */
+	TSharedRef<SWidget> BuildActionsTrack(const FBBMBeatSequence* Sequence);
 
 	/* Track 3: 8비트 Animations 가로 바 생성 */
 	TSharedRef<SWidget> BuildAnimationsTrack(const FBBMBeatSequence* Sequence);

@@ -308,6 +308,39 @@ int32 UDISEnhancementContainer::RemoveEnhancementEffectsByClass(TSubclassOf<UDIS
 	return RemovedTotalCount;
 }
 
+int32 UDISEnhancementContainer::RemoveEnhancementEffectsByInstigator(const UObject* InInstigator, TSubclassOf<UDISEnhancementEffect> InEffectClass)
+{
+	if (InInstigator == nullptr)
+	{
+		return 0;
+	}
+
+	ENHANCEMENT_SCOPE_LOCK();
+
+	TArray<FDISActiveEnhancementEffectHandle> HandlesToRemove;
+	for (FConstEffectIterator It(*this); It; ++It)
+	{
+		if (It->GetInstigator() == InInstigator)
+		{
+			if (InEffectClass == nullptr || It->GetEffectClass() == InEffectClass)
+			{
+				HandlesToRemove.Add(It->GetHandle());
+			}
+		}
+	}
+
+	int32 RemovedTotalCount = 0;
+	for (const FDISActiveEnhancementEffectHandle& Handle : HandlesToRemove)
+	{
+		if (RemoveEnhancementEffect(Handle) == true)
+		{
+			RemovedTotalCount++;
+		}
+	}
+
+	return RemovedTotalCount;
+}
+
 const FDISActiveEnhancementEffect* UDISEnhancementContainer::FindActiveEnhancementEffect(const FDISActiveEnhancementEffectHandle& Handle) const
 {
 	return const_cast<UDISEnhancementContainer*>(this)->FindActiveEnhancementEffect(Handle);
@@ -350,6 +383,25 @@ bool UDISEnhancementContainer::K2_FindActiveEnhancement(TSubclassOf<UDISEnhancem
 const TArray<FDISActiveEnhancement>& UDISEnhancementContainer::GetActiveEnhancements() const
 {
 	return ActiveEnhancements;
+}
+
+void UDISEnhancementContainer::ForEachActiveEnhancement(TFunctionRef<void(const FDISActiveEnhancement&)> Predicate) const
+{
+	for (const FDISActiveEnhancement& Active : ActiveEnhancements)
+	{
+		if (Active.IsPendingRemove() == false)
+		{
+			Predicate(Active);
+		}
+	}
+
+	for (const FDISActiveEnhancement& Pending : PendingAddEnhancements)
+	{
+		if (Pending.IsPendingRemove() == false)
+		{
+			Predicate(Pending);
+		}
+	}
 }
 
 bool UDISEnhancementContainer::HasIdenticalEnhancements(const UDISEnhancementContainer* OtherContainer) const
@@ -673,7 +725,9 @@ FDISActiveEnhancementEffectHandle UDISEnhancementContainer::AllocateEffectHandle
 		return GlobalLogic->AllocateEnhancementEffectHandle(this);
 	}
 
-	return FDISActiveEnhancementEffectHandle();
+	// 서브시스템/월드가 존재하지 않는 독립 실행 또는 단위 테스트 환경용 로컬 폴백 고유 핸들 발급
+	static int32 LocalFallbackHandleId = 100000;
+	return FDISActiveEnhancementEffectHandle(++LocalFallbackHandleId);
 }
 
 void UDISEnhancementContainer::ReleaseEffectHandle(const FDISActiveEnhancementEffectHandle& Handle)
@@ -811,6 +865,7 @@ FDISActiveEnhancement* UDISEnhancementContainer::RegisterEnhancement(TSubclassOf
 
 	// 락 상태 보호를 위해 PendingAddEnhancements에 추가 (스코프 종료 시 ActiveEnhancements로 플러시)
 	FDISActiveEnhancement& FoundEnhancement = PendingAddEnhancements.Add_GetRef(FDISActiveEnhancement(InEnhancementClass, false, BaseMax));
+	FoundEnhancement.SetContainer(this);
 	const UDISEnhancement* CDO = FoundEnhancement.GetEnhancementCDO();
 
 	// 스탯이 컨테이너에 최초 등록된 경우 등록된 모든 유효 타깃에 OnEnhancementAdded 호출 (즉시 실행)

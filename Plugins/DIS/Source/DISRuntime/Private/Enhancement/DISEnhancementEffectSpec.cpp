@@ -3,16 +3,19 @@
 
 FDISEnhancementEffectSpec::FDISEnhancementEffectSpec() :
 	EffectClass(nullptr),
-	OverallMagnitude(1.0f)
+	OverallMagnitude(1.0f),
+	Instigator(nullptr)
 {
 }
 
 FDISEnhancementEffectSpec::FDISEnhancementEffectSpec(
 	TSubclassOf<UDISEnhancementEffect> InEffectClass,
-	float InOverallMagnitude
+	float InOverallMagnitude,
+	UObject* InInstigator
 ) :
 	EffectClass(InEffectClass),
-	OverallMagnitude(InOverallMagnitude)
+	OverallMagnitude(InOverallMagnitude),
+	Instigator(InInstigator)
 {
 }
 

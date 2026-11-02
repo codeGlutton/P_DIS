@@ -100,6 +100,9 @@ public:
 	/* 요청 명세(Spec) 반환 */
 	const FDISEnhancementEffectSpec& GetSpec() const;
 
+	/* 효과를 부여한 주체 객체 반환 */
+	UObject* GetInstigator() const { return Spec.Instigator.Get(); }
+
 	/* 삭제 대기 상태인지 확인 */
 	bool IsPendingRemove() const { return bPendingRemove; }
 

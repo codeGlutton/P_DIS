@@ -1,5 +1,6 @@
 #include "Enhancement/DISActiveEnhancement.h"
 #include "Enhancement/DISEnhancement.h"
+#include "Enhancement/DISEnhancementContainer.h"
 
 /* FDISActiveEnhancementModEntry */
 
@@ -102,7 +103,8 @@ FDISActiveEnhancement::FDISActiveEnhancement() :
 	BaseMaxLevel(0),
 	CachedCalculatedRawLevel(0.0f),
 	CachedCalculatedMaxLevel(0.0f),
-	CachedCalculatedValue(0.0f)
+	CachedCalculatedValue(0.0f),
+	OwnerContainer(nullptr)
 {
 	ResetModifiers();
 }
@@ -118,7 +120,8 @@ FDISActiveEnhancement::FDISActiveEnhancement(
 	BaseMaxLevel(InBaseMaxLevel),
 	CachedCalculatedRawLevel(0.0f),
 	CachedCalculatedMaxLevel(static_cast<float>(InBaseMaxLevel)),
-	CachedCalculatedValue(0.0f)
+	CachedCalculatedValue(0.0f),
+	OwnerContainer(nullptr)
 {
 	ResetModifiers();
 }
@@ -140,6 +143,16 @@ const UDISEnhancement* FDISActiveEnhancement::GetEnhancementCDO() const
 TSubclassOf<UDISEnhancement> FDISActiveEnhancement::GetEnhancementClass() const
 {
 	return EnhancementClass;
+}
+
+UDISEnhancementContainer* FDISActiveEnhancement::GetContainer() const
+{
+	return Cast<UDISEnhancementContainer>(OwnerContainer.Get());
+}
+
+void FDISActiveEnhancement::SetContainer(UDISEnhancementContainer* InContainer)
+{
+	OwnerContainer = InContainer;
 }
 
 void FDISActiveEnhancement::SetBaseMaxLevel(int32 InBaseMaxLevel)

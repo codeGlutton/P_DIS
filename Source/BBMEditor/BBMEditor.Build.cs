@@ -16,6 +16,9 @@ public class BBMEditor : ModuleRules
 				"CoreUObject",
 				"Engine",
 
+				/* 플러그인 런타임 모듈 */
+				"DISRuntime",
+
 				/* 호스트 게임 런타임 모듈 */
 				"BBM"
 			}

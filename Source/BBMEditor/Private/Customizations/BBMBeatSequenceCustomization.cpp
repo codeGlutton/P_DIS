@@ -119,21 +119,28 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildTimelineWidget()
 	for (int32 BeatIndex = 0; BeatIndex < 8; ++BeatIndex)
 	{
 		const bool bIsPairBorder = (BeatIndex % 2 == 1);
+		const bool bIsAssignedBeat = (Sequence != nullptr && Sequence->Beats.IsValidIndex(BeatIndex));
+		const FLinearColor BgColor = bIsAssignedBeat ? FLinearColor(0.08f, 0.08f, 0.08f, 1.0f) : FLinearColor(0.03f, 0.03f, 0.03f, 0.6f);
+		const FLinearColor TextColor = bIsAssignedBeat ? FLinearColor(0.75f, 0.75f, 0.75f, 1.0f) : FLinearColor(0.35f, 0.35f, 0.35f, 1.0f);
+		const FText BeatText = bIsAssignedBeat ?
+			FText::Format(LOCTEXT("BeatNumberFormat", "비트 {0}"), FText::AsNumber(BeatIndex + 1)) :
+			FText::Format(LOCTEXT("BeatNumberUnusedFormat", "비트 {0} (-)"), FText::AsNumber(BeatIndex + 1));
+
 		BeatNumbersBox->AddSlot()
 		.FillWidth(1.0f)
 		.Padding(FMargin(1.0f, 0.0f, bIsPairBorder ? 4.0f : 1.0f, 0.0f))
 		[
 			SNew(SBorder)
 			.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
-			.BorderBackgroundColor(FLinearColor(0.08f, 0.08f, 0.08f, 1.0f))
+			.BorderBackgroundColor(BgColor)
 			.HAlign(HAlign_Center)
 			.VAlign(VAlign_Center)
 			.Padding(FMargin(0.0f, 2.0f))
 			[
 				SNew(STextBlock)
 				.Font(IDetailLayoutBuilder::GetDetailFontBold())
-				.ColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.75f, 0.75f, 1.0f)))
-				.Text(FText::Format(LOCTEXT("BeatNumberFormat", "비트 {0}"), FText::AsNumber(BeatIndex + 1)))
+				.ColorAndOpacity(FSlateColor(TextColor))
+				.Text(BeatText)
 			]
 		];
 	}
@@ -145,7 +152,7 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildTimelineWidget()
 		BeatNumbersBox
 	];
 
-	// 3. Track 2: 8비트 로직 Effects 가로 바
+	// 3. Track 2: 8비트 로직 Actions 가로 바
 	Container->AddSlot()
 	.AutoHeight()
 	.Padding(2.0f, 2.0f, 0.0f, 1.0f)
@@ -153,14 +160,14 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildTimelineWidget()
 		SNew(STextBlock)
 		.Font(IDetailLayoutBuilder::GetDetailFont())
 		.ColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f, 1.0f)))
-		.Text(LOCTEXT("EffectsTrackTitle", "[ 로직 효과 (Logic Effects) ]"))
+		.Text(LOCTEXT("ActionsTrackTitle", "[ 로직 액션 (Logic Actions) ]"))
 	];
 
 	Container->AddSlot()
 	.AutoHeight()
 	.Padding(0.0f, 0.0f, 0.0f, 4.0f)
 	[
-		BuildEffectsTrack(Sequence)
+		BuildActionsTrack(Sequence)
 	];
 
 	// 4. Track 3: 8비트 Animations 가로 바
@@ -255,13 +262,13 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildEffectRangesTrack(const 
 		if (End > Start)
 		{
 			const FLinearColor CurrentColor = RangeColors[RangeIndex % UE_ARRAY_COUNT(RangeColors)];
-			const FString RangeLabel = Range.RangeName.IsNone() ?
-				FString::Printf(TEXT("Range %d [%d ~ %d)"), RangeIndex + 1, Start + 1, End) :
-				FString::Printf(TEXT("◀ %s [%d ~ %d) ▶"), *Range.RangeName.ToString(), Start + 1, End);
+			const FString PrimaryEffectName = (Range.GrantedEffects.IsEmpty() == false && Range.GrantedEffects[0].EffectClass.IsNull() == false) ?
+				Range.GrantedEffects[0].EffectClass.GetAssetName() : FString::Printf(TEXT("EffectRange %d"), RangeIndex + 1);
+			const FString RangeLabel = FString::Printf(TEXT("◀ %s [%d ~ %d) ▶"), *PrimaryEffectName, Start + 1, End);
 
 			// 툴팁 텍스트 구성
-			FString ToolTipString = FString::Printf(TEXT("구간명: %s\n유지 비트: %d ~ %d\n부여 효과 수: %d개"),
-				*Range.RangeName.ToString(), Start + 1, End, Range.GrantedEffects.Num());
+			FString ToolTipString = FString::Printf(TEXT("비트 구간: %d ~ %d (총 %d비트 유지)\n부여 GameplayEffect: %d개"),
+				Start + 1, End, End - Start, Range.GrantedEffects.Num());
 			for (const FBBMItemGameplayEffectConfig& EffectConfig : Range.GrantedEffects)
 			{
 				ToolTipString += FString::Printf(TEXT("\n - %s (SetByCaller: %d개)"),
@@ -309,68 +316,68 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildEffectRangesTrack(const 
 	return RangesContainer;
 }
 
-TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildEffectsTrack(const FBBMBeatSequence* Sequence)
+TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildActionsTrack(const FBBMBeatSequence* Sequence)
 {
-	TSharedRef<SHorizontalBox> EffectsBox = SNew(SHorizontalBox);
+	TSharedRef<SHorizontalBox> ActionsBox = SNew(SHorizontalBox);
 
 	for (int32 BeatIndex = 0; BeatIndex < 8; ++BeatIndex)
 	{
 		const bool bIsPairBorder = (BeatIndex % 2 == 1);
 		const bool bHasBeat = (Sequence != nullptr && Sequence->Beats.IsValidIndex(BeatIndex));
 		const FBBMBeatDefinition* BeatDef = bHasBeat ? &Sequence->Beats[BeatIndex] : nullptr;
-		const bool bHasEffects = (BeatDef != nullptr && BeatDef->Effects.IsEmpty() == false);
+		const bool bHasActions = (BeatDef != nullptr && BeatDef->Actions.IsEmpty() == false);
 
-		if (bHasEffects == true)
+		if (bHasActions == true)
 		{
-			// 실제 전투 로직 실행 순서(EBBMEffectCategory: 선이동 -> 선버프 -> 방어 -> 데미지 -> 후버프 -> 후이동)로 Stable Sort
-			struct FSortedEffectItem
+			// 실제 전투 로직 실행 순서(EBBMActionCategory: 선이동 -> 선버프 -> 방어 -> 데미지 -> 후버프 -> 후이동)로 Stable Sort
+			struct FSortedActionItem
 			{
 				int32 OriginalIndex;
-				const FBBMEffectBase* EffectPtr;
-				EBBMEffectCategory Category;
+				const FBBMBeatAction* ActionPtr;
+				EBBMActionCategory Category;
 			};
 
-			TArray<FSortedEffectItem> SortedEffects;
-			SortedEffects.Reserve(BeatDef->Effects.Num());
+			TArray<FSortedActionItem> SortedActions;
+			SortedActions.Reserve(BeatDef->Actions.Num());
 
-			for (int32 EffectIndex = 0; EffectIndex < BeatDef->Effects.Num(); ++EffectIndex)
+			for (int32 ActionIndex = 0; ActionIndex < BeatDef->Actions.Num(); ++ActionIndex)
 			{
-				const FBBMEffectBase* EffectPtr = BeatDef->Effects[EffectIndex].GetPtr<FBBMEffectBase>();
-				const EBBMEffectCategory Category = EffectPtr ? EffectPtr->EffectCategory : EBBMEffectCategory::Damage;
-				SortedEffects.Add({ EffectIndex, EffectPtr, Category });
+				const FBBMBeatAction* ActionPtr = BeatDef->Actions[ActionIndex].GetPtr<FBBMBeatAction>();
+				const EBBMActionCategory Category = ActionPtr ? ActionPtr->ActionCategory : EBBMActionCategory::Damage;
+				SortedActions.Add({ ActionIndex, ActionPtr, Category });
 			}
 
 			// 카테고리 순 오름차순 정렬 (동일 카테고리는 OriginalIndex 순서 유지)
-			SortedEffects.StableSort([](const FSortedEffectItem& A, const FSortedEffectItem& B)
+			SortedActions.StableSort([](const FSortedActionItem& A, const FSortedActionItem& B)
 			{
 				return static_cast<uint8>(A.Category) < static_cast<uint8>(B.Category);
 			});
 
-			// 해당 비트 내 정렬된 Effect들을 세부 분할하여 렌더링
-			TSharedRef<SHorizontalBox> BeatSubEffectsBox = SNew(SHorizontalBox);
-			FString ToolTipString = FString::Printf(TEXT("[비트 %d 로직 실행 순서: %d개 효과]"), BeatIndex + 1, SortedEffects.Num());
+			// 해당 비트 내 정렬된 Action들을 세부 분할하여 렌더링
+			TSharedRef<SHorizontalBox> BeatSubActionsBox = SNew(SHorizontalBox);
+			FString ToolTipString = FString::Printf(TEXT("[비트 %d 로직 실행 순서: %d개 액션]"), BeatIndex + 1, SortedActions.Num());
 
-			for (int32 DisplayIndex = 0; DisplayIndex < SortedEffects.Num(); ++DisplayIndex)
+			for (int32 DisplayIndex = 0; DisplayIndex < SortedActions.Num(); ++DisplayIndex)
 			{
-				const FSortedEffectItem& Item = SortedEffects[DisplayIndex];
-				const EBBMEffectCategory Category = Item.Category;
+				const FSortedActionItem& Item = SortedActions[DisplayIndex];
+				const EBBMActionCategory Category = Item.Category;
 
 				FLinearColor CategoryColor = FLinearColor(0.85f, 0.25f, 0.25f); // Damage 기본 레드
 				FString CategoryAbbrev = TEXT("DMG");
 
 				switch (Category)
 				{
-				case EBBMEffectCategory::PreMovement:
-				case EBBMEffectCategory::PostMovement:
+				case EBBMActionCategory::PreMovement:
+				case EBBMActionCategory::PostMovement:
 					CategoryColor = FLinearColor(0.2f, 0.75f, 0.35f); // 그린
 					CategoryAbbrev = TEXT("MOV");
 					break;
-				case EBBMEffectCategory::Defense:
+				case EBBMActionCategory::Defense:
 					CategoryColor = FLinearColor(0.25f, 0.5f, 0.9f); // 블루
 					CategoryAbbrev = TEXT("DEF");
 					break;
-				case EBBMEffectCategory::PreBuffDebuff:
-				case EBBMEffectCategory::PostBuffDebuff:
+				case EBBMActionCategory::PreBuffDebuff:
+				case EBBMActionCategory::PostBuffDebuff:
 					CategoryColor = FLinearColor(0.9f, 0.65f, 0.15f); // 앰버
 					CategoryAbbrev = TEXT("BUF");
 					break;
@@ -381,17 +388,17 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildEffectsTrack(const FBBMB
 				ToolTipString += FString::Printf(TEXT("\n %d단계. %s (원래 등록 인덱스: #%d)"),
 					DisplayIndex + 1, *UEnum::GetValueAsString(Category), Item.OriginalIndex + 1);
 
-				// 세부 효과 타입별 추가 수치 정보 표기
-				if (const FBBMCombatEffect* CombatEffect = static_cast<const FBBMCombatEffect*>(Item.EffectPtr))
+				// 세부 액션 타입별 추가 수치 정보 표기
+				if (const FBBMCombatAction* CombatAction = static_cast<const FBBMCombatAction*>(Item.ActionPtr))
 				{
-					ToolTipString += FString::Printf(TEXT(" [계수: %.1f, 기본값: %.1f]"), CombatEffect->Coefficient, CombatEffect->BaseValue);
+					ToolTipString += FString::Printf(TEXT(" [계수: %.1f, 기본값: %.1f]"), CombatAction->Coefficient, CombatAction->BaseValue);
 				}
-				else if (const FBBMMovementEffect* MoveEffect = static_cast<const FBBMMovementEffect*>(Item.EffectPtr))
+				else if (const FBBMMovementAction* MoveAction = static_cast<const FBBMMovementAction*>(Item.ActionPtr))
 				{
-					ToolTipString += FString::Printf(TEXT(" [이동: %d칸]"), MoveEffect->StepCount);
+					ToolTipString += FString::Printf(TEXT(" [이동: %d칸]"), MoveAction->StepCount);
 				}
 
-				BeatSubEffectsBox->AddSlot()
+				BeatSubActionsBox->AddSlot()
 				.FillWidth(1.0f)
 				.Padding(FMargin(0.5f, 0.0f))
 				[
@@ -409,7 +416,7 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildEffectsTrack(const FBBMB
 				];
 			}
 
-			EffectsBox->AddSlot()
+			ActionsBox->AddSlot()
 			.FillWidth(1.0f)
 			.Padding(FMargin(1.0f, 0.0f, bIsPairBorder ? 4.0f : 1.0f, 0.0f))
 			[
@@ -417,20 +424,20 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildEffectsTrack(const FBBMB
 				.HeightOverride(24.0f)
 				.ToolTipText(FText::FromString(ToolTipString))
 				[
-					BeatSubEffectsBox
+					BeatSubActionsBox
 				]
 			];
 		}
 		else
 		{
-			// 효과 없는 빈 비트 슬롯
-			EffectsBox->AddSlot()
+			// 액션 없는 빈 비트 슬롯
+			ActionsBox->AddSlot()
 			.FillWidth(1.0f)
 			.Padding(FMargin(1.0f, 0.0f, bIsPairBorder ? 4.0f : 1.0f, 0.0f))
 			[
 				SNew(SBox)
 				.HeightOverride(24.0f)
-				.ToolTipText(FText::Format(LOCTEXT("EmptyBeatToolTip", "비트 {0}: 등록된 로직 효과 없음"), FText::AsNumber(BeatIndex + 1)))
+				.ToolTipText(FText::Format(LOCTEXT("EmptyBeatToolTip", "비트 {0}: 등록된 로직 액션 없음"), FText::AsNumber(BeatIndex + 1)))
 				[
 					SNew(SBorder)
 					.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
@@ -441,14 +448,14 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildEffectsTrack(const FBBMB
 						SNew(STextBlock)
 						.Font(IDetailLayoutBuilder::GetDetailFont())
 						.ColorAndOpacity(FSlateColor(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f)))
-						.Text(LOCTEXT("EmptyEffectSlotText", "-"))
+						.Text(LOCTEXT("EmptyActionSlotText", "-"))
 					]
 				]
 			];
 		}
 	}
 
-	return EffectsBox;
+	return ActionsBox;
 }
 
 TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildAnimationsTrack(const FBBMBeatSequence* Sequence)
@@ -619,10 +626,24 @@ FText FBBMBeatSequenceCustomization::GetSummaryText() const
 	const int32 RangeCount = Sequence->EffectRanges.Num();
 	const bool bValid = Sequence->IsValid();
 
+	FText StatusText;
+	if (bValid == false)
+	{
+		StatusText = LOCTEXT("InvalidBeatText", "규격 초과(>8)");
+	}
+	else if (BeatCount == 8)
+	{
+		StatusText = LOCTEXT("FullEightBeatsText", "완전 8비트");
+	}
+	else
+	{
+		StatusText = FText::Format(LOCTEXT("PartialBeatsText", "{0}비트 가변"), FText::AsNumber(BeatCount));
+	}
+
 	return FText::Format(
 		LOCTEXT("BeatSequenceSummaryFormat", "{0}개 비트 ({1}) | {2}개 EffectRange"),
 		FText::AsNumber(BeatCount),
-		bValid ? LOCTEXT("ValidBeatText", "정상 8비트") : LOCTEXT("InvalidBeatText", "규격 미달"),
+		StatusText,
 		FText::AsNumber(RangeCount)
 	);
 }

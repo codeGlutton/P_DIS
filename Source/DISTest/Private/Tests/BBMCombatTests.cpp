@@ -14,11 +14,18 @@
 #include "Combat/Pawn/BBMAICombatantBase.h"
 #include "Combat/Pawn/BBMCharacterDefinition.h"
 #include "Combat/Pawn/BBMAICombatantDefinition.h"
+#include "Combat/Pawn/BBMPlayerCharacterDefinition.h"
+#include "Inventory/BBMInventoryComponent.h"
+#include "Inventory/BBMInventoryDefinition.h"
+#include "Inventory/BBMInventory.h"
+#include "Item/DISItemDefinition.h"
+#include "Item/DISItemEntry.h"
 #include "Combat/Team/BBMTeamTypes.h"
 #include "Combat/Team/BBMCombatSettings.h"
 #include "Combat/BBMCombatSimulator.h"
 #include "Combat/GAS/BBMAttributeSet.h"
 #include "GameFeatures/GameFeatureAction_AddBBMGlobalDefinition.h"
+#include "Item/DISItemStack.h"
 #include "Item/BBMItemDefinition.h"
 #include "Item/BBMItemEntry.h"
 #include "Item/BBMItemGameplayEffectTypes.h"
@@ -629,6 +636,499 @@ bool FBBMAICombatantDefinitionPatternTest::RunTest(const FString& Parameters)
 	const EDataValidationResult BadRangeResult = AIDef->IsDataValid(BadRangeContext);
 	TestEqual(TEXT("비정상 EffectRange 포함 시 Invalid 판정이어야 함"), BadRangeResult, EDataValidationResult::Invalid);
 #endif
+
+	return true;
+}
+
+// 9. 플레이어 상인(ABBMPlayerMerchantBase) Definition 주입 및 인벤토리 컴포넌트 자동 초기화 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMPlayerMerchantInventoryTest,
+	"DIS.BBM.Combat.PlayerMerchantInventoryInitialization",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMPlayerMerchantInventoryTest::RunTest(const FString& Parameters)
+{
+	FBBMScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
+
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	// 1. 플레이어 상인 폰 스폰
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ABBMPlayerMerchantBase* Merchant = TestWorld.World->SpawnActor<ABBMPlayerMerchantBase>(
+		ABBMPlayerMerchantBase::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		SpawnParams
+	);
+
+	TestTrue(TEXT("플레이어 상인이 정상 스폰되어야 함"), Merchant != nullptr);
+	if (Merchant == nullptr)
+	{
+		return false;
+	}
+
+	// 2. 인벤토리 래퍼 컴포넌트 존재 검증
+	UBBMInventoryComponent* InvenComp = Merchant->GetInventoryComponent();
+	TestTrue(TEXT("플레이어 상인은 UBBMInventoryComponent를 소유해야 함"), InvenComp != nullptr);
+	TestEqual(TEXT("기본 팀은 Player여야 함"), Merchant->GetTeamType(), EBBMTeamType::Player);
+
+	// 3. 2D 배낭 인벤토리 정의 생성 (4열 x 3행 = 12칸)
+	UBBMInventoryDefinition* InvenDef = NewObject<UBBMInventoryDefinition>();
+	InvenDef->DefaultCapacity = 12;
+	InvenDef->MaxExpandableCapacity = 12;
+	InvenDef->LineBreakTileCount = 4;
+	InvenDef->ExtractionOrder = EBBMItemExtractionOrder::TopToBottom_LeftToRight;
+
+	// 4. 플레이어 캐릭터 전용 정의(PDA) 생성 및 인벤토리 정의 바인딩
+	UBBMPlayerCharacterDefinition* PlayerDef = NewObject<UBBMPlayerCharacterDefinition>();
+	PlayerDef->DisplayName = FText::FromString(TEXT("BBM Hero Merchant"));
+	PlayerDef->TableKeyName = FName(TEXT("Player"));
+	PlayerDef->DefaultTeam = EBBMTeamType::Player;
+	PlayerDef->InventoryDefinition = InvenDef;
+	PlayerDef->PawnClass = ABBMPlayerMerchantBase::StaticClass();
+
+	TestEqual(TEXT("PlayerCharacterDefinition PrimaryAssetId 검증"), PlayerDef->GetPrimaryAssetId().PrimaryAssetType, FPrimaryAssetType(BBMPrimaryAssetTypes::PlayerCharacter));
+	TestTrue(TEXT("PlayerCharacterDefinition에서 인벤토리 정의 반환 검증"), PlayerDef->GetInventoryDefinition() == InvenDef);
+	TestTrue(TEXT("PlayerCharacterDefinition PawnClass 검증"), PlayerDef->GetPawnClass() == ABBMPlayerMerchantBase::StaticClass());
+
+	// 5. 플레이어 상인에 캐릭터 정의 설정 -> 인벤토리 컴포넌트 자동 초기화
+	Merchant->SetCharacterDefinition(PlayerDef);
+
+	TestTrue(TEXT("GetPlayerCharacterDefinition 일치 검증"), Merchant->GetPlayerCharacterDefinition() == PlayerDef);
+	TestTrue(TEXT("인벤토리 컴포넌트 내 인벤토리가 유효해야 함"), InvenComp->HasValidInventory() == true);
+	TestTrue(TEXT("인벤토리 컴포넌트의 인벤토리 정의 일치 검증"), InvenComp->GetInventoryDefinition() == InvenDef);
+
+	// 6. 실제 배낭 인벤토리 런타임 인스턴스 검증
+	UBBMInventory* Inventory = Merchant->GetInventory();
+	TestTrue(TEXT("Merchant->GetInventory()가 유효해야 함"), Inventory != nullptr);
+	if (Inventory != nullptr)
+	{
+		TestEqual(TEXT("인벤토리 슬롯 수량은 12개여야 함"), Inventory->GetSlotCount(), 12);
+	}
+
+	// 7. DeferredSpawn 방식 사전 주입 시나리오 검증
+	ABBMPlayerMerchantBase* DeferredMerchant = TestWorld.World->SpawnActorDeferred<ABBMPlayerMerchantBase>(
+		ABBMPlayerMerchantBase::StaticClass(),
+		FTransform::Identity
+	);
+
+	TestTrue(TEXT("DeferredSpawn 상인 생성 성공 검증"), DeferredMerchant != nullptr);
+	if (DeferredMerchant != nullptr)
+	{
+		// 스폰 완료(FinishSpawning) 전에 Definition 주입
+		DeferredMerchant->SetCharacterDefinition(PlayerDef);
+		DeferredMerchant->FinishSpawning(FTransform::Identity);
+
+		TestTrue(TEXT("Deferred 주입 상인의 인벤토리 컴포넌트 유효 검증"), DeferredMerchant->GetInventoryComponent() != nullptr);
+		TestTrue(TEXT("Deferred 주입 상인의 인벤토리 인스턴스 자동 초기화 검증"), DeferredMerchant->GetInventory() != nullptr);
+		if (DeferredMerchant->GetInventory() != nullptr)
+		{
+			TestEqual(TEXT("Deferred 주입 상인 인벤토리 슬롯 수량 검증"), DeferredMerchant->GetInventory()->GetSlotCount(), 12);
+		}
+	}
+
+	return true;
+}
+
+// 10. UBBMInventoryComponent 장비 일시 보관소(UsedEquipmentStorage) 아카이브, 유저 지정 슬롯 복원 및 수동 분리 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMInventoryComponentEquipmentStorageTest,
+	"DIS.BBM.Combat.InventoryComponentEquipmentStorage",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMInventoryComponentEquipmentStorageTest::RunTest(const FString& Parameters)
+{
+	FBBMScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	// 1. 플레이어 상인 스폰 및 인벤토리 초기화 (4열 x 3행 = 12슬롯)
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ABBMPlayerMerchantBase* Merchant = TestWorld.World->SpawnActor<ABBMPlayerMerchantBase>(
+		ABBMPlayerMerchantBase::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		SpawnParams
+	);
+
+	TestNotNull(TEXT("Merchant 스폰 검증"), Merchant);
+	if (Merchant == nullptr)
+	{
+		return false;
+	}
+
+	UBBMInventoryComponent* InvenComp = Merchant->GetInventoryComponent();
+	TestNotNull(TEXT("InvenComp 유효 검증"), InvenComp);
+	if (InvenComp == nullptr)
+	{
+		return false;
+	}
+
+	UBBMInventoryDefinition* InvenDef = NewObject<UBBMInventoryDefinition>();
+	InvenDef->DefaultCapacity = 12;
+	InvenDef->MaxExpandableCapacity = 12;
+	InvenDef->LineBreakTileCount = 4;
+	InvenComp->InitializeInventory(InvenDef);
+
+	UBBMInventory* Inventory = InvenComp->GetInventory();
+	TestNotNull(TEXT("Inventory 유효 검증"), Inventory);
+	if (Inventory == nullptr)
+	{
+		return false;
+	}
+
+	// 2. 테스트용 1x1 장비 아이템 스택 2개 생성
+	UDISItemDefinition* EquipDefA = NewObject<UDISItemDefinition>();
+	UDISItemEntry* EntryA = NewObject<UDISItemEntry>();
+	EntryA->InitializeEntry(EquipDefA);
+	UDISItemStack* EquipStackA = NewObject<UDISItemStack>();
+	EquipStackA->PushEntry(EntryA);
+
+	UDISItemDefinition* EquipDefB = NewObject<UDISItemDefinition>();
+	UDISItemEntry* EntryB = NewObject<UDISItemEntry>();
+	EntryB->InitializeEntry(EquipDefB);
+	UDISItemStack* EquipStackB = NewObject<UDISItemStack>();
+	EquipStackB->PushEntry(EntryB);
+
+	// 슬롯 2와 5에 임의 배치
+	Inventory->SetSlotItemStack(2, EquipStackA);
+	Inventory->SetSlotItemStack(5, EquipStackB);
+
+	TestEqual(TEXT("슬롯 2 아이템 배치 검증"), Inventory->GetSlotItemStack(2), EquipStackA);
+	TestEqual(TEXT("슬롯 5 아이템 배치 검증"), Inventory->GetSlotItemStack(5), EquipStackB);
+
+	// 3. EquipStackA 아카이브 (UsedEquipmentStorage 이관)
+	const bool bArchiveASuccess = InvenComp->ArchiveEquipment(EquipStackA);
+	TestTrue(TEXT("EquipStackA 아카이브 성공 검증"), bArchiveASuccess);
+	TestTrue(TEXT("EquipStackA가 아카이브 목록에 존재해야 함"), InvenComp->IsEquipmentArchived(EquipStackA));
+	TestEqual(TEXT("아카이브된 장비 수량은 1이어야 함"), InvenComp->GetArchivedEquipmentCount(), 1);
+	TestTrue(TEXT("아카이브 후 배낭의 슬롯 2는 비어있어야 함"), Inventory->IsSlotEmpty(2));
+
+	// 중복 아카이브 방지 검증
+	const bool bDuplicateArchive = InvenComp->ArchiveEquipment(EquipStackA);
+	TestFalse(TEXT("이미 보관된 장비의 중복 아카이브는 실패해야 함"), bDuplicateArchive);
+
+	// 4. 슬롯 인덱스 기준 EquipStackB 아카이브 (ArchiveEquipmentAtSlot)
+	const bool bArchiveBSuccess = InvenComp->ArchiveEquipmentAtSlot(5);
+	TestTrue(TEXT("슬롯 5 장비 아카이브 성공 검증"), bArchiveBSuccess);
+	TestTrue(TEXT("EquipStackB가 아카이브 목록에 존재해야 함"), InvenComp->IsEquipmentArchived(EquipStackB));
+	TestEqual(TEXT("아카이브된 장비 수량은 2여야 함"), InvenComp->GetArchivedEquipmentCount(), 2);
+	TestTrue(TEXT("아카이브 후 배낭의 슬롯 5는 비어있어야 함"), Inventory->IsSlotEmpty(5));
+
+	// 5. 유저가 선택한 슬롯으로 복원 (RestoreArchivedEquipmentToSlot)
+	// 유저가 슬롯 7을 선택하여 복원 시도
+	const bool bRestoreToSlotSuccess = InvenComp->RestoreArchivedEquipmentToSlot(EquipStackA, 7);
+	TestTrue(TEXT("유저 지정 슬롯 7 복원 성공 검증"), bRestoreToSlotSuccess);
+	TestEqual(TEXT("슬롯 7에 EquipStackA가 정확히 배치되어야 함"), Inventory->GetSlotItemStack(7), EquipStackA);
+	TestFalse(TEXT("복원 후 EquipStackA는 아카이브 목록에서 제거되어야 함"), InvenComp->IsEquipmentArchived(EquipStackA));
+	TestEqual(TEXT("잔여 아카이브 장비 수량은 1이어야 함"), InvenComp->GetArchivedEquipmentCount(), 1);
+
+	// 이미 다른 아이템이 있는 슬롯(7)에 중복 복원 시도 시 실패 검증
+	const bool bConflictRestore = InvenComp->RestoreArchivedEquipmentToSlot(EquipStackB, 7);
+	TestFalse(TEXT("점유 중인 슬롯으로의 복원은 실패해야 함"), bConflictRestore);
+
+	// 6. 보관소에서 수동 꺼내기 검증 (TakeArchivedEquipment - UI 드래그 상호작용 지원)
+	UDISItemStack* TakenStack = InvenComp->TakeArchivedEquipment(EquipStackB);
+	TestEqual(TEXT("꺼낸 장비 스택 일치 검증"), TakenStack, EquipStackB);
+	TestFalse(TEXT("꺼낸 후 보관소에서 제거되어야 함"), InvenComp->IsEquipmentArchived(EquipStackB));
+	TestFalse(TEXT("보관소는 비어있어야 함"), InvenComp->HasArchivedEquipment());
+
+	// 7. 가로 2x1 장비가 회전을 통해 세로 빈 공간에 자동으로 맞춰 복원되는지 검증
+	for (int32 SlotIdx = 0; SlotIdx < 12; ++SlotIdx)
+	{
+		Inventory->ClearSlot(SlotIdx);
+	}
+
+	UDISItemDefinition* WideDef = NewObject<UDISItemDefinition>();
+	WideDef->bCanRotate = true;
+	TArray<FIntPoint> WidePoints;
+	WidePoints.Add(FIntPoint(0, 0));
+	WidePoints.Add(FIntPoint(1, 0)); // 가로 2x1
+	WideDef->Shape = FDISTileShape(WidePoints);
+
+	UDISItemEntry* WideEntry = NewObject<UDISItemEntry>();
+	WideEntry->InitializeEntry(WideDef);
+	UDISItemStack* WideStack = NewObject<UDISItemStack>();
+	WideStack->PushEntry(WideEntry);
+
+	// 슬롯 0에 임시 배치 후 아카이브
+	Inventory->SetSlotItemStack(0, WideStack);
+	InvenComp->ArchiveEquipment(WideStack);
+	TestTrue(TEXT("WideStack 아카이브 성공"), InvenComp->IsEquipmentArchived(WideStack));
+
+	// 인벤토리 상태를 세로 2칸만 남도록 설정:
+	// 슬롯 1, 2, 3, 5, 6, 7, 8, 9, 10, 11에 더미 아이템 채우기 -> 슬롯 0과 슬롯 4(세로 2칸)만 비어있음
+	for (int32 SlotIdx = 0; SlotIdx < 12; ++SlotIdx)
+	{
+		if (SlotIdx != 0 && SlotIdx != 4)
+		{
+			UDISItemDefinition* DummyDef = NewObject<UDISItemDefinition>();
+			UDISItemEntry* DummyEntry = NewObject<UDISItemEntry>();
+			DummyEntry->InitializeEntry(DummyDef);
+			UDISItemStack* DummyStack = NewObject<UDISItemStack>();
+			DummyStack->PushEntry(DummyEntry);
+			Inventory->SetSlotItemStack(SlotIdx, DummyStack);
+		}
+	}
+
+	// 가로 2x1로는 슬롯 0에 배치 불가 (슬롯 1이 차있음), 하지만 90도 회전(세로 1x2) 시 슬롯 0, 4에 들어갈 수 있음
+	const bool bRotateFitSuccess = InvenComp->RestoreArchivedEquipment(WideStack, true);
+	TestTrue(TEXT("회전을 통한 빈 공간 맞춤 복원 성공 검증"), bRotateFitSuccess);
+	TestEqual(TEXT("WideStack은 슬롯 0에 세로로 회전되어 배치되어야 함"), Inventory->GetItemStackRootSlot(WideStack), 0);
+	TestFalse(TEXT("복원 후 WideStack은 아카이브에서 제거되어야 함"), InvenComp->IsEquipmentArchived(WideStack));
+
+	// 8. ClearArchivedEquipment 강제 정리 검증
+	UDISItemDefinition* ClearTestDef = NewObject<UDISItemDefinition>();
+	UDISItemEntry* ClearTestEntry = NewObject<UDISItemEntry>();
+	ClearTestEntry->InitializeEntry(ClearTestDef);
+	UDISItemStack* ClearTestStack = NewObject<UDISItemStack>();
+	ClearTestStack->PushEntry(ClearTestEntry);
+
+	Inventory->ClearSlot(0); // 슬롯 0 비우기
+	Inventory->SetSlotItemStack(0, ClearTestStack);
+	InvenComp->ArchiveEquipment(ClearTestStack);
+	TestTrue(TEXT("보관 확인"), InvenComp->HasArchivedEquipment());
+
+	InvenComp->ClearArchivedEquipment();
+	TestFalse(TEXT("Clear 후 보관소가 비어있어야 함"), InvenComp->HasArchivedEquipment());
+
+	return true;
+}
+
+// 11. ABBMAICombatantBase 패턴 시퀀스 보관, 랜덤 갱신 및 GetCurrentBeatSequence 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMCombatantAIBeatSequenceTest,
+	"DIS.BBM.Combat.AIBeatSequenceSelection",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMCombatantAIBeatSequenceTest::RunTest(const FString& Parameters)
+{
+	FBBMScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	// 1. AI 전투원 폰 스폰
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ABBMAICombatantBase* AICombatant = TestWorld.World->SpawnActor<ABBMAICombatantBase>(
+		ABBMAICombatantBase::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		SpawnParams
+	);
+
+	TestNotNull(TEXT("AICombatant 스폰 검증"), AICombatant);
+	if (AICombatant == nullptr)
+	{
+		return false;
+	}
+
+	// Definition 주입 전 기본 비트 시퀀스는 빈 시퀀스여야 함
+	TestEqual(TEXT("초기 시퀀스 비트 수는 0이어야 함"), AICombatant->GetCurrentBeatSequence().Beats.Num(), 0);
+
+	// 2. 8비트 패턴 풀을 갖춘 AI 정적 정의 에셋 구성
+	UBBMAICombatantDefinition* AIDef = NewObject<UBBMAICombatantDefinition>();
+	AIDef->DisplayName = FText::FromString(TEXT("TestMonster"));
+	AIDef->TableKeyName = FName(TEXT("Monster"));
+	AIDef->DefaultTeam = EBBMTeamType::Monster;
+
+	// 패턴 A: 8비트
+	FBBMAIBeatSequence PatternA;
+	PatternA.PatternName = FName(TEXT("PatternA"));
+	PatternA.SelectionWeight = 1.0f;
+	PatternA.bCanRepeatConsecutively = true;
+	PatternA.Sequence.Beats.SetNum(8);
+	PatternA.Sequence.EffectRanges.Add(FBBMBeatEffectRange(0, 4));
+	AIDef->PatternPool.Add(PatternA);
+
+	// 패턴 B: 8비트
+	FBBMAIBeatSequence PatternB;
+	PatternB.PatternName = FName(TEXT("PatternB"));
+	PatternB.SelectionWeight = 2.0f;
+	PatternB.bCanRepeatConsecutively = true;
+	PatternB.Sequence.Beats.SetNum(8);
+	PatternB.Sequence.EffectRanges.Add(FBBMBeatEffectRange(4, 8));
+	AIDef->PatternPool.Add(PatternB);
+
+	// 3. Definition 주입 -> InitializeFromDefinition() 내부에서 자동 1턴 패턴 선정 검증
+	AICombatant->SetCharacterDefinition(AIDef);
+
+	TestNotNull(TEXT("정의 주입 후 SelectedPattern이 선정되어 있어야 함"), AICombatant->GetSelectedPattern());
+	TestTrue(TEXT("선정된 패턴 이름이 유효해야 함"), AICombatant->GetSelectedPatternName() == FName(TEXT("PatternA")) || AICombatant->GetSelectedPatternName() == FName(TEXT("PatternB")));
+
+	// GetCurrentBeatSequence()가 선정된 패턴 시퀀스와 일치하는지 검증
+	const FBBMBeatSequence CurSeq = AICombatant->GetCurrentBeatSequence();
+	TestTrue(TEXT("8비트 완성형 시퀀스여야 함"), CurSeq.IsFullEightBeats());
+	TestEqual(TEXT("시퀀스 EffectRange 수량 검증"), CurSeq.EffectRanges.Num(), 1);
+
+	// 4. 결정론적 RandomStream을 사용한 새 패턴 갱신 헬퍼 검증
+	FRandomStream FixedStream(42);
+	const FBBMAIBeatSequence* SelectedNew = AICombatant->SelectNewPattern(FixedStream);
+	TestNotNull(TEXT("SelectNewPattern 성공 검증"), SelectedNew);
+	TestEqual(TEXT("GetCurrentBeatSequence가 갱신된 패턴과 일치해야 함"), AICombatant->GetCurrentBeatSequence().EffectRanges[0].StartBeat, SelectedNew->Sequence.EffectRanges[0].StartBeat);
+
+	// 5. SelectNewPatternRandom 헬퍼 검증
+	const bool bRandomSuccess = AICombatant->SelectNewPatternRandom();
+	TestTrue(TEXT("SelectNewPatternRandom 성공 검증"), bRandomSuccess);
+	TestNotNull(TEXT("SelectedPattern 유효 검증"), AICombatant->GetSelectedPattern());
+
+	// 6. UpdateBeatSequence 가상 함수 갱신 검증
+	AICombatant->UpdateBeatSequence();
+	TestNotNull(TEXT("UpdateBeatSequence 호출 후에도 SelectedPattern 유효 검증"), AICombatant->GetSelectedPattern());
+	TestEqual(TEXT("UpdateBeatSequence 후 GetCurrentBeatSequence 캐시 일치 검증"), AICombatant->GetCurrentBeatSequence().EffectRanges[0].StartBeat, AICombatant->GetSelectedPattern()->Sequence.EffectRanges[0].StartBeat);
+
+	return true;
+}
+
+// 12. ABBMPlayerMerchantBase ExtractionOrder 기반 8비트 시퀀스 합성 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMCombatantPlayerBeatSequenceTest,
+	"DIS.BBM.Combat.PlayerBeatSequenceGeneration",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMCombatantPlayerBeatSequenceTest::RunTest(const FString& Parameters)
+{
+	FBBMScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	// 1. 플레이어 상인 스폰 및 인벤토리 초기화
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ABBMPlayerMerchantBase* Merchant = TestWorld.World->SpawnActor<ABBMPlayerMerchantBase>(
+		ABBMPlayerMerchantBase::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		SpawnParams
+	);
+
+	TestNotNull(TEXT("Merchant 스폰 검증"), Merchant);
+	if (Merchant == nullptr)
+	{
+		return false;
+	}
+
+	// 4열 x 3행 인벤토리 정의
+	UBBMInventoryDefinition* InvenDef = NewObject<UBBMInventoryDefinition>();
+	InvenDef->DefaultCapacity = 12;
+	InvenDef->MaxExpandableCapacity = 12;
+	InvenDef->LineBreakTileCount = 4;
+	InvenDef->ExtractionOrder = EBBMItemExtractionOrder::TopToBottom_LeftToRight;
+
+	UBBMPlayerCharacterDefinition* PlayerDef = NewObject<UBBMPlayerCharacterDefinition>();
+	PlayerDef->InventoryDefinition = InvenDef;
+	PlayerDef->PawnClass = ABBMPlayerMerchantBase::StaticClass();
+
+	Merchant->SetCharacterDefinition(PlayerDef);
+	UBBMInventory* Inventory = Merchant->GetInventory();
+	TestNotNull(TEXT("Inventory 유효 검증"), Inventory);
+	if (Inventory == nullptr)
+	{
+		return false;
+	}
+
+	// 빈 인벤토리 시 기본 8비트 빈 시퀀스 반환 검증
+	const FBBMBeatSequence EmptySeq = Merchant->GetCurrentBeatSequence();
+	TestEqual(TEXT("기본 8비트 슬롯 확보 검증"), EmptySeq.Beats.Num(), 8);
+	TestEqual(TEXT("효과 범위는 0개여야 함"), EmptySeq.EffectRanges.Num(), 0);
+
+	// GenerateBeatSequenceFromInventory 직접 호출 검증
+	const FBBMBeatSequence DirectEmptySeq = Merchant->GenerateBeatSequenceFromInventory();
+	TestEqual(TEXT("GenerateBeatSequenceFromInventory 기본 인자 호출 일치 검증"), DirectEmptySeq.Beats.Num(), 8);
+
+	// 2. 가로 2x1 아이템 A 생성 (2비트 차지, EffectRange [0, 2))
+	UBBMItemDefinition* ItemDefA = NewObject<UBBMItemDefinition>();
+	TArray<FIntPoint> ShapeA;
+	ShapeA.Add(FIntPoint(0, 0));
+	ShapeA.Add(FIntPoint(1, 0));
+	ItemDefA->Shape = FDISTileShape(ShapeA);
+	ItemDefA->BeatSequence.Beats.SetNum(2);
+	ItemDefA->BeatSequence.EffectRanges.Add(FBBMBeatEffectRange(0, 2));
+
+	UBBMItemEntry* EntryA = NewObject<UBBMItemEntry>();
+	EntryA->InitializeEntry(ItemDefA);
+	UDISItemStack* StackA = NewObject<UDISItemStack>();
+	StackA->PushEntry(EntryA);
+
+	// 3. 가로 2x1 아이템 B 생성 (2비트 차지, EffectRange [0, 2))
+	UBBMItemDefinition* ItemDefB = NewObject<UBBMItemDefinition>();
+	TArray<FIntPoint> ShapeB;
+	ShapeB.Add(FIntPoint(0, 0));
+	ShapeB.Add(FIntPoint(1, 0));
+	ItemDefB->Shape = FDISTileShape(ShapeB);
+	ItemDefB->BeatSequence.Beats.SetNum(2);
+	ItemDefB->BeatSequence.EffectRanges.Add(FBBMBeatEffectRange(0, 2));
+
+	UBBMItemEntry* EntryB = NewObject<UBBMItemEntry>();
+	EntryB->InitializeEntry(ItemDefB);
+	UDISItemStack* StackB = NewObject<UDISItemStack>();
+	StackB->PushEntry(EntryB);
+
+	// 슬롯 0에 Item A, 슬롯 2에 Item B 배치 (TopToBottom_LeftToRight 정렬 시 A -> B 순서)
+	Inventory->SetSlotItemStack(0, StackA);
+	Inventory->SetSlotItemStack(2, StackB);
+
+	// 배치 직후 아직 UpdateBeatSequence() 호출 전에는 이전 캐시(효과 범위 0개) 상태여야 함
+	TestEqual(TEXT("Update 전 GetCurrentBeatSequence는 이전 캐시 유지"), Merchant->GetCurrentBeatSequence().EffectRanges.Num(), 0);
+
+	// 4. UpdateBeatSequence() 호출 -> 소유 인벤토리로부터 누적 합성 및 캐시 갱신
+	Merchant->UpdateBeatSequence();
+
+	// GetCurrentBeatSequence() 호출 -> 캐시된 8비트 시퀀스 검증
+	const FBBMBeatSequence CompiledSeq = Merchant->GetCurrentBeatSequence();
+	TestEqual(TEXT("합성된 시퀀스는 8비트여야 함"), CompiledSeq.Beats.Num(), 8);
+	TestEqual(TEXT("합성된 시퀀스는 총 2개의 EffectRange를 포함해야 함"), CompiledSeq.EffectRanges.Num(), 2);
+
+	if (CompiledSeq.EffectRanges.Num() == 2)
+	{
+		// Item A의 범위: [0, 2)
+		TestEqual(TEXT("Item A 시작 비트는 0이어야 함"), CompiledSeq.EffectRanges[0].StartBeat, 0);
+		TestEqual(TEXT("Item A 종료 비트는 2여야 함"), CompiledSeq.EffectRanges[0].EndBeat, 2);
+
+		// Item B의 범위: 오프셋 2 누적으로 [2, 4)
+		TestEqual(TEXT("Item B 시작 비트는 2여야 함"), CompiledSeq.EffectRanges[1].StartBeat, 2);
+		TestEqual(TEXT("Item B 종료 비트는 4여야 함"), CompiledSeq.EffectRanges[1].EndBeat, 4);
+	}
+
+	// 5. GDD 4.1 8비트 초과 Overflow 규칙 검증:
+	// 슬롯 4에 5비트 아이템 C를 배치하면, 누적 2 + 2 + 5 = 9 > 8 이므로 C는 제외되어야 함
+	UBBMItemDefinition* ItemDefC = NewObject<UBBMItemDefinition>();
+	TArray<FIntPoint> ShapeC;
+	for (int32 i = 0; i < 5; ++i) { ShapeC.Add(FIntPoint(i % 4, i / 4)); }
+	ItemDefC->Shape = FDISTileShape(ShapeC);
+	ItemDefC->BeatSequence.Beats.SetNum(5);
+	ItemDefC->BeatSequence.EffectRanges.Add(FBBMBeatEffectRange(0, 5));
+
+	UBBMItemEntry* EntryC = NewObject<UBBMItemEntry>();
+	EntryC->InitializeEntry(ItemDefC);
+	UDISItemStack* StackC = NewObject<UDISItemStack>();
+	StackC->PushEntry(EntryC);
+
+	Inventory->SetSlotItemStack(4, StackC);
+
+	// GenerateBeatSequenceFromInventory() 직접 호출로 갱신 및 캐시 검증
+	const FBBMBeatSequence OverflowSeq = Merchant->GenerateBeatSequenceFromInventory();
+	TestEqual(TEXT("8비트 초과 시 Overflow 아이템은 제외되어 여전히 2개 범위만 유지되어야 함"), OverflowSeq.EffectRanges.Num(), 2);
+	TestEqual(TEXT("GetCurrentBeatSequence도 동일하게 2개 범위 캐시를 반환해야 함"), Merchant->GetCurrentBeatSequence().EffectRanges.Num(), 2);
 
 	return true;
 }

@@ -12,9 +12,13 @@
 #include "AbilitySystemInterface.h"
 #include "GenericTeamAgentInterface.h"
 #include "Combat/Team/BBMTeamTypes.h"
+#include "Item/BBMBeatTypes.h"
 #include "BBMCombatantBase.generated.h"
 
 /* 독립 전방 선언 (상단에 단독 배치) */
+class UCapsuleComponent;
+class USkeletalMeshComponent;
+class UArrowComponent;
 class UAbilitySystemComponent;
 class UBBMAttributeSet;
 class UBBMCharacterDefinition;
@@ -59,9 +63,23 @@ public:
 	UFUNCTION(Category = "Combat|Character", BlueprintCallable, BlueprintPure)
 	const UBBMCharacterDefinition* GetCharacterDefinition() const;
 
-	/* 캐릭터 정적 정의 에셋 설정 및 팀 식별자 자동 동기화 */
+	/* 캐릭터 정적 정의 에셋 설정 및 초기화 동기화 */
 	UFUNCTION(Category = "Combat|Character", BlueprintCallable)
 	void SetCharacterDefinition(const UBBMCharacterDefinition* InDef);
+
+	/* 캐릭터 정적 정의 기반 초기화 가상 함수 (팀 설정, 스탯 초기화 등, 자식 클래스에서 확장 가능) */
+	UFUNCTION(Category = "Combat|Character", BlueprintCallable)
+	virtual void InitializeFromDefinition();
+
+	/* 비트 행동 시퀀스 관리 */
+public:
+	/* 이번 턴에 실행할 8비트 행동 시퀀스 갱신 (자식 클래스에서 오버라이드하여 캐시 업데이트) */
+	UFUNCTION(Category = "BBM|Beat", BlueprintCallable)
+	virtual void UpdateBeatSequence();
+
+	/* 이번 턴에 캐시된 8비트 행동 시퀀스 반환 */
+	UFUNCTION(Category = "BBM|Beat", BlueprintCallable, BlueprintPure)
+	virtual FBBMBeatSequence GetCurrentBeatSequence() const;
 
 	/* 어트리뷰트 세트 조회 */
 public:
@@ -121,6 +139,37 @@ public:
 	UFUNCTION(Category = "Combat|Formation", BlueprintCallable)
 	void SetLaneIndex(int32 InLaneIndex);
 
+	/* 기본 캐릭터 컴포넌트 접근자 (ACharacter 규격) */
+public:
+	/* 캡슐 콜리전 컴포넌트 반환 */
+	UFUNCTION(Category = "Combat|Component", BlueprintCallable, BlueprintPure)
+	UCapsuleComponent* GetCapsuleComponent() const;
+
+	/* 스켈레탈 메시 컴포넌트 반환 */
+	UFUNCTION(Category = "Combat|Component", BlueprintCallable, BlueprintPure)
+	USkeletalMeshComponent* GetMesh() const;
+
+#if WITH_EDITORONLY_DATA
+	/* 에디터 전용 방향 표시 화살표 컴포넌트 반환 */
+	UArrowComponent* GetArrowComponent() const;
+#endif
+
+	/* 기본 캐릭터 컴포넌트 프로퍼티 (ACharacter 규격) */
+protected:
+	/* 이동 및 충돌 판정용 캡슐 콜리전 컴포넌트 (루트 컴포넌트) */
+	UPROPERTY(Category = "Combat|Character", VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UCapsuleComponent> CapsuleComponent;
+
+	/* 캐릭터 3D 외형을 렌더링하는 스켈레탈 메시 컴포넌트 */
+	UPROPERTY(Category = "Combat|Character", VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USkeletalMeshComponent> Mesh;
+
+#if WITH_EDITORONLY_DATA
+	/* 에디터 뷰포트에서 캐릭터 정면 방향을 시각화하는 화살표 컴포넌트 */
+	UPROPERTY()
+	TObjectPtr<UArrowComponent> ArrowComponent;
+#endif
+
 	/* 컴포넌트 프로퍼티 */
 protected:
 	/* 언리얼 Gameplay Ability System 컴포넌트 */
@@ -134,7 +183,7 @@ protected:
 	/* 정적 정의 에셋 */
 protected:
 	/* 캐릭터 정적 정의 에셋 (표시명, 스탯 테이블 키, 기본 팀) */
-	UPROPERTY(Category = "Combat|Character", EditAnywhere, BlueprintReadWrite, meta = (AssetBundles = "Data"))
+	UPROPERTY(Category = "Combat|Character", EditAnywhere, BlueprintReadWrite, meta = (ExposeOnSpawn = "true", AssetBundles = "Data"))
 	TObjectPtr<const UBBMCharacterDefinition> CharacterDefinition;
 
 	/* 런타임 상태 프로퍼티 */
@@ -150,4 +199,8 @@ protected:
 	/* 1D 레인 진형 인덱스 (0: 최전방 Frontline, 1 이상: 후방 Backline) */
 	UPROPERTY(Category = "Combat|Formation", EditAnywhere, BlueprintReadWrite)
 	int32 LaneIndex;
+
+	/* 이번 턴에 실행할 캐시된 8비트 행동 시퀀스 */
+	UPROPERTY(Category = "BBM|Beat", Transient, BlueprintReadOnly)
+	FBBMBeatSequence CachedBeatSequence;
 };

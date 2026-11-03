@@ -1,8 +1,8 @@
 /*****************************************************************//**
  * @file   BBMCharacterDefinition.h
  * @brief  BBM(비트 배낭 상인) 캐릭터 기본 정적 정의 데이터 에셋 클래스 정의
- * @details 캐릭터 표시명, GAS CurveTable 행 파싱 키 이름(TableKeyName), 기본 소속 팀 등을 정의함
- * @date   2026-10-31
+ * @details 캐릭터 표시명, GAS CurveTable 행 파싱 키 이름(TableKeyName), 기본 소속 팀, 스폰할 폰 클래스 등을 정의함
+ * @date   2026-11-03
  *********************************************************************/
 
 #pragma once
@@ -11,6 +11,9 @@
 #include "Engine/DataAsset.h"
 #include "Combat/Team/BBMTeamTypes.h"
 #include "BBMCharacterDefinition.generated.h"
+
+/* 독립 전방 선언 (상단에 단독 배치) */
+class ABBMCombatantBase;
 
 /**
  * BBM 호스트 게임 전역에서 사용하는 PrimaryAssetType 식별자 모음
@@ -49,6 +52,10 @@ public:
 	/* 기본 소속 팀 반환 */
 	EBBMTeamType GetDefaultTeam() const;
 
+	/* 월드에 스폰할 전투원 폰 클래스 반환 */
+	UFUNCTION(Category = "Character|Spawn", BlueprintCallable, BlueprintPure)
+	TSoftClassPtr<ABBMCombatantBase> GetPawnClass() const;
+
 	/* 정적 프로퍼티 */
 public:
 	/* UI 및 인게임 표기용 캐릭터 이름 */
@@ -62,4 +69,8 @@ public:
 	/* 캐릭터의 기본 소속 팀 */
 	UPROPERTY(Category = "Character|Team", EditDefaultsOnly, BlueprintReadOnly)
 	EBBMTeamType DefaultTeam;
+
+	/* 월드에 스폰할 전투원 폰 클래스 (소프트 클래스 레퍼런스) */
+	UPROPERTY(Category = "Character|Spawn", EditDefaultsOnly, BlueprintReadOnly, meta = (AssetBundles = "World"))
+	TSoftClassPtr<ABBMCombatantBase> PawnClass;
 };

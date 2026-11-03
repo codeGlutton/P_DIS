@@ -3,7 +3,8 @@
 UBBMCharacterDefinition::UBBMCharacterDefinition() :
 	DisplayName(FText::FromString(TEXT("기본 캐릭터"))),
 	TableKeyName(TEXT("Player")),
-	DefaultTeam(EBBMTeamType::Player)
+	DefaultTeam(EBBMTeamType::Player),
+	PawnClass(nullptr)
 {
 }
 
@@ -25,4 +26,9 @@ FName UBBMCharacterDefinition::GetTableKeyName() const
 EBBMTeamType UBBMCharacterDefinition::GetDefaultTeam() const
 {
 	return DefaultTeam;
+}
+
+TSoftClassPtr<ABBMCombatantBase> UBBMCharacterDefinition::GetPawnClass() const
+{
+	return PawnClass;
 }

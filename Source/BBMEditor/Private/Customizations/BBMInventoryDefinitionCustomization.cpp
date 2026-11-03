@@ -1,8 +1,6 @@
 #include "Customizations/BBMInventoryDefinitionCustomization.h"
 #include "Inventory/BBMInventoryDefinition.h"
 #include "Inventory/BBMInventoryTypes.h"
-#include "Inventory/BBMSlotEnhancementEffect.h"
-#include "Enhancement/DISEnhancement.h"
 #include "Enhancement/DISEnhancementEffect.h"
 #include "DetailLayoutBuilder.h"
 #include "DetailCategoryBuilder.h"
@@ -11,12 +9,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SGridPanel.h"
 #include "Widgets/Layout/SSeparator.h"
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Input/SSpinBox.h"
-#include "Widgets/Input/SComboBox.h"
 #include "Widgets/Text/STextBlock.h"
-#include "ScopedTransaction.h"
-#include "UObject/UObjectIterator.h"
 
 #define LOCTEXT_NAMESPACE "FBBMInventoryDefinitionCustomization"
 
@@ -25,10 +18,18 @@ TSharedRef<IDetailCustomization> FBBMInventoryDefinitionCustomization::MakeInsta
 	return MakeShared<FBBMInventoryDefinitionCustomization>();
 }
 
+FBBMInventoryDefinitionCustomization::~FBBMInventoryDefinitionCustomization()
+{
+	// 등록된 엔진 오브젝트 프로퍼티 변경 델리게이트 안전하게 해제
+	if (OnPropertyChangedHandle.IsValid() == true)
+	{
+		FCoreUObjectDelegates::OnObjectPropertyChanged.Remove(OnPropertyChangedHandle);
+		OnPropertyChangedHandle.Reset();
+	}
+}
+
 void FBBMInventoryDefinitionCustomization::CustomizeDetails(IDetailLayoutBuilder& DetailBuilder)
 {
-	DetailLayout = &DetailBuilder;
-
 	// 대상 UBBMInventoryDefinition 인스턴스 획득
 	TArray<TWeakObjectPtr<UObject>> CustomizedObjects;
 	DetailBuilder.GetObjectsBeingCustomized(CustomizedObjects);
@@ -38,64 +39,142 @@ void FBBMInventoryDefinitionCustomization::CustomizeDetails(IDetailLayoutBuilder
 		TargetDefinition = Cast<UBBMInventoryDefinition>(CustomizedObjects[0].Get());
 	}
 
-	SlotEnhancementsPropertyHandle = DetailBuilder.GetProperty(
-		GET_MEMBER_NAME_CHECKED(UBBMInventoryDefinition, SlotEnhancements),
-		UBBMInventoryDefinition::StaticClass()
-	);
+	// 에셋 프로퍼티 실시간 변경 감지를 위한 델리게이트 등록
+	if (OnPropertyChangedHandle.IsValid() == false)
+	{
+		OnPropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddSP(
+			this, &FBBMInventoryDefinitionCustomization::OnObjectPropertyChanged);
+	}
 
-	// 슬롯 강화 인터랙티브 2D 매트릭스 전용 최상위 카테고리 구성
-	IDetailCategoryBuilder& MatrixCategory = DetailBuilder.EditCategory(
-		"BBM Slot Enhancement Matrix",
-		LOCTEXT("SlotEnhancementMatrixCategory", "BBM 슬롯 강화 2D 인터랙티브 매트릭스"),
+	// 배낭 프리뷰 전용 최상위 카테고리 구성 (시각화 전용)
+	IDetailCategoryBuilder& PreviewCategory = DetailBuilder.EditCategory(
+		"BBM Backpack Preview",
+		LOCTEXT("BackpackPreviewCategory", "BBM 배낭 2D 시각화 프리뷰"),
 		ECategoryPriority::Important
 	);
 
-	MatrixCategory.AddCustomRow(LOCTEXT("SlotEnhancementMatrixRow", "슬롯 강화 2D 매트릭스"))
+	PreviewCategory.AddCustomRow(LOCTEXT("BackpackPreviewRow", "배낭 2D 프리뷰"))
 	.WholeRowContent()
 	[
 		SNew(SVerticalBox)
-		// 안내 헤더
+		// 안내 문구 및 요약 정보
 		+ SVerticalBox::Slot()
 		.AutoHeight()
-		.Padding(0.0f, 4.0f, 0.0f, 8.0f)
+		.Padding(0.0f, 4.0f, 0.0f, 6.0f)
 		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFont())
-			.ColorAndOpacity(FSlateColor(FLinearColor(0.7f, 0.7f, 0.7f, 1.0f)))
-			.Text(LOCTEXT("MatrixGuideText", "배낭 타일을 클릭하여 해당 칸에 부여할 슬롯 강화를 직관적으로 확인하고 편집할 수 있습니다. (막힌 칸은 BlockedTileShape에 의해 비활성화)"))
+			SAssignNew(SummaryTextBlock, STextBlock)
+			.Font(IDetailLayoutBuilder::GetDetailFontBold())
+			.ColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.85f, 0.85f, 1.0f)))
 		]
-		// 메인 2D 그리드 패널
+		// 범례(Legend) 표시
 		+ SVerticalBox::Slot()
 		.AutoHeight()
-		.Padding(0.0f, 0.0f, 0.0f, 12.0f)
+		.Padding(0.0f, 0.0f, 0.0f, 8.0f)
+		[
+			SNew(SHorizontalBox)
+			// 일반 타일 범례
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0.0f, 0.0f, 12.0f, 0.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SBox)
+					.WidthOverride(12.0f)
+					.HeightOverride(12.0f)
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+						.BorderBackgroundColor(FLinearColor(0.18f, 0.22f, 0.28f, 1.0f))
+					]
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SNew(STextBlock)
+					.Font(IDetailLayoutBuilder::GetDetailFont())
+					.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+					.Text(LOCTEXT("LegendNormal", "일반 타일"))
+				]
+			]
+			// 막힌 타일 범례
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0.0f, 0.0f, 12.0f, 0.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SBox)
+					.WidthOverride(12.0f)
+					.HeightOverride(12.0f)
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+						.BorderBackgroundColor(FLinearColor(0.12f, 0.12f, 0.12f, 0.9f))
+					]
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SNew(STextBlock)
+					.Font(IDetailLayoutBuilder::GetDetailFont())
+					.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+					.Text(LOCTEXT("LegendBlocked", "막힌 타일 (X)"))
+				]
+			]
+			// 슬롯 강화 범례
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SBox)
+					.WidthOverride(12.0f)
+					.HeightOverride(12.0f)
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+						.BorderBackgroundColor(FLinearColor(0.75f, 0.40f, 0.08f, 1.0f))
+					]
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SNew(STextBlock)
+					.Font(IDetailLayoutBuilder::GetDetailFont())
+					.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+					.Text(LOCTEXT("LegendEnhanced", "슬롯 강화 (+N)"))
+				]
+			]
+		]
+		// 메인 2D 그리드 패널 (읽기 전용 시각화)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 0.0f, 0.0f, 6.0f)
 		[
 			SNew(SBorder)
 			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-			.Padding(12.0f)
+			.Padding(10.0f)
 			[
 				SAssignNew(GridContainer, SGridPanel)
 			]
-		]
-		// 구분선
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(0.0f, 4.0f)
-		[
-			SNew(SSeparator)
-			.Orientation(Orient_Horizontal)
-		]
-		// 하단 슬롯 강화 상세 편집 패널
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		.Padding(0.0f, 8.0f, 0.0f, 4.0f)
-		[
-			SAssignNew(DetailContainer, SVerticalBox)
 		]
 	];
 
 	// 초기 UI 렌더링
 	RefreshGridWidget();
-	RefreshDetailPanelWidget();
 }
 
 UBBMInventoryDefinition* FBBMInventoryDefinitionCustomization::GetTargetDefinition() const
@@ -103,21 +182,18 @@ UBBMInventoryDefinition* FBBMInventoryDefinitionCustomization::GetTargetDefiniti
 	return TargetDefinition.Get();
 }
 
-void FBBMInventoryDefinitionCustomization::MarkAssetDirty()
+void FBBMInventoryDefinitionCustomization::OnObjectPropertyChanged(UObject* InObject, FPropertyChangedEvent& InPropertyChangedEvent)
 {
-	UBBMInventoryDefinition* TargetDef = GetTargetDefinition();
-	if (TargetDef == nullptr)
+	if (TargetDefinition.IsValid() == false || InObject == nullptr)
 	{
 		return;
 	}
 
-	if (SlotEnhancementsPropertyHandle.IsValid() == true)
+	// 현재 커스터마이징 중인 UBBMInventoryDefinition 인스턴스의 프로퍼티 변경 시 그리드 실시간 최신화
+	if (InObject == TargetDefinition.Get())
 	{
-		SlotEnhancementsPropertyHandle->NotifyPreChange();
-		SlotEnhancementsPropertyHandle->NotifyPostChange(EPropertyChangeType::ValueSet);
+		RefreshGridWidget();
 	}
-
-	TargetDef->MarkPackageDirty();
 }
 
 void FBBMInventoryDefinitionCustomization::RefreshGridWidget()
@@ -137,78 +213,146 @@ void FBBMInventoryDefinitionCustomization::RefreshGridWidget()
 
 	const int32 Width = (TargetDef->LineBreakTileCount > 0) ? TargetDef->LineBreakTileCount : 4;
 	const int32 TotalCapacity = (TargetDef->DefaultCapacity > 0) ? TargetDef->DefaultCapacity : 16;
-	const int32 Height = FMath::Max(1, FMath::CeilToInt((float)TotalCapacity / Width));
+	const int32 Height = FMath::Max(1, FMath::DivideAndRoundUp(TotalCapacity, Width));
 
-	const float TileSize = 48.0f;
+	int32 BlockedCount = 0;
+	int32 EnhancedCount = 0;
 
+	// 사전 통계 집계
 	for (int32 Y = 0; Y < Height; ++Y)
 	{
 		for (int32 X = 0; X < Width; ++X)
 		{
 			const FIntPoint Coord(X, Y);
 			const int32 SlotIndex = TargetDef->CoordToSlotIndex(Coord);
+			if (SlotIndex < 0 || SlotIndex >= TotalCapacity)
+			{
+				continue;
+			}
+
+			if (TargetDef->IsTileBlocked(Coord) == true)
+			{
+				++BlockedCount;
+			}
+			else if (const FBBMSlotEffectSpecList* SpecList = TargetDef->FindSlotEnhancements(Coord))
+			{
+				if (SpecList->Effects.Num() > 0)
+				{
+					++EnhancedCount;
+				}
+			}
+		}
+	}
+
+	// 상단 요약 텍스트 갱신
+	if (SummaryTextBlock.IsValid() == true)
+	{
+		SummaryTextBlock->SetText(FText::Format(
+			LOCTEXT("BackpackSummaryFormat", "배낭 그리드: {0} x {1} (총 {2}칸) | 사용 가능: {3}칸 | 막힌 타일: {4}칸 | 강화 슬롯: {5}칸"),
+			FText::AsNumber(Width),
+			FText::AsNumber(Height),
+			FText::AsNumber(TotalCapacity),
+			FText::AsNumber(TotalCapacity - BlockedCount),
+			FText::AsNumber(BlockedCount),
+			FText::AsNumber(EnhancedCount)
+		));
+	}
+
+	constexpr float TileSize = 34.0f;
+
+	for (int32 Row = 0; Row < Height; ++Row)
+	{
+		for (int32 Col = 0; Col < Width; ++Col)
+		{
+			const FIntPoint Coord(Col, Row);
+			const int32 SlotIndex = TargetDef->CoordToSlotIndex(Coord);
 			const bool bOutOfRange = (SlotIndex < 0 || SlotIndex >= TotalCapacity);
 
 			if (bOutOfRange == true)
 			{
+				// 유효 슬롯 범위를 벗어난 칸은 흐릿한 비활성 칸으로 렌더링
+				GridContainer->AddSlot(Col, Row)
+				.Padding(1.5f)
+				[
+					SNew(SBox)
+					.WidthOverride(TileSize)
+					.HeightOverride(TileSize)
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+						.BorderBackgroundColor(FLinearColor(0.04f, 0.04f, 0.04f, 0.4f))
+					]
+				];
 				continue;
 			}
 
 			const bool bIsBlocked = TargetDef->IsTileBlocked(Coord);
 			const FBBMSlotEffectSpecList* SpecList = TargetDef->FindSlotEnhancements(Coord);
 			const bool bHasEnhancement = (SpecList != nullptr && SpecList->Effects.Num() > 0);
-			const bool bIsSelected = (SelectedCoord == Coord);
 
-			// 타일 배경 색상 결정
 			FLinearColor BgColor;
+			FLinearColor BorderColor = FLinearColor(0.06f, 0.06f, 0.06f, 1.0f);
 			FText TileLabel;
 			FText TooltipText;
 
 			if (bIsBlocked == true)
 			{
-				BgColor = FLinearColor(0.12f, 0.12f, 0.12f, 0.8f);
+				// 막힌 타일
+				BgColor = FLinearColor(0.12f, 0.12f, 0.12f, 0.9f);
 				TileLabel = FText::FromString(TEXT("X"));
-				TooltipText = FText::Format(LOCTEXT("BlockedTileTooltip", "좌표 ({0}, {1}) - 사용 불가하게 막힌 타일 (BlockedTileShape)"), FText::AsNumber(X), FText::AsNumber(Y));
+				TooltipText = FText::Format(
+					LOCTEXT("BlockedTileTooltip", "좌표 ({0}, {1}) | 슬롯 #{2}\n사용 불가하게 막힌 타일 (BlockedTileShape)"),
+					FText::AsNumber(Col), FText::AsNumber(Row), FText::AsNumber(SlotIndex));
 			}
 			else if (bHasEnhancement == true)
 			{
-				BgColor = bIsSelected ? FLinearColor(0.85f, 0.45f, 0.1f, 1.0f) : FLinearColor(0.55f, 0.25f, 0.05f, 1.0f);
+				// 강화 타일
+				BgColor = FLinearColor(0.70f, 0.35f, 0.06f, 1.0f);
+				BorderColor = FLinearColor(0.95f, 0.55f, 0.15f, 1.0f);
 				TileLabel = FText::Format(LOCTEXT("EnhancedTileLabel", "+{0}"), FText::AsNumber(SpecList->Effects.Num()));
-				TooltipText = FText::Format(LOCTEXT("EnhancedTileTooltip", "좌표 ({0}, {1}) - 슬롯 강화 효과 {2}개 설정됨"), FText::AsNumber(X), FText::AsNumber(Y), FText::AsNumber(SpecList->Effects.Num()));
+
+				FString DetailsString = FString::Printf(TEXT("좌표 (%d, %d) | 슬롯 #%d\n슬롯 강화 효과 (%d개):"), Col, Row, SlotIndex, SpecList->Effects.Num());
+				for (int32 Idx = 0; Idx < SpecList->Effects.Num(); ++Idx)
+				{
+					const FDISEnhancementEffectSpec& Spec = SpecList->Effects[Idx];
+					const FString ClassName = (Spec.EffectClass != nullptr) ? Spec.EffectClass->GetName() : TEXT("None");
+					DetailsString += FString::Printf(TEXT("\n  • [%d] %s (강도: %.1f)"), Idx + 1, *ClassName, Spec.OverallMagnitude);
+				}
+				TooltipText = FText::FromString(DetailsString);
 			}
 			else
 			{
-				BgColor = bIsSelected ? FLinearColor(0.2f, 0.45f, 0.7f, 1.0f) : FLinearColor(0.18f, 0.2f, 0.24f, 1.0f);
-				TileLabel = FText::Format(LOCTEXT("NormalTileLabel", "{0},{1}"), FText::AsNumber(X), FText::AsNumber(Y));
-				TooltipText = FText::Format(LOCTEXT("NormalTileTooltip", "좌표 ({0}, {1}) - 클릭하여 슬롯 강화 편집"), FText::AsNumber(X), FText::AsNumber(Y));
+				// 일반 사용 가능 타일
+				BgColor = FLinearColor(0.16f, 0.20f, 0.25f, 1.0f);
+				TileLabel = FText::Format(LOCTEXT("NormalTileLabel", "{0},{1}"), FText::AsNumber(Col), FText::AsNumber(Row));
+				TooltipText = FText::Format(
+					LOCTEXT("NormalTileTooltip", "좌표 ({0}, {1}) | 슬롯 #{2}\n사용 가능한 기본 타일"),
+					FText::AsNumber(Col), FText::AsNumber(Row), FText::AsNumber(SlotIndex));
 			}
 
-			// 테두리 색상 (선택된 타일은 밝은 노란색 테두리)
-			const FLinearColor BorderColor = bIsSelected ? FLinearColor(1.0f, 0.85f, 0.2f, 1.0f) : FLinearColor(0.08f, 0.08f, 0.08f, 1.0f);
-
-			GridContainer->AddSlot(X, Y)
-			.Padding(2.0f)
+			// 순수 시각적 타일 렌더링 (버튼 없이 SBorder + STextBlock 구성)
+			GridContainer->AddSlot(Col, Row)
+			.Padding(1.5f)
 			[
 				SNew(SBox)
 				.WidthOverride(TileSize)
 				.HeightOverride(TileSize)
+				.ToolTipText(TooltipText)
 				[
 					SNew(SBorder)
 					.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
 					.BorderBackgroundColor(BorderColor)
-					.Padding(bIsSelected ? 2.0f : 1.0f)
+					.Padding(1.0f)
 					[
-						SNew(SButton)
-						.IsEnabled(bIsBlocked == false)
-						.ButtonColorAndOpacity(BgColor)
-						.ToolTipText(TooltipText)
-						.OnClicked(this, &FBBMInventoryDefinitionCustomization::OnTileClicked, Coord)
+						SNew(SBorder)
+						.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+						.BorderBackgroundColor(BgColor)
 						.HAlign(HAlign_Center)
 						.VAlign(VAlign_Center)
 						[
 							SNew(STextBlock)
-							.Font(IDetailLayoutBuilder::GetDetailFontBold())
-							.ColorAndOpacity(bIsBlocked ? FSlateColor(FLinearColor(0.4f, 0.4f, 0.4f, 1.0f)) : FSlateColor(FLinearColor::White))
+							.Font(IDetailLayoutBuilder::GetDetailFont())
+							.ColorAndOpacity(bIsBlocked ? FSlateColor(FLinearColor(0.45f, 0.45f, 0.45f, 1.0f)) : FSlateColor(FLinearColor::White))
 							.Text(TileLabel)
 						]
 					]
@@ -218,281 +362,4 @@ void FBBMInventoryDefinitionCustomization::RefreshGridWidget()
 	}
 }
 
-void FBBMInventoryDefinitionCustomization::RefreshDetailPanelWidget()
-{
-	if (DetailContainer.IsValid() == false)
-	{
-		return;
-	}
-
-	DetailContainer->ClearChildren();
-
-	UBBMInventoryDefinition* TargetDef = GetTargetDefinition();
-	if (TargetDef == nullptr)
-	{
-		return;
-	}
-
-	// 타일이 선택되지 않은 경우 안내 문구 표시
-	if (SelectedCoord == FIntPoint::NoneValue)
-	{
-		DetailContainer->AddSlot()
-		.AutoHeight()
-		.Padding(0.0f, 8.0f)
-		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFontItalic())
-			.ColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f, 1.0f)))
-			.Text(LOCTEXT("NoTileSelectedPrompt", "위 매트릭스에서 타일을 클릭하면 해당 칸의 슬롯 강화를 설정할 수 있습니다."))
-		];
-		return;
-	}
-
-	const int32 SelectedSlotIndex = TargetDef->CoordToSlotIndex(SelectedCoord);
-
-	// 1. 선택된 타일 헤더 및 정보
-	DetailContainer->AddSlot()
-	.AutoHeight()
-	.Padding(0.0f, 4.0f, 0.0f, 8.0f)
-	[
-		SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFontBold())
-			.Text(FText::Format(LOCTEXT("SelectedTileHeader", "선택된 타일: 좌표 ({0}, {1}) | 슬롯 인덱스: {2}"),
-				FText::AsNumber(SelectedCoord.X),
-				FText::AsNumber(SelectedCoord.Y),
-				FText::AsNumber(SelectedSlotIndex)))
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.Padding(16.0f, 0.0f, 0.0f, 0.0f)
-		[
-			SNew(SButton)
-			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
-			.ToolTipText(LOCTEXT("ClearTileTooltip", "이 타일에 설정된 모든 강화를 삭제합니다."))
-			.OnClicked(this, &FBBMInventoryDefinitionCustomization::OnClearSlotEnhancementsClicked)
-			[
-				SNew(STextBlock)
-				.Font(IDetailLayoutBuilder::GetDetailFont())
-				.ColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.4f, 0.4f, 1.0f)))
-				.Text(LOCTEXT("ClearTileBtn", "선택 칸 모든 강화 삭제"))
-			]
-		]
-	];
-
-	// 2. 현재 설정된 강화 항목 목록
-	const FBBMSlotEffectSpecList* SpecList = TargetDef->FindSlotEnhancements(SelectedCoord);
-	if (SpecList != nullptr && SpecList->Effects.Num() > 0)
-	{
-		for (int32 Index = 0; Index < SpecList->Effects.Num(); ++Index)
-		{
-			const FDISEnhancementEffectSpec& Spec = SpecList->Effects[Index];
-			const FString ClassName = (Spec.EffectClass != nullptr) ? Spec.EffectClass->GetName() : TEXT("None");
-
-			DetailContainer->AddSlot()
-			.AutoHeight()
-			.Padding(4.0f, 2.0f)
-			[
-				SNew(SBorder)
-				.BorderImage(FAppStyle::GetBrush("ToolPanel.DarkGroupBorder"))
-				.Padding(6.0f, 4.0f)
-				[
-					SNew(SHorizontalBox)
-					+ SHorizontalBox::Slot()
-					.FillWidth(1.0f)
-					.VAlign(VAlign_Center)
-					[
-						SNew(STextBlock)
-						.Font(IDetailLayoutBuilder::GetDetailFont())
-						.Text(FText::Format(LOCTEXT("EnhanceItemRow", "[{0}] {1} (강도: {2})"),
-							FText::AsNumber(Index + 1),
-							FText::FromString(ClassName),
-							FText::AsNumber(Spec.OverallMagnitude)))
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.Padding(8.0f, 0.0f, 0.0f, 0.0f)
-					[
-						SNew(SButton)
-						.ButtonStyle(FAppStyle::Get(), "SimpleButton")
-						.ToolTipText(LOCTEXT("RemoveEntryTooltip", "이 강화 효과 항목을 삭제합니다."))
-						.OnClicked(this, &FBBMInventoryDefinitionCustomization::OnRemoveEnhancementClicked, Index)
-						[
-							SNew(STextBlock)
-							.Font(IDetailLayoutBuilder::GetDetailFont())
-							.ColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.3f, 0.3f, 1.0f)))
-							.Text(LOCTEXT("RemoveBtn", "삭제"))
-						]
-					]
-				]
-			];
-		}
-	}
-	else
-	{
-		DetailContainer->AddSlot()
-		.AutoHeight()
-		.Padding(4.0f, 4.0f)
-		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFontItalic())
-			.ColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 1.0f)))
-			.Text(LOCTEXT("NoEnhancementsOnSlot", "이 타일에는 현재 부여된 슬롯 강화가 없습니다."))
-		];
-	}
-
-	// 3. 신규 강화 추가 영역
-	DetailContainer->AddSlot()
-	.AutoHeight()
-	.Padding(0.0f, 8.0f, 0.0f, 0.0f)
-	[
-		SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		.Padding(0.0f, 0.0f, 6.0f, 0.0f)
-		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFont())
-			.Text(LOCTEXT("AddMagnitudeLabel", "강도/보너스 수치:"))
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.Padding(0.0f, 0.0f, 12.0f, 0.0f)
-		[
-			SNew(SBox)
-			.WidthOverride(70.0f)
-			[
-				SNew(SSpinBox<float>)
-				.Font(IDetailLayoutBuilder::GetDetailFont())
-				.MinValue(1.0f)
-				.MaxValue(99.0f)
-				.Value(PendingOverallMagnitude)
-				.OnValueChanged_Lambda([this](float NewVal)
-				{
-					PendingOverallMagnitude = NewVal;
-				})
-			]
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		[
-			SNew(SButton)
-			.ButtonStyle(FAppStyle::Get(), "PrimaryButton")
-			.ToolTipText(LOCTEXT("AddEnhanceBtnTooltip", "선택된 타일에 강화를 추가합니다."))
-			.OnClicked(this, &FBBMInventoryDefinitionCustomization::OnAddEnhancementClicked)
-			[
-				SNew(STextBlock)
-				.Font(IDetailLayoutBuilder::GetDetailFontBold())
-				.Text(LOCTEXT("AddEnhanceBtn", "+ 슬롯 강화 효과 추가"))
-			]
-		]
-	];
-}
-
-FReply FBBMInventoryDefinitionCustomization::OnTileClicked(FIntPoint Coord)
-{
-	SelectedCoord = Coord;
-	RefreshGridWidget();
-	RefreshDetailPanelWidget();
-	return FReply::Handled();
-}
-
-FReply FBBMInventoryDefinitionCustomization::OnAddEnhancementClicked()
-{
-	UBBMInventoryDefinition* TargetDef = GetTargetDefinition();
-	if (TargetDef == nullptr || SelectedCoord == FIntPoint::NoneValue)
-	{
-		return FReply::Handled();
-	}
-
-	// 기본 유효한 UBBMSlotEnhancementEffect 파생 클래스 자동 탐색
-	if (PendingEffectClass == nullptr)
-	{
-		for (TObjectIterator<UClass> It; It; ++It)
-		{
-			if (It->IsChildOf(UBBMSlotEnhancementEffect::StaticClass()) == true && It->HasAnyClassFlags(CLASS_Abstract) == false)
-			{
-				PendingEffectClass = *It;
-				break;
-			}
-		}
-	}
-
-	if (PendingEffectClass == nullptr)
-	{
-		return FReply::Handled();
-	}
-
-	FScopedTransaction Transaction(LOCTEXT("AddSlotEnhancementTx", "Add Slot Enhancement"));
-	TargetDef->Modify();
-
-	FBBMSlotEffectSpecList& SpecList = TargetDef->SlotEnhancements.FindOrAdd(SelectedCoord);
-	SpecList.Effects.Add(FDISEnhancementEffectSpec(PendingEffectClass, FMath::Max(1.0f, PendingOverallMagnitude)));
-
-	MarkAssetDirty();
-	RefreshGridWidget();
-	RefreshDetailPanelWidget();
-
-	return FReply::Handled();
-}
-
-FReply FBBMInventoryDefinitionCustomization::OnRemoveEnhancementClicked(int32 EntryIndex)
-{
-	UBBMInventoryDefinition* TargetDef = GetTargetDefinition();
-	if (TargetDef == nullptr || SelectedCoord == FIntPoint::NoneValue)
-	{
-		return FReply::Handled();
-	}
-
-	if (FBBMSlotEffectSpecList* SpecList = TargetDef->SlotEnhancements.Find(SelectedCoord))
-	{
-		if (SpecList->Effects.IsValidIndex(EntryIndex) == true)
-		{
-			FScopedTransaction Transaction(LOCTEXT("RemoveSlotEnhancementTx", "Remove Slot Enhancement"));
-			TargetDef->Modify();
-
-			SpecList->Effects.RemoveAt(EntryIndex);
-			if (SpecList->Effects.Num() == 0)
-			{
-				TargetDef->SlotEnhancements.Remove(SelectedCoord);
-			}
-
-			MarkAssetDirty();
-			RefreshGridWidget();
-			RefreshDetailPanelWidget();
-		}
-	}
-
-	return FReply::Handled();
-}
-
-FReply FBBMInventoryDefinitionCustomization::OnClearSlotEnhancementsClicked()
-{
-	UBBMInventoryDefinition* TargetDef = GetTargetDefinition();
-	if (TargetDef == nullptr || SelectedCoord == FIntPoint::NoneValue)
-	{
-		return FReply::Handled();
-	}
-
-	if (TargetDef->SlotEnhancements.Contains(SelectedCoord) == true)
-	{
-		FScopedTransaction Transaction(LOCTEXT("ClearSlotEnhancementsTx", "Clear Slot Enhancements"));
-		TargetDef->Modify();
-
-		TargetDef->SlotEnhancements.Remove(SelectedCoord);
-
-		MarkAssetDirty();
-		RefreshGridWidget();
-		RefreshDetailPanelWidget();
-	}
-
-	return FReply::Handled();
-}
-
 #undef LOCTEXT_NAMESPACE
-

@@ -1,7 +1,7 @@
 /*****************************************************************//**
  * @file   BBMBeatSequenceCustomization.h
- * @brief  FBBMBeatSequence 구조체의 디테일 패널 3단 타임라인 시각화 커스터마이제이션 정의
- * @details 상단에 EffectRanges 구간 바 / 8비트 로직 Effects 바 / 8비트 Animations 바를 렌더링하고 하단에 기본 설정 트리를 제공함
+ * @brief  FBBMBeatSequence 구조체의 디테일 패널 4단 타임라인 시각화 커스터마이제이션 정의
+ * @details 상단에 EffectRanges 구간 바 / AnimLayerRanges 구간 바 / 8비트 로직 Actions 바 / 8비트 Animations 바를 렌더링하고 하단에 기본 설정 트리를 제공함
  * @date   2026-11-01
  *********************************************************************/
 
@@ -34,19 +34,22 @@ public:
 
 	/* 타임라인 Slate 위젯 빌드 및 리프레시 헬퍼 */
 private:
-	/* 3단 타임라인 통합 컨테이너 위젯 생성 */
+	/* 4단 타임라인 통합 컨테이너 위젯 생성 */
 	TSharedRef<SWidget> BuildTimelineWidget();
 
 	/* 상단 타임라인 시각화 위젯 부분 리프레시 (디테일 뷰 전체 재생성 방지) */
 	void RefreshTimelineWidget();
 
-	/* Track 1: EffectRanges 구간 표기 위젯 생성 */
+	/* Track 1: EffectRanges 구간 표기 위젯 생성 (채움 솔리드 바 스타일) */
 	TSharedRef<SWidget> BuildEffectRangesTrack(const FBBMBeatSequence* Sequence);
 
-	/* Track 2: 8비트 로직 Actions 가로 바 생성 */
+	/* Track 2: AnimLayerRanges 구간 표기 위젯 생성 (아웃라인 및 다이아몬드 기호 스타일로 EffectRange와 시각적 차별화) */
+	TSharedRef<SWidget> BuildAnimLayerRangesTrack(const FBBMBeatSequence* Sequence);
+
+	/* Track 3: 8비트 로직 Actions 가로 바 생성 */
 	TSharedRef<SWidget> BuildActionsTrack(const FBBMBeatSequence* Sequence);
 
-	/* Track 3: 8비트 Animations 가로 바 생성 */
+	/* Track 4: 8비트 Animations 가로 바 생성 */
 	TSharedRef<SWidget> BuildAnimationsTrack(const FBBMBeatSequence* Sequence);
 
 	/* 하단 범례(Legend) 위젯 생성 */

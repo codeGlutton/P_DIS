@@ -1,34 +1,44 @@
 /*****************************************************************//**
- * @file   BBMCombatTests.cpp
- * @brief  BBM 전투 핵심 단위 테스트
- * @details CompositeCurveTable 기반 스탯 초기화, 비트 단위 아이템 GE 부여/원복, GDD 5.3 4단계 피해 해결 파이프라인 검증
- * @date   2026-10-31
+ * @file   BBMCombatManagerTests.cpp
+ * @brief  BBM(비트 배낭 상인) 전투 핵심 및 1D 타일 라인 전투 매니저 종합 단위 테스트
+ * @details 스탯 커브테이블, 아이템 비트 GE 수명주기, 팀 태도, AI/플레이어 비트 시퀀스,
+ *          1D 타일 라인 진형/시프트, 3단계 방어 및 상태이상 틱 총괄 검증
+ * @date   2026-11-04
  *********************************************************************/
 
+#include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/DataValidation.h"
 #include "AbilitySystemGlobals.h"
+#include "AbilitySystemComponent.h"
+#include "Combat/BBMCombatManagerSubsystem.h"
+#include "Combat/BBMCombatTypes.h"
+#include "Combat/GAS/BBMAttributeSet.h"
 #include "Combat/GAS/BBMAbilitySystemGlobals.h"
+#include "Combat/GAS/BBMGameplayEffects.h"
 #include "Combat/Pawn/BBMCombatantBase.h"
 #include "Combat/Pawn/BBMPlayerMerchantBase.h"
 #include "Combat/Pawn/BBMAICombatantBase.h"
 #include "Combat/Pawn/BBMCharacterDefinition.h"
 #include "Combat/Pawn/BBMAICombatantDefinition.h"
 #include "Combat/Pawn/BBMPlayerCharacterDefinition.h"
+#include "Combat/Team/BBMTeamTypes.h"
+#include "Combat/Team/BBMCombatSettings.h"
 #include "Inventory/BBMInventoryComponent.h"
 #include "Inventory/BBMInventoryDefinition.h"
 #include "Inventory/BBMInventory.h"
 #include "Item/DISItemDefinition.h"
 #include "Item/DISItemEntry.h"
-#include "Combat/Team/BBMTeamTypes.h"
-#include "Combat/Team/BBMCombatSettings.h"
-#include "Combat/BBMCombatSimulator.h"
-#include "Combat/GAS/BBMAttributeSet.h"
-#include "GameFeatures/GameFeatureAction_AddBBMGlobalDefinition.h"
 #include "Item/DISItemStack.h"
 #include "Item/BBMItemDefinition.h"
 #include "Item/BBMItemEntry.h"
 #include "Item/BBMItemGameplayEffectTypes.h"
+#include "Item/BBMBeatTypes.h"
+#include "Item/BBMItemProfileTypes.h"
+#include "Animation/AnimInstance.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Combat/Animation/BBMCombatantAnimInstance.h"
+#include "GameFeatures/GameFeatureAction_AddBBMGlobalDefinition.h"
 #include "Engine/CompositeCurveTable.h"
 #include "Engine/CurveTable.h"
 #include "Engine/Engine.h"
@@ -201,7 +211,7 @@ bool FBBMCombatantCompositeCurveTableTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// 2. 비트 단위 아이템 GAS GameplayEffect 부여 및 종료 시 100% 원복 검증
+// 2. 비트 단위 아이템 GAS GameplayEffect 부여 및 종료 시 100% 원복 검증 (UBBMCombatManagerSubsystem 기반)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMCombatItemEffectLifecycleTest,
 	"DIS.BBM.Combat.ItemEffectLifecycle",
@@ -244,9 +254,9 @@ bool FBBMCombatItemEffectLifecycleTest::RunTest(const FString& Parameters)
 	BuffRange.GrantedEffects.Add(BuffConfig);
 	ItemEntry->AddEffectRange(BuffRange);
 
-	// 3. 비트 시작: 아이템 효과 캐릭터 ASC에 적용
+	// 3. 비트 시작: 아이템 효과 캐릭터 ASC에 적용 (UBBMCombatManagerSubsystem 헬퍼 활용)
 	TArray<FActiveGameplayEffectHandle> ActiveHandles;
-	const bool bApplyResult = UBBMCombatSimulator::ApplyItemGrantedEffects(Combatant, ItemEntry, ActiveHandles);
+	const bool bApplyResult = UBBMCombatManagerSubsystem::ApplyItemGrantedEffects(Combatant, ItemEntry, ActiveHandles);
 	TestTrue(TEXT("아이템 Granted Effects 적용 성공"), bApplyResult);
 	TestEqual(TEXT("적용된 Active Handle 개수는 1개여야 함"), ActiveHandles.Num(), 1);
 
@@ -254,7 +264,7 @@ bool FBBMCombatItemEffectLifecycleTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("아이템 효과 부여 후 공격력 증폭 검증"), Combatant->GetAttributeValue(UBBMAttributeSet::GetAttackPowerAttribute()), 35.0f);
 
 	// 4. 비트 종료: 핸들을 통해 활성 효과 일괄 해제
-	UBBMCombatSimulator::RemoveItemGrantedEffects(Combatant, ActiveHandles);
+	UBBMCombatManagerSubsystem::RemoveItemGrantedEffects(Combatant, ActiveHandles);
 
 	// 해제 후 원래 공격력(10.0f)으로 100% 원복 검증
 	TestEqual(TEXT("비트 종료 후 공격력 완전 원복 검증"), Combatant->GetAttributeValue(UBBMAttributeSet::GetAttackPowerAttribute()), InitialAttack);
@@ -262,76 +272,7 @@ bool FBBMCombatItemEffectLifecycleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// 3. GDD 5.3 규격에 따른 엄격한 4단계 피해 처리 파이프라인 검증
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FBBMCombatResolveDamagePipelineTest,
-	"DIS.BBM.Combat.ResolveDamagePipeline",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
-)
-
-bool FBBMCombatResolveDamagePipelineTest::RunTest(const FString& Parameters)
-{
-	FBBMScopedTestWorld TestWorld;
-	TestNotNull(TEXT("테스트 월드 생성 검증"), TestWorld.World);
-	if (TestWorld.World == nullptr)
-	{
-		return false;
-	}
-
-	// 1. 전투원 스폰 및 스탯 설정 (체력 100, 방어도 20)
-	ABBMCombatantBase* Combatant = TestWorld.SpawnCombatant();
-	TestNotNull(TEXT("전투원 스폰 검증"), Combatant);
-	if (Combatant == nullptr)
-	{
-		return false;
-	}
-
-	UAbilitySystemComponent* ASC = Combatant->GetAbilitySystemComponent();
-	TestNotNull(TEXT("전투원 ASC 검증"), ASC);
-	if (ASC == nullptr)
-	{
-		return false;
-	}
-
-	ASC->SetNumericAttributeBase(UBBMAttributeSet::GetHealthAttribute(), 100.0f);
-	ASC->SetNumericAttributeBase(UBBMAttributeSet::GetMaxHealthAttribute(), 100.0f);
-	ASC->SetNumericAttributeBase(UBBMAttributeSet::GetArmorAttribute(), 20.0f);
-
-	// 2. 1단계: 패링 체크 (패링 중이면 100 피해도 완전 무효화, 방어력/체력 100% 보존)
-	float ActiveGuard = 0.0f;
-	float DealtDamage = UBBMCombatSimulator::ResolveDamage(Combatant, 100.0f, true, ActiveGuard);
-	TestEqual(TEXT("패링 상태 시 입힌 피해량은 0이어야 함"), DealtDamage, 0.0f);
-	TestEqual(TEXT("패링 성공 시 체력 보존 검증"), Combatant->GetAttributeValue(UBBMAttributeSet::GetHealthAttribute()), 100.0f);
-	TestEqual(TEXT("패링 성공 시 방어도 보존 검증"), Combatant->GetAttributeValue(UBBMAttributeSet::GetArmorAttribute()), 20.0f);
-
-	// 3. 2~4단계: 액티브 가드(30) + 쌓아둔 방어도(20)로 60 피해 흡수
-	// - 가드 30 흡수 -> 잔여 가드 0, 잔여 피해 30
-	// - 방어도 20 흡수 -> 잔여 방어도 0, 잔여 피해 10
-	// - 체력 10 차감 -> 잔여 체력 90
-	ActiveGuard = 30.0f;
-	DealtDamage = UBBMCombatSimulator::ResolveDamage(Combatant, 60.0f, false, ActiveGuard);
-	TestEqual(TEXT("가드 및 방어도 차감 후 체력에 실제 입힌 피해량은 10이어야 함"), DealtDamage, 10.0f);
-	TestEqual(TEXT("액티브 가드 전량 소진 검증"), ActiveGuard, 0.0f);
-	TestEqual(TEXT("쌓아둔 방어도 전량 소진 검증"), Combatant->GetAttributeValue(UBBMAttributeSet::GetArmorAttribute()), 0.0f);
-	TestEqual(TEXT("남은 최종 체력은 90이어야 함"), Combatant->GetAttributeValue(UBBMAttributeSet::GetHealthAttribute()), 90.0f);
-	TestFalse(TEXT("전투원은 아직 생존 상태여야 함"), Combatant->IsDead());
-
-	// 4. 치명적 피해 적용 및 사망(IsDead) 검증
-	// 잔여 체력 90인 상태에서 피해 150 직격
-	ActiveGuard = 0.0f;
-	DealtDamage = UBBMCombatSimulator::ResolveDamage(Combatant, 150.0f, false, ActiveGuard);
-	TestEqual(TEXT("체력 90 전량 소진 검증"), DealtDamage, 90.0f);
-	TestEqual(TEXT("체력은 0.0f이어야 함"), Combatant->GetAttributeValue(UBBMAttributeSet::GetHealthAttribute()), 0.0f);
-	TestTrue(TEXT("체력 0 소진 시 IsDead는 true여야 함"), Combatant->IsDead());
-
-	// 5. 지속 방어도 획득(ResolveGainArmor) 검증
-	UBBMCombatSimulator::ResolveGainArmor(Combatant, 50.0f);
-	TestEqual(TEXT("방어도 50 획득 후 수치 검증"), Combatant->GetAttributeValue(UBBMAttributeSet::GetArmorAttribute()), 50.0f);
-
-	return true;
-}
-
-// 4. FGenericTeamId 및 IGenericTeamAgentInterface 팀 관계 태도 검증
+// 3. FGenericTeamId 및 IGenericTeamAgentInterface 팀 관계 태도 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMCombatantTeamAttitudeTest,
 	"DIS.BBM.Combat.TeamAttitude",
@@ -640,7 +581,7 @@ bool FBBMAICombatantDefinitionPatternTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// 9. 플레이어 상인(ABBMPlayerMerchantBase) Definition 주입 및 인벤토리 컴포넌트 자동 초기화 검증
+// 8. 플레이어 상인(ABBMPlayerMerchantBase) Definition 주입 및 인벤토리 컴포넌트 자동 초기화 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMPlayerMerchantInventoryTest,
 	"DIS.BBM.Combat.PlayerMerchantInventoryInitialization",
@@ -651,7 +592,6 @@ bool FBBMPlayerMerchantInventoryTest::RunTest(const FString& Parameters)
 {
 	FBBMScopedTestWorld TestWorld;
 	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
-
 	if (TestWorld.World == nullptr)
 	{
 		return false;
@@ -736,7 +676,7 @@ bool FBBMPlayerMerchantInventoryTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// 10. UBBMInventoryComponent 장비 일시 보관소(UsedEquipmentStorage) 아카이브, 유저 지정 슬롯 복원 및 수동 분리 검증
+// 9. UBBMInventoryComponent 장비 일시 보관소(UsedEquipmentStorage) 아카이브, 유저 지정 슬롯 복원 및 수동 분리 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMInventoryComponentEquipmentStorageTest,
 	"DIS.BBM.Combat.InventoryComponentEquipmentStorage",
@@ -827,7 +767,6 @@ bool FBBMInventoryComponentEquipmentStorageTest::RunTest(const FString& Paramete
 	TestTrue(TEXT("아카이브 후 배낭의 슬롯 5는 비어있어야 함"), Inventory->IsSlotEmpty(5));
 
 	// 5. 유저가 선택한 슬롯으로 복원 (RestoreArchivedEquipmentToSlot)
-	// 유저가 슬롯 7을 선택하여 복원 시도
 	const bool bRestoreToSlotSuccess = InvenComp->RestoreArchivedEquipmentToSlot(EquipStackA, 7);
 	TestTrue(TEXT("유저 지정 슬롯 7 복원 성공 검증"), bRestoreToSlotSuccess);
 	TestEqual(TEXT("슬롯 7에 EquipStackA가 정확히 배치되어야 함"), Inventory->GetSlotItemStack(7), EquipStackA);
@@ -868,7 +807,6 @@ bool FBBMInventoryComponentEquipmentStorageTest::RunTest(const FString& Paramete
 	TestTrue(TEXT("WideStack 아카이브 성공"), InvenComp->IsEquipmentArchived(WideStack));
 
 	// 인벤토리 상태를 세로 2칸만 남도록 설정:
-	// 슬롯 1, 2, 3, 5, 6, 7, 8, 9, 10, 11에 더미 아이템 채우기 -> 슬롯 0과 슬롯 4(세로 2칸)만 비어있음
 	for (int32 SlotIdx = 0; SlotIdx < 12; ++SlotIdx)
 	{
 		if (SlotIdx != 0 && SlotIdx != 4)
@@ -906,7 +844,7 @@ bool FBBMInventoryComponentEquipmentStorageTest::RunTest(const FString& Paramete
 	return true;
 }
 
-// 11. ABBMAICombatantBase 패턴 시퀀스 보관, 랜덤 갱신 및 GetCurrentBeatSequence 검증
+// 10. ABBMAICombatantBase 패턴 시퀀스 보관, 랜덤 갱신 및 GetCurrentBeatSequence 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMCombatantAIBeatSequenceTest,
 	"DIS.BBM.Combat.AIBeatSequenceSelection",
@@ -965,10 +903,16 @@ bool FBBMCombatantAIBeatSequenceTest::RunTest(const FString& Parameters)
 	PatternB.Sequence.EffectRanges.Add(FBBMBeatEffectRange(4, 8));
 	AIDef->PatternPool.Add(PatternB);
 
-	// 3. Definition 주입 -> InitializeFromDefinition() 내부에서 자동 1턴 패턴 선정 검증
+	// 3. Definition 주입 검증 (초기 캐시는 비어있으며 전투 단계에서 직접 UpdateBeatSequence로 갱신함)
 	AICombatant->SetCharacterDefinition(AIDef);
 
-	TestNotNull(TEXT("정의 주입 후 SelectedPattern이 선정되어 있어야 함"), AICombatant->GetSelectedPattern());
+	TestNull(TEXT("초기에는 SelectedPattern이 비어있어야 함"), AICombatant->GetSelectedPattern());
+	TestEqual(TEXT("초기 비트 시퀀스는 비어있어야 함"), AICombatant->GetCurrentBeatSequence().Beats.Num(), 0);
+
+	// 전투 단계: UpdateBeatSequence를 통해 1턴 AI 패턴 무작위 선정 및 캐시 갱신
+	AICombatant->UpdateBeatSequence();
+
+	TestNotNull(TEXT("UpdateBeatSequence 호출 후 SelectedPattern이 선정되어 있어야 함"), AICombatant->GetSelectedPattern());
 	TestTrue(TEXT("선정된 패턴 이름이 유효해야 함"), AICombatant->GetSelectedPatternName() == FName(TEXT("PatternA")) || AICombatant->GetSelectedPatternName() == FName(TEXT("PatternB")));
 
 	// GetCurrentBeatSequence()가 선정된 패턴 시퀀스와 일치하는지 검증
@@ -995,7 +939,7 @@ bool FBBMCombatantAIBeatSequenceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// 12. ABBMPlayerMerchantBase ExtractionOrder 기반 8비트 시퀀스 합성 검증
+// 11. ABBMPlayerMerchantBase ExtractionOrder 기반 8비트 시퀀스 합성 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMCombatantPlayerBeatSequenceTest,
 	"DIS.BBM.Combat.PlayerBeatSequenceGeneration",
@@ -1046,6 +990,13 @@ bool FBBMCombatantPlayerBeatSequenceTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
+	// 초기 캐시는 비어있어야 함 (전투 단계에서 UpdateBeatSequence를 통해 갱신)
+	const FBBMBeatSequence InitialSeq = Merchant->GetCurrentBeatSequence();
+	TestEqual(TEXT("초기 캐시 비트 수는 0이어야 함"), InitialSeq.Beats.Num(), 0);
+
+	// 전투 단계: UpdateBeatSequence를 통해 배낭 아이템 기반 비트 시퀀스 갱신
+	Merchant->UpdateBeatSequence();
+
 	// 빈 인벤토리 시 기본 8비트 빈 시퀀스 반환 검증
 	const FBBMBeatSequence EmptySeq = Merchant->GetCurrentBeatSequence();
 	TestEqual(TEXT("기본 8비트 슬롯 확보 검증"), EmptySeq.Beats.Num(), 8);
@@ -1055,28 +1006,32 @@ bool FBBMCombatantPlayerBeatSequenceTest::RunTest(const FString& Parameters)
 	const FBBMBeatSequence DirectEmptySeq = Merchant->GenerateBeatSequenceFromInventory();
 	TestEqual(TEXT("GenerateBeatSequenceFromInventory 기본 인자 호출 일치 검증"), DirectEmptySeq.Beats.Num(), 8);
 
-	// 2. 가로 2x1 아이템 A 생성 (2비트 차지, EffectRange [0, 2))
+	// 2. 가로 2x1 아이템 A 생성 (2비트 차지, EffectRange [0, 2), AnimLayerRange [0, 2)) - 장비(Item_Equipment)
 	UBBMItemDefinition* ItemDefA = NewObject<UBBMItemDefinition>();
+	ItemDefA->ItemTypeTag = BBMItemTypeTags::Item_Equipment;
 	TArray<FIntPoint> ShapeA;
 	ShapeA.Add(FIntPoint(0, 0));
 	ShapeA.Add(FIntPoint(1, 0));
 	ItemDefA->Shape = FDISTileShape(ShapeA);
 	ItemDefA->BeatSequence.Beats.SetNum(2);
 	ItemDefA->BeatSequence.EffectRanges.Add(FBBMBeatEffectRange(0, 2));
+	ItemDefA->BeatSequence.AnimLayerRanges.Add(FBBMBeatAnimLayerRange(0, 2, BBMAnimLayerTags::AnimLayer_Weapon_Sword.GetTag()));
 
 	UBBMItemEntry* EntryA = NewObject<UBBMItemEntry>();
 	EntryA->InitializeEntry(ItemDefA);
 	UDISItemStack* StackA = NewObject<UDISItemStack>();
 	StackA->PushEntry(EntryA);
 
-	// 3. 가로 2x1 아이템 B 생성 (2비트 차지, EffectRange [0, 2))
+	// 3. 가로 2x1 아이템 B 생성 (2비트 차지, EffectRange [0, 2), AnimLayerRange [0, 2)) - 소모품(Item_Consumable)
 	UBBMItemDefinition* ItemDefB = NewObject<UBBMItemDefinition>();
+	ItemDefB->ItemTypeTag = BBMItemTypeTags::Item_Consumable;
 	TArray<FIntPoint> ShapeB;
 	ShapeB.Add(FIntPoint(0, 0));
 	ShapeB.Add(FIntPoint(1, 0));
 	ItemDefB->Shape = FDISTileShape(ShapeB);
 	ItemDefB->BeatSequence.Beats.SetNum(2);
 	ItemDefB->BeatSequence.EffectRanges.Add(FBBMBeatEffectRange(0, 2));
+	ItemDefB->BeatSequence.AnimLayerRanges.Add(FBBMBeatAnimLayerRange(0, 2, BBMAnimLayerTags::AnimLayer_Armor_Boots.GetTag()));
 
 	UBBMItemEntry* EntryB = NewObject<UBBMItemEntry>();
 	EntryB->InitializeEntry(ItemDefB);
@@ -1090,13 +1045,14 @@ bool FBBMCombatantPlayerBeatSequenceTest::RunTest(const FString& Parameters)
 	// 배치 직후 아직 UpdateBeatSequence() 호출 전에는 이전 캐시(효과 범위 0개) 상태여야 함
 	TestEqual(TEXT("Update 전 GetCurrentBeatSequence는 이전 캐시 유지"), Merchant->GetCurrentBeatSequence().EffectRanges.Num(), 0);
 
-	// 4. UpdateBeatSequence() 호출 -> 소유 인벤토리로부터 누적 합성 및 캐시 갱신
+	// 4. UpdateBeatSequence() 호출 -> 소유 인벤토리로부터 누적 합성 및 캐시 갱신 (장비는 UsedEquipmentStorage 이관, 소모품은 소멸)
 	Merchant->UpdateBeatSequence();
 
 	// GetCurrentBeatSequence() 호출 -> 캐시된 8비트 시퀀스 검증
 	const FBBMBeatSequence CompiledSeq = Merchant->GetCurrentBeatSequence();
 	TestEqual(TEXT("합성된 시퀀스는 8비트여야 함"), CompiledSeq.Beats.Num(), 8);
 	TestEqual(TEXT("합성된 시퀀스는 총 2개의 EffectRange를 포함해야 함"), CompiledSeq.EffectRanges.Num(), 2);
+	TestEqual(TEXT("합성된 시퀀스는 총 2개의 AnimLayerRange를 포함해야 함"), CompiledSeq.AnimLayerRanges.Num(), 2);
 
 	if (CompiledSeq.EffectRanges.Num() == 2)
 	{
@@ -1109,11 +1065,60 @@ bool FBBMCombatantPlayerBeatSequenceTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Item B 종료 비트는 4여야 함"), CompiledSeq.EffectRanges[1].EndBeat, 4);
 	}
 
+	if (CompiledSeq.AnimLayerRanges.Num() == 2)
+	{
+		// Item A의 AnimLayer 범위: [0, 2)
+		TestEqual(TEXT("Item A AnimLayer 시작 비트는 0이어야 함"), CompiledSeq.AnimLayerRanges[0].StartBeat, 0);
+		TestEqual(TEXT("Item A AnimLayer 종료 비트는 2여야 함"), CompiledSeq.AnimLayerRanges[0].EndBeat, 2);
+
+		// Item B의 AnimLayer 범위: 오프셋 2 누적으로 [2, 4)
+		TestEqual(TEXT("Item B AnimLayer 시작 비트는 2여야 함"), CompiledSeq.AnimLayerRanges[1].StartBeat, 2);
+		TestEqual(TEXT("Item B AnimLayer 종료 비트는 4여야 함"), CompiledSeq.AnimLayerRanges[1].EndBeat, 4);
+	}
+
+	// 장비 아이템 보관소 이관 및 인벤토리 슬롯 제거 검증
+	TestTrue(TEXT("장비 아이템 StackA는 UsedEquipmentStorage로 이관되어야 함"), Merchant->GetInventoryComponent()->IsEquipmentArchived(StackA));
+	TestEqual(TEXT("장비 아이템 StackA는 인벤토리에서 제거되어 슬롯 검색 불가여야 함"), Inventory->GetItemStackRootSlot(StackA), static_cast<int32>(INDEX_NONE));
+
+	// 소모품 아이템 인벤토리 슬롯 완전 소멸 검증
+	TestEqual(TEXT("소모품 아이템 StackB는 인벤토리에서 완전 제거되어 슬롯 검색 불가여야 함"), Inventory->GetItemStackRootSlot(StackB), static_cast<int32>(INDEX_NONE));
+
 	// 5. GDD 4.1 8비트 초과 Overflow 규칙 검증:
-	// 슬롯 4에 5비트 아이템 C를 배치하면, 누적 2 + 2 + 5 = 9 > 8 이므로 C는 제외되어야 함
+	// 앞선 단계에서 StackA(장비)는 UsedEquipmentStorage로 이관되고, StackB(소모품)는 소멸되었음.
+	// 이제 슬롯 0에 4비트 무기 W1, 슬롯 4에 4비트 무기 W2를 배치하여 8비트를 꽉 채움.
+	UBBMItemDefinition* WeaponDef1 = NewObject<UBBMItemDefinition>();
+	WeaponDef1->ItemTypeTag = BBMItemTypeTags::Item_Weapon;
+	TArray<FIntPoint> ShapeW1;
+	for (int32 i = 0; i < 4; ++i) { ShapeW1.Add(FIntPoint(i, 0)); }
+	WeaponDef1->Shape = FDISTileShape(ShapeW1);
+	WeaponDef1->BeatSequence.Beats.SetNum(4);
+	WeaponDef1->BeatSequence.EffectRanges.Add(FBBMBeatEffectRange(0, 4));
+
+	UBBMItemEntry* EntryW1 = NewObject<UBBMItemEntry>();
+	EntryW1->InitializeEntry(WeaponDef1);
+	UDISItemStack* StackW1 = NewObject<UDISItemStack>();
+	StackW1->PushEntry(EntryW1);
+
+	UBBMItemDefinition* WeaponDef2 = NewObject<UBBMItemDefinition>();
+	WeaponDef2->ItemTypeTag = BBMItemTypeTags::Item_Weapon;
+	TArray<FIntPoint> ShapeW2;
+	for (int32 i = 0; i < 4; ++i) { ShapeW2.Add(FIntPoint(i, 1)); }
+	WeaponDef2->Shape = FDISTileShape(ShapeW2);
+	WeaponDef2->BeatSequence.Beats.SetNum(4);
+	WeaponDef2->BeatSequence.EffectRanges.Add(FBBMBeatEffectRange(0, 4));
+
+	UBBMItemEntry* EntryW2 = NewObject<UBBMItemEntry>();
+	EntryW2->InitializeEntry(WeaponDef2);
+	UDISItemStack* StackW2 = NewObject<UDISItemStack>();
+	StackW2->PushEntry(EntryW2);
+
+	Inventory->SetSlotItemStack(0, StackW1);
+	Inventory->SetSlotItemStack(4, StackW2);
+
+	// 8비트를 채운 상태에서 5비트 아이템 C를 슬롯 8에 추가 배치
 	UBBMItemDefinition* ItemDefC = NewObject<UBBMItemDefinition>();
 	TArray<FIntPoint> ShapeC;
-	for (int32 i = 0; i < 5; ++i) { ShapeC.Add(FIntPoint(i % 4, i / 4)); }
+	for (int32 i = 0; i < 5; ++i) { ShapeC.Add(FIntPoint(i % 4, 2 + (i / 4))); }
 	ItemDefC->Shape = FDISTileShape(ShapeC);
 	ItemDefC->BeatSequence.Beats.SetNum(5);
 	ItemDefC->BeatSequence.EffectRanges.Add(FBBMBeatEffectRange(0, 5));
@@ -1123,12 +1128,486 @@ bool FBBMCombatantPlayerBeatSequenceTest::RunTest(const FString& Parameters)
 	UDISItemStack* StackC = NewObject<UDISItemStack>();
 	StackC->PushEntry(EntryC);
 
-	Inventory->SetSlotItemStack(4, StackC);
+	Inventory->SetSlotItemStack(8, StackC);
 
 	// GenerateBeatSequenceFromInventory() 직접 호출로 갱신 및 캐시 검증
 	const FBBMBeatSequence OverflowSeq = Merchant->GenerateBeatSequenceFromInventory();
 	TestEqual(TEXT("8비트 초과 시 Overflow 아이템은 제외되어 여전히 2개 범위만 유지되어야 함"), OverflowSeq.EffectRanges.Num(), 2);
 	TestEqual(TEXT("GetCurrentBeatSequence도 동일하게 2개 범위 캐시를 반환해야 함"), Merchant->GetCurrentBeatSequence().EffectRanges.Num(), 2);
+
+	return true;
+}
+
+// 12. BBM 1D 타일 라인 전투 매니저 종합 단위 테스트 (진형, 시프트, 3단계 방어 및 ResolveAttack, 턴 방어도 초기화, 상태이상 독/화상 틱, 비트 커맨드 실행)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMCombatManagerTest,
+	"DIS.BBM.Combat.CombatManager",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
+)
+
+bool FBBMCombatManagerTest::RunTest(const FString& Parameters)
+{
+	// 1. GAS 전역 초기화 및 테스트 월드/WorldContext 준비
+	UAbilitySystemGlobals::Get().InitGlobalData();
+
+	UWorld* TestWorld = UWorld::CreateWorld(EWorldType::Game, false);
+	TestNotNull(TEXT("테스트 월드 생성 성공"), TestWorld);
+	if (TestWorld == nullptr)
+	{
+		return false;
+	}
+
+	FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::Game);
+	WorldContext.SetCurrentWorld(TestWorld);
+	FURL URL;
+	TestWorld->InitializeActorsForPlay(URL);
+
+	UBBMCombatManagerSubsystem* CombatMgr = NewObject<UBBMCombatManagerSubsystem>(TestWorld);
+	FSubsystemCollection<UWorldSubsystem> SubsystemCollection;
+	CombatMgr->Initialize(SubsystemCollection);
+
+	// 2. 테스트용 플레이어 및 몬스터 전투원 생성 및 GAS ActorInfo 초기화
+	ABBMPlayerMerchantBase* PlayerMerchant = TestWorld->SpawnActor<ABBMPlayerMerchantBase>();
+	TestNotNull(TEXT("플레이어 상인 액터 스폰 성공"), PlayerMerchant);
+	PlayerMerchant->GetAbilitySystemComponent()->InitAbilityActorInfo(PlayerMerchant, PlayerMerchant);
+
+	ABBMAICombatantBase* MonsterA = TestWorld->SpawnActor<ABBMAICombatantBase>();
+	TestNotNull(TEXT("몬스터 A 스폰 성공"), MonsterA);
+	MonsterA->GetAbilitySystemComponent()->InitAbilityActorInfo(MonsterA, MonsterA);
+
+	ABBMAICombatantBase* MonsterB = TestWorld->SpawnActor<ABBMAICombatantBase>();
+	TestNotNull(TEXT("몬스터 B 스폰 성공"), MonsterB);
+	MonsterB->GetAbilitySystemComponent()->InitAbilityActorInfo(MonsterB, MonsterB);
+
+	// 기본 체력 설정 (100 HP)
+	PlayerMerchant->GetAbilitySystemComponent()->SetNumericAttributeBase(UBBMAttributeSet::GetMaxHealthAttribute(), 100.0f);
+	PlayerMerchant->GetAbilitySystemComponent()->SetNumericAttributeBase(UBBMAttributeSet::GetHealthAttribute(), 100.0f);
+
+	MonsterA->GetAbilitySystemComponent()->SetNumericAttributeBase(UBBMAttributeSet::GetMaxHealthAttribute(), 100.0f);
+	MonsterA->GetAbilitySystemComponent()->SetNumericAttributeBase(UBBMAttributeSet::GetHealthAttribute(), 100.0f);
+
+	MonsterB->GetAbilitySystemComponent()->SetNumericAttributeBase(UBBMAttributeSet::GetMaxHealthAttribute(), 100.0f);
+	MonsterB->GetAbilitySystemComponent()->SetNumericAttributeBase(UBBMAttributeSet::GetHealthAttribute(), 100.0f);
+
+	// 3. 1D 타일 라인 진형 초기화 및 최전방 조회 검증
+	TArray<ABBMAICombatantBase*> MonsterList = { MonsterA, MonsterB };
+	CombatMgr->InitializeBattleFormation(PlayerMerchant, MonsterList);
+
+	ABBMCombatantBase* AllyFront = CombatMgr->GetFrontlineCombatant(EBBMCombatLane::AllyLane);
+	TestEqual(TEXT("아군 최전방은 플레이어 상인이어야 함"), AllyFront, Cast<ABBMCombatantBase>(PlayerMerchant));
+
+	ABBMCombatantBase* EnemyFront = CombatMgr->GetFrontlineCombatant(EBBMCombatLane::EnemyLane);
+	TestEqual(TEXT("적군 최전방은 몬스터 A여야 함"), EnemyFront, Cast<ABBMCombatantBase>(MonsterA));
+
+	TArray<ABBMCombatantBase*> LivingEnemies = CombatMgr->GetLivingCombatantsInLane(EBBMCombatLane::EnemyLane);
+	TestEqual(TEXT("적군 생존 유닛은 2마리여야 함"), LivingEnemies.Num(), 2);
+
+	// 4. 1D 타일 라인 시프트(ShiftLane) 검증
+	CombatMgr->ShiftLane(EBBMCombatLane::EnemyLane, EBBMLaneShiftDirection::Backward, 1);
+	TestEqual(TEXT("넉백 후에도 생존 최전방 탐색은 MonsterA를 반환해야 함"), CombatMgr->GetFrontlineCombatant(EBBMCombatLane::EnemyLane), Cast<ABBMCombatantBase>(MonsterA));
+
+	CombatMgr->ShiftLane(EBBMCombatLane::EnemyLane, EBBMLaneShiftDirection::Frontward, 1);
+
+	// 5. 엄격한 3단계 방어 및 공격 해결(ResolveAttack) 검증
+	// 5-1. 패링 상태: 완전 무효화 (0 피해)
+	const float ParryDamage = CombatMgr->ResolveAttack(PlayerMerchant, MonsterA, 50.0f, true);
+	TestEqual(TEXT("패링 상태 시 피해는 0이어야 함"), ParryDamage, 0.0f);
+	TestEqual(TEXT("패링 시 체력 보존 (100 HP)"), MonsterA->GetAttributeSet()->GetHealth(), 100.0f);
+
+	// 5-2. 턴 방어도(10) 및 지속 방어도(20) 부여
+	CombatMgr->AddTurnArmor(MonsterA, 10.0f);
+	CombatMgr->AddPersistentArmor(MonsterA, 20.0f);
+	TestEqual(TEXT("턴 방어도 10 검증"), MonsterA->GetAttributeSet()->GetTurnArmor(), 10.0f);
+	TestEqual(TEXT("지속 방어도 20 검증"), MonsterA->GetAttributeSet()->GetArmor(), 20.0f);
+
+	// 15 피해 공격: 턴 방어도(10) 우선 흡수 소진 -> 지속 방어도에서 5 흡수(남은 지속 방어도 15) -> 체력 피해 0
+	float DealtDamage1 = CombatMgr->ResolveAttack(PlayerMerchant, MonsterA, 15.0f, false);
+	TestEqual(TEXT("방어도로 완전 흡수되어 실제 체력 피해는 0이어야 함"), DealtDamage1, 0.0f);
+	TestEqual(TEXT("턴 방어도는 완전 소진되어 0이어야 함"), MonsterA->GetAttributeSet()->GetTurnArmor(), 0.0f);
+	TestEqual(TEXT("지속 방어도는 15가 남아있어야 함"), MonsterA->GetAttributeSet()->GetArmor(), 15.0f);
+	TestEqual(TEXT("체력은 여전히 100이어야 함"), MonsterA->GetAttributeSet()->GetHealth(), 100.0f);
+
+	// 30 피해 공격: 남은 지속 방어도 15 흡수 소진 -> 잔여 15 체력 피해 결착
+	float DealtDamage2 = CombatMgr->ResolveAttack(PlayerMerchant, MonsterA, 30.0f, false);
+	TestEqual(TEXT("지속 방어도를 뚫고 들어간 체력 피해는 15여야 함"), DealtDamage2, 15.0f);
+	TestEqual(TEXT("지속 방어도는 0이어야 함"), MonsterA->GetAttributeSet()->GetArmor(), 0.0f);
+	TestEqual(TEXT("체력은 85가 되어야 함"), MonsterA->GetAttributeSet()->GetHealth(), 85.0f);
+
+	// 6. 턴 방어도 일괄 초기화(ClearAllTurnArmors) 검증
+	CombatMgr->AddTurnArmor(PlayerMerchant, 25.0f);
+	CombatMgr->AddPersistentArmor(PlayerMerchant, 30.0f);
+	CombatMgr->ClearAllTurnArmors();
+	TestEqual(TEXT("턴 방어도는 0으로 초기화되어야 함"), PlayerMerchant->GetAttributeSet()->GetTurnArmor(), 0.0f);
+	TestEqual(TEXT("지속 방어도는 보존되어야 함 (30)"), PlayerMerchant->GetAttributeSet()->GetArmor(), 30.0f);
+
+	// 7. GameplayTag 기반 상태이상 및 턴 종료 틱(ProcessTurnEndStatusTicks) 검증
+	CombatMgr->ApplyStatusEffect(MonsterB, BBMStatusTags::Status_Poison, 3);
+	CombatMgr->ApplyStatusEffect(MonsterB, BBMStatusTags::Status_Burn, 2);
+	TestEqual(TEXT("독 3스택 검증"), CombatMgr->GetStatusStacks(MonsterB, BBMStatusTags::Status_Poison), 3);
+	TestEqual(TEXT("화상 2스택 검증"), CombatMgr->GetStatusStacks(MonsterB, BBMStatusTags::Status_Burn), 2);
+
+	// 턴 틱 실행: 독(3피해) + 화상(5피해) = 8 피해 결착, 독 스택 2로 감소, 화상 스택 1로 감소
+	CombatMgr->ProcessTurnEndStatusTicks();
+	TestEqual(TEXT("턴 틱 후 체력은 92 HP여야 함"), MonsterB->GetAttributeSet()->GetHealth(), 92.0f);
+	TestEqual(TEXT("독 스택은 1 감소하여 2여야 함"), CombatMgr->GetStatusStacks(MonsterB, BBMStatusTags::Status_Poison), 2);
+	TestEqual(TEXT("화상 스택은 1 감소하여 1이어야 함"), CombatMgr->GetStatusStacks(MonsterB, BBMStatusTags::Status_Burn), 1);
+
+	// 8. FBBMBeatAction 커맨드 패턴(ExecuteAction) 다형성 실행 검증
+	FBBMCombatAction AttackCommand(EBBMActionCategory::Damage, EBBMTargetScope::EnemyFrontline, 1.0f, 5.0f);
+	const float PrevMonsterAHealth = MonsterA->GetAttributeSet()->GetHealth();
+	AttackCommand.ExecuteAction(CombatMgr, PlayerMerchant);
+	TestEqual(TEXT("커맨드 실행으로 15 데미지가 최전방 몬스터 A에 적용되어야 함"), MonsterA->GetAttributeSet()->GetHealth(), PrevMonsterAHealth - 15.0f);
+
+	// 이동 커맨드 실행
+	FBBMMovementAction MoveCommand(EBBMActionCategory::PostMovement, EBBMLaneShiftDirection::Backward, 1);
+	MoveCommand.ExecuteAction(CombatMgr, PlayerMerchant);
+
+	// 9. 기획 표준 턴(8비트) 시뮬레이션(SimulateTurn), 사망 처리, 승리 델리게이트 종합 검증
+	bool bVictoryBroadcasted = false;
+	TArray<UDISItemStack*> ReceivedUsedEquipment;
+	TArray<FPrimaryAssetId> ReceivedRewardItems;
+	CombatMgr->OnCombatVictoryNative.AddLambda([&](const TArray<UDISItemStack*>& InUsedEquipment, const TArray<FPrimaryAssetId>& InRewardItems)
+	{
+		bVictoryBroadcasted = true;
+		ReceivedUsedEquipment = InUsedEquipment;
+		ReceivedRewardItems = InRewardItems;
+	});
+
+	// 보상 아이템 등록
+	const FPrimaryAssetId TestRewardId(TEXT("BBMItem:TestSword"));
+	CombatMgr->AddPendingRewardItem(TestRewardId);
+
+	// 플레이어 배낭 인벤토리 초기화
+	UBBMInventoryDefinition* InvenDef = NewObject<UBBMInventoryDefinition>();
+	InvenDef->DefaultCapacity = 16;
+	InvenDef->MaxExpandableCapacity = 16;
+	InvenDef->LineBreakTileCount = 4;
+	InvenDef->ExtractionOrder = EBBMItemExtractionOrder::TopToBottom_LeftToRight;
+	PlayerMerchant->GetInventoryComponent()->InitializeInventory(InvenDef);
+
+	// 몬스터 A, B 체력을 10으로 조정 (치명타 1방에 즉시 사망하도록 설정)
+	MonsterA->GetAbilitySystemComponent()->SetNumericAttributeBase(UBBMAttributeSet::GetHealthAttribute(), 10.0f);
+	MonsterB->GetAbilitySystemComponent()->SetNumericAttributeBase(UBBMAttributeSet::GetHealthAttribute(), 10.0f);
+
+	// 플레이어에게 2칸 장비 아이템 배치 (비트 0: 몬스터 A 처치, 비트 1: 몬스터 B 처치)
+	UBBMItemDefinition* SlashItemDef = NewObject<UBBMItemDefinition>();
+	SlashItemDef->ItemTypeTag = BBMItemTypeTags::Item_Equipment;
+	TArray<FIntPoint> SlashShape;
+	SlashShape.Add(FIntPoint(0, 0));
+	SlashShape.Add(FIntPoint(1, 0));
+	SlashItemDef->Shape = FDISTileShape(SlashShape);
+	SlashItemDef->BeatSequence.Beats.SetNum(2);
+
+	// 비트 0 치명적 일격 (Monster A 체력 초과 피해)
+	SlashItemDef->BeatSequence.Beats[0].Actions.Add(TInstancedStruct<FBBMBeatAction>::Make<FBBMCombatAction>(EBBMActionCategory::Damage, EBBMTargetScope::EnemyFrontline, 1.0f, 100.0f));
+
+	// 비트 1 치명적 일격 (Monster B 체력 초과 피해)
+	SlashItemDef->BeatSequence.Beats[1].Actions.Add(TInstancedStruct<FBBMBeatAction>::Make<FBBMCombatAction>(EBBMActionCategory::Damage, EBBMTargetScope::EnemyFrontline, 1.0f, 100.0f));
+
+	UBBMItemEntry* SlashEntry = NewObject<UBBMItemEntry>();
+	SlashEntry->InitializeEntry(SlashItemDef);
+	UDISItemStack* SlashStack = NewObject<UDISItemStack>();
+	SlashStack->PushEntry(SlashEntry);
+
+	UBBMInventory* Inven = PlayerMerchant->GetInventory();
+	TestNotNull(TEXT("플레이어 인벤토리 유효 검증"), Inven);
+	if (Inven != nullptr)
+	{
+		const FDISItemPlacementResult PlaceResult = Inven->SetSlotItemStack(0, SlashStack);
+		TestTrue(TEXT("아이템 배치 성공 검증"), PlaceResult.bSuccess);
+	}
+
+	// 턴 시뮬레이션 실행 (8비트 파이프라인)
+	TArray<FBBMCombatStepVisualEvent> OutVisualEvents;
+	const bool bSimResult = CombatMgr->SimulateTurn(OutVisualEvents);
+	TestTrue(TEXT("SimulateTurn 턴 시뮬레이션 정상 완료 검증"), bSimResult);
+	TestTrue(TEXT("비주얼 이벤트가 수집되어야 함"), OutVisualEvents.Num() > 0);
+
+	// 몬스터 A 사망 및 사망 애니메이션 태그 부착 검증
+	TestTrue(TEXT("몬스터 A 사망 검증"), MonsterA->IsDead());
+	TestTrue(TEXT("몬스터 A에게 BBM.Animation.Death 태그가 부여되어야 함"), MonsterA->GetAbilitySystemComponent()->HasMatchingGameplayTag(BBMAnimationTags::Animation_Death));
+
+	// 몬스터 B 사망 검증
+	TestTrue(TEXT("몬스터 B 사망 검증"), MonsterB->IsDead());
+
+	// 적군 전멸로 인한 승리 델리게이트 브로드캐스트 검증
+	TestTrue(TEXT("전투 승리 델리게이트(OnCombatVictory)가 호출되어야 함"), bVictoryBroadcasted);
+	TestTrue(TEXT("승리 델리게이트로 전달된 UsedEquipmentStorage에 SlashStack이 포함되어야 함"), ReceivedUsedEquipment.Contains(SlashStack));
+	TestTrue(TEXT("승리 델리게이트로 전달된 RewardItems에 TestRewardId가 포함되어야 함"), ReceivedRewardItems.Contains(TestRewardId));
+
+	// 10. 정리 및 파괴
+	CombatMgr->ClearCurrentEncounter();
+	CombatMgr->Deinitialize();
+
+	PlayerMerchant->Destroy();
+	MonsterA->Destroy();
+	MonsterB->Destroy();
+	GEngine->DestroyWorldContext(TestWorld);
+	TestWorld->DestroyWorld(false);
+
+	return true;
+}
+
+// 7. FBBMArmorAction 및 SetByCaller 강화 GameplayEffect 단위 테스트
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMArmorActionAndEnhancementEffectTest,
+	"DIS.BBM.Combat.ArmorActionAndEnhancementEffect",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMArmorActionAndEnhancementEffectTest::RunTest(const FString& Parameters)
+{
+	// 1. 범용 애니메이션 및 SetByCaller 네이티브 태그 유효성 검증
+	TestTrue(TEXT("Animation_Action 태그 유효성 검증"), BBMAnimationTags::Animation_Action.GetTag().IsValid());
+	TestTrue(TEXT("Animation_Hit 태그 유효성 검증"), BBMAnimationTags::Animation_Hit.GetTag().IsValid());
+	TestTrue(TEXT("Animation_Victory 태그 유효성 검증"), BBMAnimationTags::Animation_Victory.GetTag().IsValid());
+	TestTrue(TEXT("Animation_Defeat 태그 유효성 검증"), BBMAnimationTags::Animation_Defeat.GetTag().IsValid());
+	TestTrue(TEXT("Animation_Death 태그 유효성 검증"), BBMAnimationTags::Animation_Death.GetTag().IsValid());
+
+	TestTrue(TEXT("SetByCaller_AttackPower 태그 유효성 검증"), BBMSetByCallerTags::SetByCaller_AttackPower.GetTag().IsValid());
+	TestTrue(TEXT("SetByCaller_DefensePower 태그 유효성 검증"), BBMSetByCallerTags::SetByCaller_DefensePower.GetTag().IsValid());
+
+	// 2. 테스트 월드 및 전투원 스폰
+	FBBMScopedTestWorld Scope;
+	UWorld* TestWorld = Scope.World;
+	TestNotNull(TEXT("테스트 월드 유효 검증"), TestWorld);
+
+	UBBMCombatManagerSubsystem* CombatMgr = TestWorld->GetSubsystem<UBBMCombatManagerSubsystem>();
+	TestNotNull(TEXT("CombatManagerSubsystem 유효 검증"), CombatMgr);
+
+	ABBMCombatantBase* Hero = Scope.SpawnCombatant();
+	TestNotNull(TEXT("영웅 전투원 스폰 유효 검증"), Hero);
+
+	// 초기 스탯 주입 (DefensePower: 20, AttackPower: 15)
+	UAbilitySystemComponent* HeroASC = Hero->GetAbilitySystemComponent();
+	UBBMAttributeSet* HeroAttr = Hero->GetAttributeSet();
+	TestNotNull(TEXT("영웅 ASC 유효 검증"), HeroASC);
+	TestNotNull(TEXT("영웅 AttrSet 유효 검증"), HeroAttr);
+
+	HeroAttr->SetDefensePower(20.0f);
+	HeroAttr->SetAttackPower(15.0f);
+	HeroAttr->SetHealth(100.0f);
+	HeroAttr->SetMaxHealth(100.0f);
+	HeroAttr->SetArmor(0.0f);
+	HeroAttr->SetTurnArmor(0.0f);
+
+	// 레인 배치
+	CombatMgr->AddCombatantToLane(EBBMCombatLane::AllyLane, Hero, 0);
+
+	// 3. FBBMArmorAction (턴 방어도 TurnArmor 검증)
+	// 계수 1.5, 기본값 10.0 -> 20.0 * 1.5 + 10.0 = 40.0
+	FBBMArmorAction TurnArmorAction(true, EBBMTargetScope::Self, 1.5f, 10.0f);
+	TurnArmorAction.ExecuteAction(CombatMgr, Hero);
+
+	TestEqual(TEXT("턴 방어도 40.0 부여 검증"), HeroAttr->GetTurnArmor(), 40.0f);
+	TestEqual(TEXT("지속 방어도는 0 유지 검증"), HeroAttr->GetArmor(), 0.0f);
+
+	// 4. FBBMArmorAction (지속 방어도 Persistent Armor 검증)
+	// 계수 0.5, 기본값 5.0 -> 20.0 * 0.5 + 5.0 = 15.0
+	FBBMArmorAction PersistentArmorAction(false, EBBMTargetScope::Self, 0.5f, 5.0f);
+	PersistentArmorAction.ExecuteAction(CombatMgr, Hero);
+
+	TestEqual(TEXT("지속 방어도 15.0 부여 검증"), HeroAttr->GetArmor(), 15.0f);
+	TestEqual(TEXT("턴 방어도는 40.0 유지 검증"), HeroAttr->GetTurnArmor(), 40.0f);
+
+	// 5. UBBMAttackPowerEnhancementEffect SetByCaller 적용 검증 (+12.5)
+	FGameplayEffectContextHandle ContextHandle = HeroASC->MakeEffectContext();
+	FGameplayEffectSpecHandle AttackSpecHandle = HeroASC->MakeOutgoingSpec(UBBMAttackPowerEnhancementEffect::StaticClass(), 1.0f, ContextHandle);
+	TestTrue(TEXT("AttackPower GE Spec 생성 검증"), AttackSpecHandle.IsValid());
+
+	AttackSpecHandle.Data->SetSetByCallerMagnitude(BBMSetByCallerTags::SetByCaller_AttackPower.GetTag(), 12.5f);
+	HeroASC->ApplyGameplayEffectSpecToSelf(*AttackSpecHandle.Data.Get());
+
+	TestEqual(TEXT("공격력 15.0 + 12.5 = 27.5 증가 검증"), HeroAttr->GetAttackPower(), 27.5f);
+
+	// 6. UBBMDefensePowerEnhancementEffect SetByCaller 적용 검증 (+8.0)
+	FGameplayEffectSpecHandle DefenseSpecHandle = HeroASC->MakeOutgoingSpec(UBBMDefensePowerEnhancementEffect::StaticClass(), 1.0f, ContextHandle);
+	TestTrue(TEXT("DefensePower GE Spec 생성 검증"), DefenseSpecHandle.IsValid());
+
+	DefenseSpecHandle.Data->SetSetByCallerMagnitude(BBMSetByCallerTags::SetByCaller_DefensePower.GetTag(), 8.0f);
+	HeroASC->ApplyGameplayEffectSpecToSelf(*DefenseSpecHandle.Data.Get());
+
+	TestEqual(TEXT("방어력 20.0 + 8.0 = 28.0 증가 검증"), HeroAttr->GetDefensePower(), 28.0f);
+
+	// 정리
+	CombatMgr->ClearCurrentEncounter();
+	Hero->Destroy();
+
+	return true;
+}
+
+// 8. 비트당 FBBMBeatAnimationConfig의 AnimationStateTag 수집 및 순수 애니메이션 이벤트 발행 단위 테스트
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMAnimationStateTagCollectionTest,
+	"DIS.BBM.Combat.AnimationStateTagCollection",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMAnimationStateTagCollectionTest::RunTest(const FString& Parameters)
+{
+	FBBMScopedTestWorld Scope;
+	UWorld* TestWorld = Scope.World;
+	TestNotNull(TEXT("테스트 월드가 생성되어야 함"), TestWorld);
+
+	UBBMCombatManagerSubsystem* CombatMgr = TestWorld->GetSubsystem<UBBMCombatManagerSubsystem>();
+	TestNotNull(TEXT("BBMCombatManagerSubsystem 획득 검증"), CombatMgr);
+
+	// 테스트용 아군 전투원 스폰
+	ABBMPlayerMerchantBase* Hero = TestWorld->SpawnActor<ABBMPlayerMerchantBase>();
+	TestNotNull(TEXT("Hero 스폰 검증"), Hero);
+	Hero->InitializeStats();
+
+	// 플레이어 배낭 인벤토리 초기화
+	UBBMInventoryDefinition* InvenDef = NewObject<UBBMInventoryDefinition>();
+	InvenDef->DefaultCapacity = 4;
+	InvenDef->MaxExpandableCapacity = 4;
+	InvenDef->LineBreakTileCount = 2;
+	InvenDef->ExtractionOrder = EBBMItemExtractionOrder::TopToBottom_LeftToRight;
+	Hero->GetInventoryComponent()->InitializeInventory(InvenDef);
+
+	// 테스트용 적 몬스터 스폰
+	ABBMAICombatantBase* Monster = TestWorld->SpawnActor<ABBMAICombatantBase>();
+	TestNotNull(TEXT("Monster 스폰 검증"), Monster);
+	Monster->InitializeStats();
+	// 몬스터 체력을 높게 설정하여 즉시 사망 방지
+	Monster->GetAbilitySystemComponent()->SetNumericAttributeBase(UBBMAttributeSet::GetHealthAttribute(), 100.0f);
+
+	// 전투 진형 배치
+	TArray<ABBMAICombatantBase*> MonsterList;
+	MonsterList.Add(Monster);
+	CombatMgr->InitializeBattleFormation(Hero, MonsterList);
+
+	// 2칸 아이템 생성
+	// 비트 0: 액션(Damage) + 애니메이션(ImpactWindow, BBM.Animation.Action)
+	// 비트 1: 액션 없음(휴식) + 순수 애니메이션(PrepDefenseWindow, BBM.Animation.Action)
+	UBBMItemDefinition* TestItemDef = NewObject<UBBMItemDefinition>();
+	TestItemDef->ItemTypeTag = BBMItemTypeTags::Item_Equipment;
+	TArray<FIntPoint> ItemShape;
+	ItemShape.Add(FIntPoint(0, 0));
+	ItemShape.Add(FIntPoint(1, 0));
+	TestItemDef->Shape = FDISTileShape(ItemShape);
+	TestItemDef->BeatSequence.Beats.SetNum(2);
+
+	// 비트 0: 공격 액션 + 타격 애니메이션 태그
+	TestItemDef->BeatSequence.Beats[0].Actions.Add(TInstancedStruct<FBBMBeatAction>::Make<FBBMCombatAction>(
+		EBBMActionCategory::Damage,
+		EBBMTargetScope::EnemyFrontline,
+		1.0f,
+		5.0f
+	));
+	TestItemDef->BeatSequence.Beats[0].Animations.Add(FBBMBeatAnimationConfig(
+		EBBMVisualWindow::ImpactWindow,
+		BBMAnimationTags::Animation_Action.GetTag()
+	));
+
+	// 비트 1: 액션 없음 + 준비 방어 순수 애니메이션 태그
+	TestItemDef->BeatSequence.Beats[1].Animations.Add(FBBMBeatAnimationConfig(
+		EBBMVisualWindow::PrepDefenseWindow,
+		BBMAnimationTags::Animation_Action.GetTag()
+	));
+
+	UBBMItemEntry* ItemEntry = NewObject<UBBMItemEntry>();
+	ItemEntry->InitializeEntry(TestItemDef);
+	UDISItemStack* ItemStack = NewObject<UDISItemStack>();
+	ItemStack->PushEntry(ItemEntry);
+
+	UBBMInventory* Inven = Hero->GetInventory();
+	TestNotNull(TEXT("플레이어 인벤토리 유효 검증"), Inven);
+	if (Inven != nullptr)
+	{
+		const FDISItemPlacementResult PlaceResult = Inven->SetSlotItemStack(0, ItemStack);
+		TestTrue(TEXT("아이템 배치 성공 검증"), PlaceResult.bSuccess);
+	}
+
+	// 턴 시뮬레이션 실행 (플레이어 비트 시퀀스가 인벤토리로부터 자동 합성됨)
+	TArray<FBBMCombatStepVisualEvent> OutVisualEvents;
+	const bool bSimResult = CombatMgr->SimulateTurn(OutVisualEvents);
+	TestTrue(TEXT("SimulateTurn 정상 완료 검증"), bSimResult);
+	TestTrue(TEXT("비주얼 이벤트 수집 검증"), OutVisualEvents.Num() >= 2);
+
+	// 비트 0 및 비트 1 애니메이션 태그 검증
+	bool bFoundBeat0Anim = false;
+	bool bFoundBeat1PureAnim = false;
+
+	for (const FBBMCombatStepVisualEvent& Ev : OutVisualEvents)
+	{
+		if (Ev.Instigator == Hero && Ev.BeatIndex == 0 && Ev.VisualWindow == EBBMVisualWindow::ImpactWindow)
+		{
+			if (Ev.AnimationStateTag == BBMAnimationTags::Animation_Action.GetTag())
+			{
+				bFoundBeat0Anim = true;
+			}
+		}
+		if (Ev.Instigator == Hero && Ev.BeatIndex == 1 && Ev.VisualWindow == EBBMVisualWindow::PrepDefenseWindow)
+		{
+			if (Ev.AnimationStateTag == BBMAnimationTags::Animation_Action.GetTag())
+			{
+				bFoundBeat1PureAnim = true;
+			}
+		}
+	}
+
+	TestTrue(TEXT("비트 0 액션 실행 시 AnimationStateTag 정상 수집 검증"), bFoundBeat0Anim);
+	TestTrue(TEXT("비트 1 액션 부재 시 순수 애니메이션 이벤트 및 AnimationStateTag 정상 발행 검증"), bFoundBeat1PureAnim);
+
+	// 정리
+	CombatMgr->ClearCurrentEncounter();
+	Hero->Destroy();
+	Monster->Destroy();
+
+	return true;
+}
+
+/**
+ * 22. 전투원 애님 인스턴스(UBBMCombatantAnimInstance) 태그 매핑 및 FBBMBeatAnimLayerRange 검증 테스트
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMCombatantAnimInstanceMappingTest,
+	"DIS.BBM.Combat.AnimInstanceTagMapping",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMCombatantAnimInstanceMappingTest::RunTest(const FString& Parameters)
+{
+	// 1. FBBMBeatAnimLayerRange 유효성 검증
+	const FGameplayTag SwordLayerTag = BBMAnimLayerTags::AnimLayer_Weapon_Sword.GetTag();
+	FBBMBeatAnimLayerRange InvalidRangeNoTag(0, 2);
+	TestFalse(TEXT("태그가 비어있는 AnimLayerRange는 IsValid() false여야 함"), InvalidRangeNoTag.IsValid());
+
+	FBBMBeatAnimLayerRange ValidRangeWithTag(0, 2, SwordLayerTag);
+	TestTrue(TEXT("0~2 비트 및 유효 태그 소유 시 AnimLayerRange는 IsValid() true여야 함"), ValidRangeWithTag.IsValid());
+
+	FBBMBeatAnimLayerRange InvalidRangeOutOfBounds(0, 9, SwordLayerTag);
+	TestFalse(TEXT("EndBeat가 8을 초과하면 IsValid() false여야 함"), InvalidRangeOutOfBounds.IsValid());
+
+	// 2. UBBMCombatantAnimInstance 태그 조회 검증 (UAnimInstance의 Within = SkeletalMeshComponent 규격 준수)
+	USkeletalMeshComponent* DummyMesh = NewObject<USkeletalMeshComponent>();
+	UBBMCombatantAnimInstance* AnimInst = NewObject<UBBMCombatantAnimInstance>(DummyMesh);
+	TestNotNull(TEXT("애님 인스턴스 생성 유효 검증"), AnimInst);
+
+	TestFalse(TEXT("초기 상태에서 미등록 태그 조회는 false여야 함"), AnimInst->HasAnimLayer(SwordLayerTag));
+	TestNull(TEXT("초기 상태에서 미등록 태그 클래스 조회는 nullptr이어야 함"), AnimInst->FindAnimLayerClass(SwordLayerTag));
+
+	// 파생 테스트 클래스 또는 리플렉션/친구 클래스 대신 Protected 멤버 설정 테스트용 구조 확인
+	// AnimInst의 GetAnimLayerMap은 const 참조를 반환하므로, UPROPERTY 필드를 리플렉션 또는 파생 클래스를 통해 설정 가능
+	// 단, 테스트에서 리플렉션을 통해 AnimLayerMap에 등록하여 매핑 정상 동작 확인
+	if (FMapProperty* MapProp = CastField<FMapProperty>(UBBMCombatantAnimInstance::StaticClass()->FindPropertyByName(FName("AnimLayerMap"))))
+	{
+		FScriptMapHelper MapHelper(MapProp, MapProp->ContainerPtrToValuePtr<void>(AnimInst));
+		const int32 NewIdx = MapHelper.AddDefaultValue_Invalid_NeedsRehash();
+		uint8* PairPtr = MapHelper.GetPairPtr(NewIdx);
+
+		FGameplayTag* KeyPtr = reinterpret_cast<FGameplayTag*>(PairPtr);
+		*KeyPtr = SwordLayerTag;
+
+		TSubclassOf<UAnimInstance>* ValPtr = reinterpret_cast<TSubclassOf<UAnimInstance>*>(PairPtr + MapProp->MapLayout.ValueOffset);
+		*ValPtr = UAnimInstance::StaticClass();
+
+		MapHelper.Rehash();
+	}
+
+	TestTrue(TEXT("매핑 등록 후 HasAnimLayer는 true여야 함"), AnimInst->HasAnimLayer(SwordLayerTag));
+	TestEqual(TEXT("매핑 등록 후 FindAnimLayerClass는 UAnimInstance::StaticClass()여야 함"), AnimInst->FindAnimLayerClass(SwordLayerTag).Get(), UAnimInstance::StaticClass());
 
 	return true;
 }

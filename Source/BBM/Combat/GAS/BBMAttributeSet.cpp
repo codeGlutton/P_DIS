@@ -5,6 +5,7 @@ UBBMAttributeSet::UBBMAttributeSet() :
 	Health(TNumericLimits<float>::Max()),
 	MaxHealth(TNumericLimits<float>::Max()),
 	Armor(0.0f),
+	TurnArmor(0.0f),
 	AttackPower(10.0f),
 	DefensePower(5.0f)
 {
@@ -24,8 +25,8 @@ void UBBMAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, f
 	{
 		NewValue = FMath::Max(NewValue, 1.0f);
 	}
-	// 방어도, 공격력, 방어력: 음수 방지 (0 이상)
-	else if (Attribute == GetArmorAttribute() || Attribute == GetAttackPowerAttribute() || Attribute == GetDefensePowerAttribute())
+	// 방어도, 턴 방어도, 공격력, 방어력: 음수 방지 (0 이상)
+	else if (Attribute == GetArmorAttribute() || Attribute == GetTurnArmorAttribute() || Attribute == GetAttackPowerAttribute() || Attribute == GetDefensePowerAttribute())
 	{
 		NewValue = FMath::Max(NewValue, 0.0f);
 	}
@@ -53,6 +54,11 @@ void UBBMAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbac
 	else if (Data.EvaluatedData.Attribute == GetArmorAttribute())
 	{
 		Armor.SetCurrentValue(FMath::Max(GetArmor(), 0.0f));
+	}
+	// 턴 방어도 음수 방지
+	else if (Data.EvaluatedData.Attribute == GetTurnArmorAttribute())
+	{
+		TurnArmor.SetCurrentValue(FMath::Max(GetTurnArmor(), 0.0f));
 	}
 	// 공격력 음수 방지
 	else if (Data.EvaluatedData.Attribute == GetAttackPowerAttribute())

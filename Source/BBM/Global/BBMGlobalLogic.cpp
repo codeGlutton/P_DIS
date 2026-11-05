@@ -24,6 +24,34 @@ EBBMItemUsageRule UBBMGlobalLogic::GetItemUsageRule(const FGameplayTag& ItemType
 	return EBBMItemUsageRule::Unlimited;
 }
 
+TArray<FGameplayTag> UBBMGlobalLogic::GetLeafItemTypeTags() const
+{
+	TArray<FGameplayTag> AllRegisteredTags;
+	RegisteredItemTypeProfiles.GetKeys(AllRegisteredTags);
+
+	TArray<FGameplayTag> LeafTags;
+	for (const FGameplayTag& CandidateTag : AllRegisteredTags)
+	{
+		bool bHasChild = false;
+		for (const FGameplayTag& OtherTag : AllRegisteredTags)
+		{
+			// 다른 태그가 CandidateTag를 포함하면서 다른 태그인 경우, CandidateTag는 부모 태그임
+			if (OtherTag != CandidateTag && OtherTag.MatchesTag(CandidateTag) == true)
+			{
+				bHasChild = true;
+				break;
+			}
+		}
+
+		if (bHasChild == false)
+		{
+			LeafTags.Add(CandidateTag);
+		}
+	}
+
+	return LeafTags;
+}
+
 bool UBBMGlobalLogic::RegisterItemGroupProfile(const FGameplayTag& GroupTag, const FBBMItemGroupProfile& Profile)
 {
 	if (GroupTag.IsValid() == false)

@@ -6,6 +6,7 @@
 #include "Item/DISItemStack.h"
 #include "Item/BBMItemEntry.h"
 #include "Item/BBMItemDefinition.h"
+#include "Item/BBMItemProfileTypes.h"
 
 ABBMPlayerMerchantBase::ABBMPlayerMerchantBase() :
 	InventoryComponent(nullptr)
@@ -40,7 +41,7 @@ FBBMBeatSequence ABBMPlayerMerchantBase::GenerateBeatSequenceFromInventory()
 	CachedBeatSequence = FBBMBeatSequence();
 	CachedBeatSequence.Beats.SetNum(8); // 8비트 슬롯 기본 확보
 
-	const UBBMInventory* TargetInventory = GetInventory();
+	UBBMInventory* TargetInventory = GetInventory();
 	if (TargetInventory == nullptr)
 	{
 		return CachedBeatSequence;
@@ -51,8 +52,12 @@ FBBMBeatSequence ABBMPlayerMerchantBase::GenerateBeatSequenceFromInventory()
 
 	int32 CurrentBeat = 0;
 
+	// 이번 턴 8비트 타임라인에 등록 확정된 아이템 스택 목록 (장비 이관 및 소모품 소멸 처리용)
+	TArray<UDISItemStack*> StacksToArchiveEquipment;
+	TArray<UDISItemStack*> StacksToConsume;
+
 	// 2. 순차적으로 아이템 비트를 누적하여 8비트 타임라인 구성 (GDD 4.1)
-	for (const UDISItemStack* ItemStack : OrderedStacks)
+	for (UDISItemStack* ItemStack : OrderedStacks)
 	{
 		if (ItemStack == nullptr || ItemStack->IsEmpty() == true)
 		{
@@ -69,7 +74,7 @@ FBBMBeatSequence ABBMPlayerMerchantBase::GenerateBeatSequenceFromInventory()
 		const int32 StartBeat = CurrentBeat;
 		const int32 EndBeat = StartBeat + ItemBeatCost;
 
-		// 8비트 초과 시 타임라인 등록 중단 (GDD 4.1: 비트 초과 Overflow로 이번 턴 미실행)
+		// 8비트 초과 시 타임라인 등록 중단 (GDD 4.1: 비트 초과 Overflow로 이번 턴 미실행 및 배낭 유지)
 		if (EndBeat > 8)
 		{
 			break;
@@ -101,7 +106,7 @@ FBBMBeatSequence ABBMPlayerMerchantBase::GenerateBeatSequenceFromInventory()
 			}
 		}
 
-		// 비트 구간 지속 효과(EffectRanges) 시간 오프셋 시프트 및 등록
+		// 비트 구간 지속 효과(EffectRanges) 및 Anim Layer(AnimLayerRanges) 시간 오프셋 시프트 및 등록
 		if (ItemSeq != nullptr)
 		{
 			for (const FBBMBeatEffectRange& Range : ItemSeq->EffectRanges)
@@ -116,9 +121,53 @@ FBBMBeatSequence ABBMPlayerMerchantBase::GenerateBeatSequenceFromInventory()
 					CachedBeatSequence.EffectRanges.Add(ShiftedRange);
 				}
 			}
+
+			for (const FBBMBeatAnimLayerRange& LayerRange : ItemSeq->AnimLayerRanges)
+			{
+				FBBMBeatAnimLayerRange ShiftedRange = LayerRange;
+				ShiftedRange.StartBeat += StartBeat;
+				ShiftedRange.EndBeat += StartBeat;
+				ShiftedRange.EndBeat = FMath::Min(ShiftedRange.EndBeat, 8);
+
+				if (ShiftedRange.IsValid() == true)
+				{
+					CachedBeatSequence.AnimLayerRanges.Add(ShiftedRange);
+				}
+			}
+		}
+
+		// 등록 확정된 아이템의 유형별 사후 분류 (장비 -> 보관소 이관, 소모품 -> 소멸)
+		if (const UDISItemEntry* TopEntry = ItemStack->GetTopEntry())
+		{
+			if (const UDISItemDefinition* ItemDef = TopEntry->GetItemDefinition())
+			{
+				const FGameplayTag& TypeTag = ItemDef->ItemTypeTag;
+				if (TypeTag.MatchesTag(BBMItemTypeTags::Item_Equipment))
+				{
+					StacksToArchiveEquipment.Add(ItemStack);
+				}
+				else if (TypeTag.MatchesTag(BBMItemTypeTags::Item_Consumable))
+				{
+					StacksToConsume.Add(ItemStack);
+				}
+			}
 		}
 
 		CurrentBeat = EndBeat;
+	}
+
+	// 3. 등록 확정된 장비 이관 및 소모품 영구 제거 처리
+	if (InventoryComponent != nullptr)
+	{
+		for (UDISItemStack* EquipStack : StacksToArchiveEquipment)
+		{
+			InventoryComponent->ArchiveEquipment(EquipStack);
+		}
+	}
+
+	for (UDISItemStack* ConsumableStack : StacksToConsume)
+	{
+		TargetInventory->ClearItemStack(ConsumableStack);
 	}
 
 	return CachedBeatSequence;

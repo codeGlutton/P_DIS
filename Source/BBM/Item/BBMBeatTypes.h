@@ -10,7 +10,13 @@
 #include "GameplayTagContainer.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Item/BBMItemGameplayEffectTypes.h"
+#include "Combat/BBMCombatTypes.h"
 #include "BBMBeatTypes.generated.h"
+
+/* 독립 전방 선언 (상단에 단독 배치) */
+class UBBMCombatManagerSubsystem;
+class ABBMCombatantBase;
+class UAnimInstance;
 
 /**
  * 액션이 실행되는 6대 논리 실행 범주 (6-Phase Logical Action Pipeline)
@@ -70,6 +76,9 @@ public:
 public:
 	EBBMActionCategory GetActionCategory() const;
 
+	/* 전투 매니저를 통해 다형적 액션 명령 직접 실행 (커맨드 패턴) */
+	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const;
+
 	/* 프로퍼티 */
 public:
 	/* 액션이 속한 6대 논리 실행 범주 */
@@ -95,6 +104,9 @@ public:
 public:
 	float CalculateMagnitude(float InAttributeValue) const;
 
+	/* 다형적 교전 실행 오버라이드 */
+	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const override;
+
 	/* 프로퍼티 */
 public:
 	/* 액션의 대상 적용 범위 */
@@ -112,7 +124,7 @@ public:
 
 /**
  * 이동 및 진형 변경 액션 구조체 (선 이동, 후 넉백/후퇴 등)
- * 이동할 칸 수(StepCount)만 소유함
+ * 이동 방향(Direction)과 이동할 칸 수(StepCount)를 소유함
  */
 USTRUCT(BlueprintType)
 struct BBM_API FBBMMovementAction : public FBBMBeatAction
@@ -122,13 +134,60 @@ struct BBM_API FBBMMovementAction : public FBBMBeatAction
 	/* 생성자 */
 public:
 	FBBMMovementAction();
-	explicit FBBMMovementAction(EBBMActionCategory InCategory, int32 InStepCount = 1);
+	explicit FBBMMovementAction(EBBMActionCategory InCategory, EBBMLaneShiftDirection InDirection = EBBMLaneShiftDirection::Frontward, int32 InStepCount = 1);
+
+	/* 다형적 이동/넉백 실행 오버라이드 */
+	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const override;
 
 	/* 프로퍼티 */
 public:
+	/* 이동할 레인 방향 (전진 / 후퇴) */
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
+	EBBMLaneShiftDirection Direction;
+
 	/* 이동할 레인 칸 수 */
 	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
 	int32 StepCount;
+};
+
+/**
+ * 방어도(지속 방어도 또는 턴 방어도) 증가 액션 구조체
+ * 대상 범위(TargetScope), 턴 방어도 여부(bIsTurnArmor), 방어력 계수(Coefficient), 기본 수치(BaseValue)를 소유함
+ */
+USTRUCT(BlueprintType)
+struct BBM_API FBBMArmorAction : public FBBMBeatAction
+{
+	GENERATED_BODY()
+
+	/* 생성자 */
+public:
+	FBBMArmorAction();
+	explicit FBBMArmorAction(bool bInIsTurnArmor, EBBMTargetScope InScope = EBBMTargetScope::Self, float InCoefficient = 1.0f, float InBaseValue = 0.0f);
+
+	/* 수치 계산 헬퍼 (InAttributeValue * Coefficient + BaseValue) */
+public:
+	float CalculateMagnitude(float InAttributeValue) const;
+
+	/* 다형적 방어도 부여 실행 오버라이드 */
+	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const override;
+
+	/* 프로퍼티 */
+public:
+	/* 턴 방어도 여부 (true: 해당 8비트 턴 동안만 유효한 TurnArmor, false: 전투 내내 유지되는 지속 방어도 Armor) */
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
+	bool bIsTurnArmor;
+
+	/* 방어도 적용 대상 범위 (기본: 시전자 본인 Self) */
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
+	EBBMTargetScope TargetScope;
+
+	/* 캐릭터 DefensePower 어트리뷰트에 곱해질 계수 */
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
+	float Coefficient;
+
+	/* 기본 고정 가산 수치 */
+	UPROPERTY(Category = "BBM|Action", EditAnywhere, BlueprintReadWrite)
+	float BaseValue;
 };
 
 /**
@@ -239,6 +298,58 @@ public:
 };
 
 /**
+ * 특정 비트 구간 [StartBeat, EndBeat) 동안 캐릭터 SkeletalMesh에 링크될 Anim Layer 목록 스케줄 구조체
+ */
+USTRUCT(BlueprintType)
+struct BBM_API FBBMBeatAnimLayerRange
+{
+	GENERATED_BODY()
+
+	/* 생성자 */
+public:
+	FBBMBeatAnimLayerRange();
+	FBBMBeatAnimLayerRange(int32 InStartBeat, int32 InEndBeat);
+	FBBMBeatAnimLayerRange(int32 InStartBeat, int32 InEndBeat, const FGameplayTag& InAnimLayerTag);
+
+	/* 비트 구간 판별 헬퍼 */
+public:
+	/* 특정 비트 인덱스에서 레이어가 활성화 상태인지 확인 (StartBeat <= BeatIndex < EndBeat) */
+	FORCEINLINE bool IsActiveAtBeat(int32 BeatIndex) const
+	{
+		return BeatIndex >= StartBeat && BeatIndex < EndBeat;
+	}
+
+	/* 특정 비트 인덱스가 레이어의 시작 비트인지 확인 (링크 타이밍) */
+	FORCEINLINE bool IsStartingAtBeat(int32 BeatIndex) const
+	{
+		return BeatIndex == StartBeat;
+	}
+
+	/* 특정 비트 인덱스 종료 시 레이어가 언링크되어야 하는지 확인 (해제 타이밍, BeatIndex + 1 == EndBeat) */
+	FORCEINLINE bool IsEndingAtBeat(int32 BeatIndex) const
+	{
+		return (BeatIndex + 1) == EndBeat;
+	}
+
+	/* 유효한 비트 범위인지 검사 (0 <= StartBeat < EndBeat <= 8 && AnimLayerTag.IsValid()) */
+	bool IsValid() const;
+
+	/* 프로퍼티 */
+public:
+	/* 레이어 링크 시작 비트 인덱스 (0~7, 0은 1번째 비트 시작 시점) */
+	UPROPERTY(Category = "BBM|Animation", EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0", ClampMax = "7"))
+	int32 StartBeat;
+
+	/* 레이어 언링크 종료 비트 인덱스 (1~8, 1-based Exclusive, 8은 8번째 비트 종료 시점) */
+	UPROPERTY(Category = "BBM|Animation", EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "1", ClampMax = "8"))
+	int32 EndBeat;
+
+	/* 해당 비트 구간 동안 캐릭터에 링크될 Anim Layer 식별 태그 (예: BBM.AnimLayer.Weapon.Sword) */
+	UPROPERTY(Category = "BBM|Animation", EditAnywhere, BlueprintReadWrite)
+	FGameplayTag AnimLayerTag;
+};
+
+/**
  * 1턴(최대 8비트) 동안 실행될 비트 시퀀스 및 비트 구간별 활성 효과 스케줄을 담는 공통 기반 구조체
  * 아이템 정의(1~8비트 가변), 플레이어 턴(배낭 인벤토리 배치 결과), AI(몬스터 행동 패턴의 실행 본체) 모두 동일한 데이터 규격으로 사용함
  */
@@ -266,6 +377,10 @@ public:
 	/* 비트 구간별 활성화되는 GameplayEffect 스케줄 목록 */
 	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
 	TArray<FBBMBeatEffectRange> EffectRanges;
+
+	/* 비트 구간별 활성화되는 Anim Layer 스케줄 목록 */
+	UPROPERTY(Category = "BBM|Beat", EditAnywhere, BlueprintReadWrite)
+	TArray<FBBMBeatAnimLayerRange> AnimLayerRanges;
 };
 
 

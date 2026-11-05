@@ -6,9 +6,11 @@
 
 #include "Combat/Pawn/BBMPlayerCharacterDefinition.h"
 #include "Inventory/BBMInventoryDefinition.h"
+#include "Stage/BBMRegionDefinition.h"
 
 UBBMPlayerCharacterDefinition::UBBMPlayerCharacterDefinition() :
-	InventoryDefinition(nullptr)
+	InventoryDefinition(nullptr),
+	StartRegionDefinition(nullptr)
 {
 	DisplayName = FText::FromString(TEXT("Player Merchant"));
 	TableKeyName = FName(TEXT("Player"));
@@ -22,5 +24,18 @@ FPrimaryAssetId UBBMPlayerCharacterDefinition::GetPrimaryAssetId() const
 
 const UBBMInventoryDefinition* UBBMPlayerCharacterDefinition::GetInventoryDefinition() const
 {
-	return InventoryDefinition.Get();
+	if (InventoryDefinition.IsValid() == true)
+	{
+		return InventoryDefinition.Get();
+	}
+	return InventoryDefinition.LoadSynchronous();
+}
+
+const UBBMRegionDefinition* UBBMPlayerCharacterDefinition::GetStartRegionDefinition() const
+{
+	if (StartRegionDefinition.IsValid() == true)
+	{
+		return StartRegionDefinition.Get();
+	}
+	return StartRegionDefinition.LoadSynchronous();
 }

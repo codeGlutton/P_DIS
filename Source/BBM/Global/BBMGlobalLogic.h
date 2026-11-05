@@ -1,4 +1,4 @@
-﻿/*****************************************************************//**
+/*****************************************************************//**
  * @file   BBMGlobalLogic.h
  * @brief  BBM(비트 배낭 상인) 전역 로직 서브오브젝트 클래스
  * @date   2026-10-28
@@ -31,11 +31,15 @@ public:
 public:
 	virtual void Deinitialize() override;
 
-	/* 아이템 타입 커스텀 규칙 조회 */
+	/* 아이템 타입 및 희귀도 기본값 쿼리 */
 public:
 	/* 아이템 타입 태그에 해석된 BBM 전투 사용 규칙 반환 (미지정 시 기본값 Unlimited 반환) */
 	UFUNCTION(Category = "BBM|Item", BlueprintCallable, BlueprintPure)
 	EBBMItemUsageRule GetItemUsageRule(const FGameplayTag& ItemTypeTag) const;
+
+	/* 등록된 아이템 타입 중 부모 태그를 제외한 최종 자식(Leaf) 태그 목록 반환 */
+	UFUNCTION(Category = "BBM|Item", BlueprintCallable, BlueprintPure)
+	TArray<FGameplayTag> GetLeafItemTypeTags() const;
 
 	/* 아이템 그룹 프로파일 동적 등록 및 해제 */
 public:

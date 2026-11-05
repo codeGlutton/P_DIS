@@ -15,6 +15,7 @@
 /* 독립 전방 선언 (상단에 단독 배치) */
 class FDataValidationContext;
 struct FRandomStream;
+class UBBMItemDefinition;
 
 /**
  * BBM AI 전투원 에셋 식별자 네임스페이스
@@ -93,10 +94,28 @@ public:
 	 */
 	const FBBMAIBeatSequence* SelectPattern(FRandomStream& InRandomStream, FName LastPatternName = NAME_None) const;
 
+	/* 처치 드롭 보상 아이템 추첨 */
+public:
+	/**
+	 * 처치 드롭 아이템 풀에서 희귀도 가중치에 따라 무작위 1개 아이템 정의 에셋 추첨
+	 * @param InWeights 적용할 희귀도별 가중치 설정 (미등록 희귀도는 가중치 0%로 배제, 비어있을 시 균등 추첨)
+	 * @param InRandomStream 난수 스트림
+	 * @return 추첨된 아이템 정의 포인터 (풀이 비어있거나 유효 가중치가 없으면 nullptr)
+	 */
+	UFUNCTION(Category = "BBM|AI|Reward", BlueprintCallable)
+	UBBMItemDefinition* PickRandomDropItem(const TMap<FGameplayTag, float>& InWeights, const FRandomStream& InRandomStream) const;
+
+	/* 등록된 처치 드롭 아이템 풀 반환 */
+	const TArray<TSoftObjectPtr<UBBMItemDefinition>>& GetDropItemPool() const;
+
 	/* AI 전투원 고유 프로퍼티 */
 public:
 	/* AI 전투원이 사용할 수 있는 8비트 행동 패턴 풀 */
 	UPROPERTY(Category = "AI|Patterns", EditDefaultsOnly, BlueprintReadOnly)
 	TArray<FBBMAIBeatSequence> PatternPool;
+
+	/* 해당 AI 몬스터 처치 시 드롭될 수 있는 보상 아이템 풀 */
+	UPROPERTY(Category = "AI|Rewards", EditDefaultsOnly, BlueprintReadOnly, meta = (AssetBundles = "Data"))
+	TArray<TSoftObjectPtr<UBBMItemDefinition>> DropItemPool;
 };
 

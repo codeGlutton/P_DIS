@@ -59,6 +59,10 @@ public:
 	UFUNCTION(Category = "BBM|Item|Group", BlueprintCallable, BlueprintPure)
 	const FGameplayTagContainer& GetItemGroupTags() const;
 
+	/* 아이템이 요구하는 링크드 애님 레이어 태그 목록 반환 */
+	UFUNCTION(Category = "BBM|Item|Animation", BlueprintCallable, BlueprintPure)
+	const FGameplayTagContainer& GetLinkedAnimLayerTags() const;
+
 	/* 프로퍼티 */
 public:
 	/* 상품의 가격 (상점 구매/판매 기본 가격 단위) */
@@ -69,9 +73,9 @@ public:
 	UPROPERTY(Category = "Item Definition|Beat", EditDefaultsOnly, BlueprintReadOnly)
 	FBBMBeatSequence BeatSequence;
 
-	/* 아이템 실행 시 캐릭터에 동적 바인딩할 링크드 애님 레이어 클래스 목록 (World 번들, 비동기 프리로드 지원) */
-	UPROPERTY(Category = "Item Definition|Animation", EditDefaultsOnly, BlueprintReadOnly, meta = (AssetBundles = "World"))
-	TArray<TSoftClassPtr<UAnimInstance>> LinkedAnimLayers;
+	/* 아이템 실행 시 캐릭터 스켈레탈 메시에서 동적 바인딩할 링크드 애님 레이어 식별 태그 목록 */
+	UPROPERTY(Category = "Item Definition|Animation", EditDefaultsOnly, BlueprintReadOnly)
+	FGameplayTagContainer LinkedAnimLayerTags;
 
 	/* 아이템이 속한 그룹 태그 컨테이너 (복수 그룹 지원, 예: Group.Noble, Group.Undead) */
 	UPROPERTY(Category = "Item Definition|Group", EditDefaultsOnly, BlueprintReadOnly, AssetRegistrySearchable)

@@ -10,6 +10,8 @@
 #endif
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "Animation/AnimInstance.h"
+#include "Combat/Animation/BBMCombatantAnimInstance.h"
 
 ABBMCombatantBase::ABBMCombatantBase() :
 	CapsuleComponent(nullptr),
@@ -274,6 +276,75 @@ UCapsuleComponent* ABBMCombatantBase::GetCapsuleComponent() const
 USkeletalMeshComponent* ABBMCombatantBase::GetMesh() const
 {
 	return Mesh;
+}
+
+void ABBMCombatantBase::LinkAnimLayerByTag(const FGameplayTag& LayerTag)
+{
+	if (Mesh == nullptr || LayerTag.IsValid() == false)
+	{
+		return;
+	}
+
+	if (UBBMCombatantAnimInstance* CombatantAnimInst = Cast<UBBMCombatantAnimInstance>(Mesh->GetAnimInstance()))
+	{
+		if (TSubclassOf<UAnimInstance> LayerClass = CombatantAnimInst->FindAnimLayerClass(LayerTag))
+		{
+			Mesh->LinkAnimClassLayers(LayerClass);
+		}
+	}
+}
+
+void ABBMCombatantBase::UnlinkAnimLayerByTag(const FGameplayTag& LayerTag)
+{
+	if (Mesh == nullptr || LayerTag.IsValid() == false)
+	{
+		return;
+	}
+
+	if (UBBMCombatantAnimInstance* CombatantAnimInst = Cast<UBBMCombatantAnimInstance>(Mesh->GetAnimInstance()))
+	{
+		if (TSubclassOf<UAnimInstance> LayerClass = CombatantAnimInst->FindAnimLayerClass(LayerTag))
+		{
+			Mesh->UnlinkAnimClassLayers(LayerClass);
+		}
+	}
+}
+
+void ABBMCombatantBase::LinkAnimLayers(const TArray<TSubclassOf<UAnimInstance>>& InLayers)
+{
+	if (Mesh == nullptr)
+	{
+		return;
+	}
+
+	for (const TSubclassOf<UAnimInstance>& LayerClass : InLayers)
+	{
+		if (LayerClass != nullptr)
+		{
+			Mesh->LinkAnimClassLayers(LayerClass);
+		}
+	}
+}
+
+void ABBMCombatantBase::UnlinkAnimLayers(const TArray<TSubclassOf<UAnimInstance>>& InLayers)
+{
+	if (Mesh == nullptr)
+	{
+		return;
+	}
+
+	for (const TSubclassOf<UAnimInstance>& LayerClass : InLayers)
+	{
+		if (LayerClass != nullptr)
+		{
+			Mesh->UnlinkAnimClassLayers(LayerClass);
+		}
+	}
+}
+
+void ABBMCombatantBase::StartDissolve()
+{
+	// [TODO] 디졸브 머티리얼 파라미터 애니메이션 또는 타임라인 연출 구현 예정 (현재는 껍데기 가상 함수로 유지)
 }
 
 #if WITH_EDITORONLY_DATA

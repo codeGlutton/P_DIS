@@ -20,6 +20,7 @@
 #include "Item/DISItemEntry.h"
 #include "Item/DISItemStack.h"
 #include "Animation/AnimInstance.h"
+#include "Combat/BBMCombatTypes.h"
 
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
@@ -414,10 +415,11 @@ bool FBBMItemBeatAndAnimationTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Beats TArray 크기는 2여야 함"), ItemDef->BeatSequence.Beats.Num(), 2);
 	TestEqual(TEXT("GetBeats() 헬퍼 크기도 2여야 함"), ItemDef->GetBeats().Num(), 2);
 
-	// 4. 링크드 애님 레이어(LinkedAnimLayers) 등록 검증
-	ItemDef->LinkedAnimLayers.Add(UAnimInstance::StaticClass());
-	TestEqual(TEXT("링크드 애님 레이어 개수는 1이어야 함"), ItemDef->LinkedAnimLayers.Num(), 1);
-	TestEqual(TEXT("등록된 레이어 클래스 일치 검증"), ItemDef->LinkedAnimLayers[0].Get(), UAnimInstance::StaticClass());
+	// 4. 링크드 애님 레이어 태그(LinkedAnimLayerTags) 등록 검증
+	const FGameplayTag LayerTag = BBMAnimLayerTags::AnimLayer_Weapon_Sword.GetTag();
+	ItemDef->LinkedAnimLayerTags.AddTag(LayerTag);
+	TestEqual(TEXT("링크드 애님 레이어 태그 개수는 1이어야 함"), ItemDef->LinkedAnimLayerTags.Num(), 1);
+	TestTrue(TEXT("등록된 레이어 태그 일치 검증"), ItemDef->GetLinkedAnimLayerTags().HasTagExact(LayerTag));
 
 #if WITH_EDITOR
 	// 5. DataValidation 검증: 비트 수와 점유 타일 수가 일치할 때 Valid

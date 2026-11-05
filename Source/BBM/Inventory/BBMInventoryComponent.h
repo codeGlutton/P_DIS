@@ -119,6 +119,10 @@ public:
 	UFUNCTION(Category = "BBM|Inventory|Equipment", BlueprintCallable, BlueprintPure)
 	TArray<UDISItemStack*> GetArchivedEquipmentStacks() const;
 
+	/* UsedEquipmentStorage 내부 배열 직접 참조 반환 (C++ 편의 접근자) */
+	const TArray<TObjectPtr<UDISItemStack>>& GetUsedEquipmentStorage() const { return UsedEquipmentStorage; }
+	TArray<TObjectPtr<UDISItemStack>>& GetMutableUsedEquipmentStorage() { return UsedEquipmentStorage; }
+
 	/* 현재 일시 보관 중인 장비 총 개수 반환 */
 	UFUNCTION(Category = "BBM|Inventory|Equipment", BlueprintCallable, BlueprintPure)
 	int32 GetArchivedEquipmentCount() const;

@@ -22,6 +22,7 @@ class UArrowComponent;
 class UAbilitySystemComponent;
 class UBBMAttributeSet;
 class UBBMCharacterDefinition;
+class UAnimInstance;
 struct FGameplayAttribute;
 
 /**
@@ -148,6 +149,28 @@ public:
 	/* 스켈레탈 메시 컴포넌트 반환 */
 	UFUNCTION(Category = "Combat|Component", BlueprintCallable, BlueprintPure)
 	USkeletalMeshComponent* GetMesh() const;
+
+	/* Anim Layer 링크 및 언링크 인터페이스 */
+public:
+	/* 특정 태그에 해당하는 캐릭터 전용 Linked Anim Layer를 스켈레탈 메시에 동적 링크 */
+	UFUNCTION(Category = "Combat|Animation", BlueprintCallable)
+	virtual void LinkAnimLayerByTag(const FGameplayTag& LayerTag);
+
+	/* 특정 태그에 해당하는 캐릭터 전용 Linked Anim Layer를 스켈레탈 메시에서 동적 언링크 */
+	UFUNCTION(Category = "Combat|Animation", BlueprintCallable)
+	virtual void UnlinkAnimLayerByTag(const FGameplayTag& LayerTag);
+
+	/* Anim Layer 클래스 목록을 스켈레탈 메시에 동적 링크 */
+	UFUNCTION(Category = "Combat|Animation", BlueprintCallable)
+	virtual void LinkAnimLayers(const TArray<TSubclassOf<UAnimInstance>>& InLayers);
+
+	/* Anim Layer 클래스 목록을 스켈레탈 메시에서 동적 언링크 */
+	UFUNCTION(Category = "Combat|Animation", BlueprintCallable)
+	virtual void UnlinkAnimLayers(const TArray<TSubclassOf<UAnimInstance>>& InLayers);
+
+	/* 사망 시 디졸브(Dissolve) 연출 시작 가상 함수 (껍데기 함수) */
+	UFUNCTION(Category = "Combat|Visual", BlueprintCallable)
+	virtual void StartDissolve();
 
 #if WITH_EDITORONLY_DATA
 	/* 에디터 전용 방향 표시 화살표 컴포넌트 반환 */

@@ -1,4 +1,4 @@
-﻿/*****************************************************************//**
+/*****************************************************************//**
  * @file   BBMAttributeSet.h
  * @brief  BBM(비트 배낭 상인) 전투 핵심 GAS 어트리뷰트 세트 클래스 정의
  * @date   2026-10-30
@@ -49,10 +49,15 @@ public:
 	FGameplayAttributeData MaxHealth;
 	BBM_ATTRIBUTE_ACCESSORS(UBBMAttributeSet, MaxHealth)
 
-	/* 현재 방어도 (체력 차감 전 데미지를 우선 흡수하는 방어 수치) */
+	/* 현재 지속 방어도 (전투 내내 누적 유지되며 턴이 바뀌어도 보존되는 방어 수치) */
 	UPROPERTY(Category = "Attributes|Combat", EditDefaultsOnly, BlueprintReadOnly)
 	FGameplayAttributeData Armor;
 	BBM_ATTRIBUTE_ACCESSORS(UBBMAttributeSet, Armor)
+
+	/* 턴 방어도 (해당 턴(8비트) 동안만 유효하며 턴 종료 시 0으로 초기화되는 임시 방어 수치) */
+	UPROPERTY(Category = "Attributes|Combat", EditDefaultsOnly, BlueprintReadOnly)
+	FGameplayAttributeData TurnArmor;
+	BBM_ATTRIBUTE_ACCESSORS(UBBMAttributeSet, TurnArmor)
 
 	/* 기본 공격력 (아이템의 공격 버프 GE로 증폭되며 비트 데미지 산출 시 계수가 적용됨) */
 	UPROPERTY(Category = "Attributes|Combat", EditDefaultsOnly, BlueprintReadOnly)

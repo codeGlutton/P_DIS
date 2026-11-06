@@ -25,7 +25,7 @@ void ABBMAICombatantBase::UpdateBeatSequence()
 	SelectNewPatternRandom();
 }
 
-FBBMBeatSequence ABBMAICombatantBase::GetCurrentBeatSequence() const
+const FBBMBeatSequence& ABBMAICombatantBase::GetCurrentBeatSequence() const
 {
 	return CachedBeatSequence;
 }

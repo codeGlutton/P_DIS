@@ -28,8 +28,7 @@ void UBBMWorldWidgetSubsystem::Deinitialize()
 UBBMUserWidgetBase* UBBMWorldWidgetSubsystem::CreateAndRegisterWidget(
 	TSubclassOf<UBBMUserWidgetBase> WidgetClass,
 	FName WidgetKey,
-	EBBMWidgetZOrder ZOrderLayer,
-	bool bAutoOpen)
+	EBBMWidgetZOrder ZOrderLayer)
 {
 	if (WidgetClass == nullptr)
 	{
@@ -64,14 +63,14 @@ UBBMUserWidgetBase* UBBMWorldWidgetSubsystem::CreateAndRegisterWidget(
 		return nullptr;
 	}
 
+	// ZOrderLayer가 명시된 경우에만 클래스 기본값을 덮어씀 (UseClassDefault일 경우 위젯 정의 기본값 유지)
+	if (ZOrderLayer != EBBMWidgetZOrder::UseClassDefault)
+	{
+		NewWidget->SetDefaultZOrderLayer(ZOrderLayer);
+	}
+
 	// 서브시스템 맵에 등록
 	ActiveWidgets.Add(WidgetKey, NewWidget);
-
-	// 자동 오픈 옵션이 켜져 있는 경우 Open() 호출
-	if (bAutoOpen == true)
-	{
-		NewWidget->Open();
-	}
 
 	return NewWidget;
 }

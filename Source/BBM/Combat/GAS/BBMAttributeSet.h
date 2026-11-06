@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "AttributeSet.h"
 #include "AbilitySystemComponent.h"
+#include "Combat/BBMCombatTypes.h"
 #include "BBMAttributeSet.generated.h"
 
 #define BBM_ATTRIBUTE_ACCESSORS(ClassName, PropertyName) \
@@ -36,6 +37,9 @@ public:
 
 	/* GameplayEffect 실행 완료 후 수치 보정 가상함수 */
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
+
+	/* 언리얼 프로퍼티 리플렉션을 순회하여 현재 모든 어트리뷰트 수치를 담은 스냅샷 생성 */
+	FBBMCombatantSnapshot CreateAttributeSnapshot() const;
 
 	/* 어트리뷰트 프로퍼티 */
 public:

@@ -1204,6 +1204,14 @@ bool FBBMCombatManagerTest::RunTest(const FString& Parameters)
 	TArray<ABBMCombatantBase*> LivingEnemies = CombatMgr->GetLivingCombatantsInLane(EBBMCombatLane::EnemyLane);
 	TestEqual(TEXT("적군 생존 유닛은 2마리여야 함"), LivingEnemies.Num(), 2);
 
+	// 전체 전투원 헬퍼(GetAllLivingCombatants, GetAllCombatants) 검증
+	TArray<ABBMCombatantBase*> AllLiving = CombatMgr->GetAllLivingCombatants();
+	TestEqual(TEXT("전체 생존 유닛은 3명(상인 1 + 몬스터 2)이어야 함"), AllLiving.Num(), 3);
+	TestTrue(TEXT("전체 생존 목록에 플레이어 상인 포함 검증"), AllLiving.Contains(Cast<ABBMCombatantBase>(PlayerMerchant)));
+	TestTrue(TEXT("전체 생존 목록에 몬스터 A 포함 검증"), AllLiving.Contains(Cast<ABBMCombatantBase>(MonsterA)));
+	TestTrue(TEXT("전체 생존 목록에 몬스터 B 포함 검증"), AllLiving.Contains(Cast<ABBMCombatantBase>(MonsterB)));
+	TestEqual(TEXT("GetAllCombatants(true)와 GetAllLivingCombatants() 일치 검증"), CombatMgr->GetAllCombatants(true).Num(), 3);
+
 	// 4. 1D 타일 라인 시프트(ShiftLane) 검증
 	CombatMgr->ShiftLane(EBBMCombatLane::EnemyLane, EBBMLaneShiftDirection::Backward, 1);
 	TestEqual(TEXT("넉백 후에도 생존 최전방 탐색은 MonsterA를 반환해야 함"), CombatMgr->GetFrontlineCombatant(EBBMCombatLane::EnemyLane), Cast<ABBMCombatantBase>(MonsterA));
@@ -1212,57 +1220,64 @@ bool FBBMCombatManagerTest::RunTest(const FString& Parameters)
 
 	// 5. 엄격한 3단계 방어 및 공격 해결(ResolveAttack) 검증
 	// 5-1. 패링 상태: 완전 무효화 (0 피해)
-	const float ParryDamage = CombatMgr->ResolveAttack(PlayerMerchant, MonsterA, 50.0f, true);
+	TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog> CombatLogs;
+	const float ParryDamage = CombatMgr->ResolveAttack(PlayerMerchant, MonsterA, 50.0f, true, CombatLogs);
 	TestEqual(TEXT("패링 상태 시 피해는 0이어야 함"), ParryDamage, 0.0f);
 	TestEqual(TEXT("패링 시 체력 보존 (100 HP)"), MonsterA->GetAttributeSet()->GetHealth(), 100.0f);
 
 	// 5-2. 턴 방어도(10) 및 지속 방어도(20) 부여
-	CombatMgr->AddTurnArmor(MonsterA, 10.0f);
-	CombatMgr->AddPersistentArmor(MonsterA, 20.0f);
+	CombatMgr->AddTurnArmor(MonsterA, 10.0f, CombatLogs);
+	CombatMgr->AddPersistentArmor(MonsterA, 20.0f, CombatLogs);
 	TestEqual(TEXT("턴 방어도 10 검증"), MonsterA->GetAttributeSet()->GetTurnArmor(), 10.0f);
 	TestEqual(TEXT("지속 방어도 20 검증"), MonsterA->GetAttributeSet()->GetArmor(), 20.0f);
 
 	// 15 피해 공격: 턴 방어도(10) 우선 흡수 소진 -> 지속 방어도에서 5 흡수(남은 지속 방어도 15) -> 체력 피해 0
-	float DealtDamage1 = CombatMgr->ResolveAttack(PlayerMerchant, MonsterA, 15.0f, false);
+	CombatLogs.Empty();
+	float DealtDamage1 = CombatMgr->ResolveAttack(PlayerMerchant, MonsterA, 15.0f, false, CombatLogs);
 	TestEqual(TEXT("방어도로 완전 흡수되어 실제 체력 피해는 0이어야 함"), DealtDamage1, 0.0f);
 	TestEqual(TEXT("턴 방어도는 완전 소진되어 0이어야 함"), MonsterA->GetAttributeSet()->GetTurnArmor(), 0.0f);
 	TestEqual(TEXT("지속 방어도는 15가 남아있어야 함"), MonsterA->GetAttributeSet()->GetArmor(), 15.0f);
 	TestEqual(TEXT("체력은 여전히 100이어야 함"), MonsterA->GetAttributeSet()->GetHealth(), 100.0f);
 
 	// 30 피해 공격: 남은 지속 방어도 15 흡수 소진 -> 잔여 15 체력 피해 결착
-	float DealtDamage2 = CombatMgr->ResolveAttack(PlayerMerchant, MonsterA, 30.0f, false);
+	CombatLogs.Empty();
+	float DealtDamage2 = CombatMgr->ResolveAttack(PlayerMerchant, MonsterA, 30.0f, false, CombatLogs);
 	TestEqual(TEXT("지속 방어도를 뚫고 들어간 체력 피해는 15여야 함"), DealtDamage2, 15.0f);
 	TestEqual(TEXT("지속 방어도는 0이어야 함"), MonsterA->GetAttributeSet()->GetArmor(), 0.0f);
 	TestEqual(TEXT("체력은 85가 되어야 함"), MonsterA->GetAttributeSet()->GetHealth(), 85.0f);
 
 	// 6. 턴 방어도 일괄 초기화(ClearAllTurnArmors) 검증
-	CombatMgr->AddTurnArmor(PlayerMerchant, 25.0f);
-	CombatMgr->AddPersistentArmor(PlayerMerchant, 30.0f);
-	CombatMgr->ClearAllTurnArmors();
+	CombatLogs.Empty();
+	CombatMgr->AddTurnArmor(PlayerMerchant, 25.0f, CombatLogs);
+	CombatMgr->AddPersistentArmor(PlayerMerchant, 30.0f, CombatLogs);
+	CombatMgr->ClearAllTurnArmors(CombatLogs);
 	TestEqual(TEXT("턴 방어도는 0으로 초기화되어야 함"), PlayerMerchant->GetAttributeSet()->GetTurnArmor(), 0.0f);
 	TestEqual(TEXT("지속 방어도는 보존되어야 함 (30)"), PlayerMerchant->GetAttributeSet()->GetArmor(), 30.0f);
 
 	// 7. GameplayTag 기반 상태이상 및 턴 종료 틱(ProcessTurnEndStatusTicks) 검증
-	CombatMgr->ApplyStatusEffect(MonsterB, BBMStatusTags::Status_Poison, 3);
-	CombatMgr->ApplyStatusEffect(MonsterB, BBMStatusTags::Status_Burn, 2);
+	CombatLogs.Empty();
+	CombatMgr->ApplyStatusEffect(MonsterB, BBMStatusTags::Status_Poison, 3, CombatLogs);
+	CombatMgr->ApplyStatusEffect(MonsterB, BBMStatusTags::Status_Burn, 2, CombatLogs);
 	TestEqual(TEXT("독 3스택 검증"), CombatMgr->GetStatusStacks(MonsterB, BBMStatusTags::Status_Poison), 3);
 	TestEqual(TEXT("화상 2스택 검증"), CombatMgr->GetStatusStacks(MonsterB, BBMStatusTags::Status_Burn), 2);
 
 	// 턴 틱 실행: 독(3피해) + 화상(5피해) = 8 피해 결착, 독 스택 2로 감소, 화상 스택 1로 감소
-	CombatMgr->ProcessTurnEndStatusTicks();
+	CombatLogs.Empty();
+	CombatMgr->ProcessTurnEndStatusTicks(CombatLogs);
 	TestEqual(TEXT("턴 틱 후 체력은 92 HP여야 함"), MonsterB->GetAttributeSet()->GetHealth(), 92.0f);
 	TestEqual(TEXT("독 스택은 1 감소하여 2여야 함"), CombatMgr->GetStatusStacks(MonsterB, BBMStatusTags::Status_Poison), 2);
 	TestEqual(TEXT("화상 스택은 1 감소하여 1이어야 함"), CombatMgr->GetStatusStacks(MonsterB, BBMStatusTags::Status_Burn), 1);
 
 	// 8. FBBMBeatAction 커맨드 패턴(ExecuteAction) 다형성 실행 검증
+	CombatLogs.Empty();
 	FBBMCombatAction AttackCommand(EBBMActionCategory::Damage, EBBMTargetScope::EnemyFrontline, 1.0f, 5.0f);
 	const float PrevMonsterAHealth = MonsterA->GetAttributeSet()->GetHealth();
-	AttackCommand.ExecuteAction(CombatMgr, PlayerMerchant);
+	AttackCommand.ExecuteAction(CombatMgr, PlayerMerchant, CombatLogs);
 	TestEqual(TEXT("커맨드 실행으로 15 데미지가 최전방 몬스터 A에 적용되어야 함"), MonsterA->GetAttributeSet()->GetHealth(), PrevMonsterAHealth - 15.0f);
 
 	// 이동 커맨드 실행
 	FBBMMovementAction MoveCommand(EBBMActionCategory::PostMovement, EBBMLaneShiftDirection::Backward, 1);
-	MoveCommand.ExecuteAction(CombatMgr, PlayerMerchant);
+	MoveCommand.ExecuteAction(CombatMgr, PlayerMerchant, CombatLogs);
 
 	// 9. 기획 표준 턴(8비트) 시뮬레이션(SimulateTurn), 사망 처리, 승리 델리게이트 종합 검증
 	bool bVictoryBroadcasted = false;
@@ -1320,10 +1335,10 @@ bool FBBMCombatManagerTest::RunTest(const FString& Parameters)
 	}
 
 	// 턴 시뮬레이션 실행 (8비트 파이프라인)
-	TArray<FBBMCombatStepVisualEvent> OutVisualEvents;
-	const bool bSimResult = CombatMgr->SimulateTurn(OutVisualEvents);
+	FBBMTurnVisualResult OutTurnResult;
+	const bool bSimResult = CombatMgr->SimulateTurn(OutTurnResult);
 	TestTrue(TEXT("SimulateTurn 턴 시뮬레이션 정상 완료 검증"), bSimResult);
-	TestTrue(TEXT("비주얼 이벤트가 수집되어야 함"), OutVisualEvents.Num() > 0);
+	TestTrue(TEXT("비트 결과가 수집되어야 함"), OutTurnResult.BeatResults.Num() > 0);
 
 	// 몬스터 A 사망 및 사망 애니메이션 태그 부착 검증
 	TestTrue(TEXT("몬스터 A 사망 검증"), MonsterA->IsDead());
@@ -1398,16 +1413,18 @@ bool FBBMArmorActionAndEnhancementEffectTest::RunTest(const FString& Parameters)
 
 	// 3. FBBMArmorAction (턴 방어도 TurnArmor 검증)
 	// 계수 1.5, 기본값 10.0 -> 20.0 * 1.5 + 10.0 = 40.0
+	TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog> DummyLogs;
 	FBBMArmorAction TurnArmorAction(true, EBBMTargetScope::Self, 1.5f, 10.0f);
-	TurnArmorAction.ExecuteAction(CombatMgr, Hero);
+	TurnArmorAction.ExecuteAction(CombatMgr, Hero, DummyLogs);
 
 	TestEqual(TEXT("턴 방어도 40.0 부여 검증"), HeroAttr->GetTurnArmor(), 40.0f);
 	TestEqual(TEXT("지속 방어도는 0 유지 검증"), HeroAttr->GetArmor(), 0.0f);
 
 	// 4. FBBMArmorAction (지속 방어도 Persistent Armor 검증)
 	// 계수 0.5, 기본값 5.0 -> 20.0 * 0.5 + 5.0 = 15.0
+	DummyLogs.Empty();
 	FBBMArmorAction PersistentArmorAction(false, EBBMTargetScope::Self, 0.5f, 5.0f);
-	PersistentArmorAction.ExecuteAction(CombatMgr, Hero);
+	PersistentArmorAction.ExecuteAction(CombatMgr, Hero, DummyLogs);
 
 	TestEqual(TEXT("지속 방어도 15.0 부여 검증"), HeroAttr->GetArmor(), 15.0f);
 	TestEqual(TEXT("턴 방어도는 40.0 유지 검증"), HeroAttr->GetTurnArmor(), 40.0f);
@@ -1522,35 +1539,50 @@ bool FBBMAnimationStateTagCollectionTest::RunTest(const FString& Parameters)
 	}
 
 	// 턴 시뮬레이션 실행 (플레이어 비트 시퀀스가 인벤토리로부터 자동 합성됨)
-	TArray<FBBMCombatStepVisualEvent> OutVisualEvents;
-	const bool bSimResult = CombatMgr->SimulateTurn(OutVisualEvents);
+	FBBMTurnVisualResult OutTurnResult;
+	const bool bSimResult = CombatMgr->SimulateTurn(OutTurnResult);
 	TestTrue(TEXT("SimulateTurn 정상 완료 검증"), bSimResult);
-	TestTrue(TEXT("비주얼 이벤트 수집 검증"), OutVisualEvents.Num() >= 2);
+	TestTrue(TEXT("비트 결과 수집 검증"), OutTurnResult.BeatResults.Num() >= 2);
 
 	// 비트 0 및 비트 1 애니메이션 태그 검증
 	bool bFoundBeat0Anim = false;
 	bool bFoundBeat1PureAnim = false;
 
-	for (const FBBMCombatStepVisualEvent& Ev : OutVisualEvents)
+	for (const FBBMBeatResult& BeatRes : OutTurnResult.BeatResults)
 	{
-		if (Ev.Instigator == Hero && Ev.BeatIndex == 0 && Ev.VisualWindow == EBBMVisualWindow::ImpactWindow)
+		for (const FBBMVisualWindowResult& WinRes : BeatRes.WindowResults)
 		{
-			if (Ev.AnimationStateTag == BBMAnimationTags::Animation_Action.GetTag())
+			if (BeatRes.BeatIndex == 0 && WinRes.VisualWindow == EBBMVisualWindow::ImpactWindow)
 			{
-				bFoundBeat0Anim = true;
+				if (const FBBMCombatantActionLog* LogPtr = WinRes.CombatLogs.Find(Hero))
+				{
+					if (LogPtr->AnimationTags.HasTag(BBMAnimationTags::Animation_Action))
+					{
+						bFoundBeat0Anim = true;
+					}
+				}
 			}
-		}
-		if (Ev.Instigator == Hero && Ev.BeatIndex == 1 && Ev.VisualWindow == EBBMVisualWindow::PrepDefenseWindow)
-		{
-			if (Ev.AnimationStateTag == BBMAnimationTags::Animation_Action.GetTag())
+			if (BeatRes.BeatIndex == 1 && WinRes.VisualWindow == EBBMVisualWindow::PrepDefenseWindow)
 			{
-				bFoundBeat1PureAnim = true;
+				if (const FBBMCombatantActionLog* LogPtr = WinRes.CombatLogs.Find(Hero))
+				{
+					if (LogPtr->AnimationTags.HasTag(BBMAnimationTags::Animation_Action))
+					{
+						bFoundBeat1PureAnim = true;
+					}
+				}
 			}
 		}
 	}
 
 	TestTrue(TEXT("비트 0 액션 실행 시 AnimationStateTag 정상 수집 검증"), bFoundBeat0Anim);
 	TestTrue(TEXT("비트 1 액션 부재 시 순수 애니메이션 이벤트 및 AnimationStateTag 정상 발행 검증"), bFoundBeat1PureAnim);
+
+	// 전투원 및 AttributeSet 스냅샷 리플렉션 순회 헬퍼 함수 검증
+	const FBBMCombatantSnapshot HeroSnapshot = Hero->CreateAttributeSnapshot();
+	TestTrue(TEXT("Hero 어트리뷰트 스냅샷에 속성이 캡처되어야 함"), HeroSnapshot.AttributeValues.Num() > 0);
+	TestEqual(TEXT("Hero 스냅샷 Health 값 일치 검증"), HeroSnapshot.GetAttributeValue(UBBMAttributeSet::GetHealthAttribute()), Hero->GetAttributeValue(UBBMAttributeSet::GetHealthAttribute()));
+	TestTrue(TEXT("Hero 스냅샷 MaxHealth 유효 검증"), HeroSnapshot.GetAttributeValue(UBBMAttributeSet::GetMaxHealthAttribute()) > 0.0f);
 
 	// 정리
 	CombatMgr->ClearCurrentEncounter();

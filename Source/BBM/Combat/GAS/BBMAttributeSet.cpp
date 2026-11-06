@@ -71,3 +71,23 @@ void UBBMAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbac
 		DefensePower.SetCurrentValue(FMath::Max(GetDefensePower(), 0.0f));
 	}
 }
+
+FBBMCombatantSnapshot UBBMAttributeSet::CreateAttributeSnapshot() const
+{
+	FBBMCombatantSnapshot OutSnapshot;
+
+	// 언리얼 프로퍼티 리플렉션을 순회하여 FGameplayAttributeData 타입 속성 캡처
+	for (TFieldIterator<FProperty> It(GetClass()); It; ++It)
+	{
+		if (const FStructProperty* StructProp = CastField<FStructProperty>(*It))
+		{
+			if (StructProp->Struct == FGameplayAttributeData::StaticStruct())
+			{
+				const FGameplayAttribute Attr(*It);
+				OutSnapshot.AttributeValues.Add(Attr, Attr.GetNumericValue(this));
+			}
+		}
+	}
+
+	return OutSnapshot;
+}

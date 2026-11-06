@@ -158,10 +158,10 @@ void ABBMPlayerController::SimulateCombatTurn()
 		return;
 	}
 
-	TArray<FBBMCombatStepVisualEvent> OutVisualEvents;
-	const bool bResult = CombatMgr->SimulateTurn(OutVisualEvents);
-	UE_LOG(LogTemp, Log, TEXT("[ABBMPlayerController::SimulateCombatTurn] SimulateTurn Result=%s, VisualEvents Count=%d"),
-		bResult ? TEXT("True") : TEXT("False"), OutVisualEvents.Num());
+	FBBMTurnVisualResult OutTurnResult;
+	const bool bResult = CombatMgr->SimulateTurn(OutTurnResult);
+	UE_LOG(LogTemp, Log, TEXT("[ABBMPlayerController::SimulateCombatTurn] SimulateTurn Result=%s, BeatResults Count=%d"),
+		bResult ? TEXT("True") : TEXT("False"), OutTurnResult.BeatResults.Num());
 }
 
 void ABBMPlayerController::ForceWinCombat()
@@ -188,8 +188,8 @@ void ABBMPlayerController::ForceWinCombat()
 		}
 	}
 
-	TArray<FBBMCombatStepVisualEvent> OutVisualEvents;
-	CombatMgr->SimulateTurn(OutVisualEvents);
+	FBBMTurnVisualResult OutTurnResult;
+	CombatMgr->SimulateTurn(OutTurnResult);
 	UE_LOG(LogTemp, Log, TEXT("[ABBMPlayerController::ForceWinCombat] Set %d enemies health to 0 and triggered SimulateTurn."), Enemies.Num());
 }
 

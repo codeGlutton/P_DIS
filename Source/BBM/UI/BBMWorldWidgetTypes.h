@@ -40,7 +40,10 @@ enum class EBBMWidgetZOrder : uint8
 	FadeLoading  = 50  UMETA(DisplayName = "Fade & Loading (50)"),
 
 	/* 최상단 시스템 메시지, 에러 팝업, 디버그 오버레이 (60) */
-	System       = 60  UMETA(DisplayName = "System / Debug (60)")
+	System          = 60  UMETA(DisplayName = "System / Debug (60)"),
+
+	/* 위젯 클래스 정의의 DefaultZOrderLayer 사용 (255) */
+	UseClassDefault = 255 UMETA(DisplayName = "Use Class Default")
 };
 
 /**
@@ -110,12 +113,8 @@ struct BBM_API FBBMWorldWidgetConfig
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
 	EBBMWidgetCreationPhase CreationPhase = EBBMWidgetCreationPhase::BeforeEncounter;
 
-	/* 뷰포트 ZOrder 레이어 */
+	/* 뷰포트 ZOrder 레이어 (UseClassDefault일 경우 위젯 클래스 자체의 기본값 유지) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
-	EBBMWidgetZOrder ZOrderLayer = EBBMWidgetZOrder::Base;
-
-	/* 생성 직후 Open() 호출 여부 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
-	bool bAutoOpen = true;
+	EBBMWidgetZOrder ZOrderLayer = EBBMWidgetZOrder::UseClassDefault;
 };
 

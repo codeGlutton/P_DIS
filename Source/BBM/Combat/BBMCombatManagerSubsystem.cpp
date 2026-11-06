@@ -25,6 +25,28 @@
 #include "AbilitySystemComponent.h"
 #include "Engine/World.h"
 
+namespace
+{
+	FORCEINLINE EBBMVisualWindow MapActionCategoryToVisualWindow(EBBMActionCategory Category)
+	{
+		switch (Category)
+		{
+		case EBBMActionCategory::PreMovement:
+			return EBBMVisualWindow::PreMoveWindow;
+		case EBBMActionCategory::PreBuffDebuff:
+		case EBBMActionCategory::Defense:
+			return EBBMVisualWindow::PrepDefenseWindow;
+		case EBBMActionCategory::Damage:
+		case EBBMActionCategory::PostBuffDebuff:
+			return EBBMVisualWindow::ImpactWindow;
+		case EBBMActionCategory::PostMovement:
+			return EBBMVisualWindow::PostMoveWindow;
+		default:
+			return EBBMVisualWindow::ImpactWindow;
+		}
+	}
+}
+
 UBBMCombatManagerSubsystem::UBBMCombatManagerSubsystem()
 {
 }
@@ -265,7 +287,6 @@ void UBBMCombatManagerSubsystem::ClearCurrentEncounter()
 {
 	ActiveCombatEncounterDef = nullptr;
 	ActiveBeatRangeHandles.Empty();
-	ActiveBeatAnimLayerTags.Empty();
 	PendingRewardItemIds.Empty();
 
 	// 1D 라인 슬롯 비우기
@@ -359,7 +380,7 @@ bool UBBMCombatManagerSubsystem::RemoveCombatantFromLane(ABBMCombatantBase* Comb
 	return bRemoved;
 }
 
-ABBMCombatantBase* UBBMCombatManagerSubsystem::GetFrontlineCombatant(EBBMCombatLane Lane) const
+ABBMCombatantBase* UBBMCombatManagerSubsystem::GetFrontlineCombatant(EBBMCombatLane Lane, bool bLivingOnly) const
 {
 	const FBBM1DCombatLane& TargetLane = (Lane == EBBMCombatLane::AllyLane) ? AllyLane : EnemyLane;
 
@@ -367,8 +388,7 @@ ABBMCombatantBase* UBBMCombatManagerSubsystem::GetFrontlineCombatant(EBBMCombatL
 	{
 		if (ABBMCombatantBase* Combatant = SlotPtr.Get())
 		{
-			const UBBMAttributeSet* AttrSet = Combatant->GetAttributeSet();
-			if (AttrSet != nullptr && AttrSet->GetHealth() > 0.0f)
+			if (bLivingOnly == false || Combatant->IsDead() == false)
 			{
 				return Combatant;
 			}
@@ -378,24 +398,69 @@ ABBMCombatantBase* UBBMCombatManagerSubsystem::GetFrontlineCombatant(EBBMCombatL
 	return nullptr;
 }
 
-TArray<ABBMCombatantBase*> UBBMCombatManagerSubsystem::GetLivingCombatantsInLane(EBBMCombatLane Lane) const
+ABBMCombatantBase* UBBMCombatManagerSubsystem::GetLivingFrontlineCombatant(EBBMCombatLane Lane) const
 {
-	TArray<ABBMCombatantBase*> LivingList;
+	return GetFrontlineCombatant(Lane, true);
+}
+
+TArray<ABBMCombatantBase*> UBBMCombatManagerSubsystem::GetCombatantsInLane(EBBMCombatLane Lane, bool bLivingOnly) const
+{
+	TArray<ABBMCombatantBase*> List;
 	const FBBM1DCombatLane& TargetLane = (Lane == EBBMCombatLane::AllyLane) ? AllyLane : EnemyLane;
+	List.Reserve(TargetLane.Slots.Num());
 
 	for (const TWeakObjectPtr<ABBMCombatantBase>& SlotPtr : TargetLane.Slots)
 	{
 		if (ABBMCombatantBase* Combatant = SlotPtr.Get())
 		{
-			const UBBMAttributeSet* AttrSet = Combatant->GetAttributeSet();
-			if (AttrSet != nullptr && AttrSet->GetHealth() > 0.0f)
+			if (bLivingOnly == false || Combatant->IsDead() == false)
 			{
-				LivingList.Add(Combatant);
+				List.Add(Combatant);
 			}
 		}
 	}
 
-	return LivingList;
+	return List;
+}
+
+TArray<ABBMCombatantBase*> UBBMCombatManagerSubsystem::GetLivingCombatantsInLane(EBBMCombatLane Lane) const
+{
+	return GetCombatantsInLane(Lane, true);
+}
+
+TArray<ABBMCombatantBase*> UBBMCombatManagerSubsystem::GetAllCombatants(bool bLivingOnly) const
+{
+	TArray<ABBMCombatantBase*> ResultList;
+	ResultList.Reserve(AllyLane.Slots.Num() + EnemyLane.Slots.Num());
+
+	for (const TWeakObjectPtr<ABBMCombatantBase>& SlotPtr : AllyLane.Slots)
+	{
+		if (ABBMCombatantBase* Combatant = SlotPtr.Get())
+		{
+			if (bLivingOnly == false || Combatant->IsDead() == false)
+			{
+				ResultList.Add(Combatant);
+			}
+		}
+	}
+
+	for (const TWeakObjectPtr<ABBMCombatantBase>& SlotPtr : EnemyLane.Slots)
+	{
+		if (ABBMCombatantBase* Combatant = SlotPtr.Get())
+		{
+			if (bLivingOnly == false || Combatant->IsDead() == false)
+			{
+				ResultList.Add(Combatant);
+			}
+		}
+	}
+
+	return ResultList;
+}
+
+TArray<ABBMCombatantBase*> UBBMCombatManagerSubsystem::GetAllLivingCombatants() const
+{
+	return GetAllCombatants(true);
 }
 
 void UBBMCombatManagerSubsystem::ShiftLane(EBBMCombatLane Lane, EBBMLaneShiftDirection Direction, int32 StepCount)
@@ -445,7 +510,7 @@ void UBBMCombatManagerSubsystem::SwapSlots(EBBMCombatLane Lane, int32 SlotA, int
 	}
 }
 
-float UBBMCombatManagerSubsystem::ResolveAttack(ABBMCombatantBase* Instigator, ABBMCombatantBase* Target, float BaseDamage, bool bTargetParrying)
+float UBBMCombatManagerSubsystem::ResolveAttack(ABBMCombatantBase* Instigator, ABBMCombatantBase* Target, float BaseDamage, bool bTargetParrying, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs)
 {
 	if (Target == nullptr || BaseDamage <= 0.0f)
 	{
@@ -474,11 +539,6 @@ float UBBMCombatManagerSubsystem::ResolveAttack(ABBMCombatantBase* Instigator, A
 	TargetASC->SetNumericAttributeBase(UBBMAttributeSet::GetTurnArmorAttribute(), NewTurnArmor);
 	RemainingDamage -= TurnAbsorb;
 
-	if (RemainingDamage <= 0.0f)
-	{
-		return 0.0f;
-	}
-
 	// 3단계: 지속 방어도(Armor) 차감 (전투 내내 누적된 지속 방어력으로 2차 흡수)
 	const float CurrentArmor = TargetAttr->GetArmor();
 	const float ArmorAbsorb = FMath::Min(CurrentArmor, RemainingDamage);
@@ -486,35 +546,62 @@ float UBBMCombatManagerSubsystem::ResolveAttack(ABBMCombatantBase* Instigator, A
 	TargetASC->SetNumericAttributeBase(UBBMAttributeSet::GetArmorAttribute(), NewArmor);
 	RemainingDamage -= ArmorAbsorb;
 
-	if (RemainingDamage <= 0.0f)
-	{
-		return 0.0f;
-	}
-
 	// 4단계: 남은 데미지 처리 (최종 체력 차감)
 	const float CurrentHealth = TargetAttr->GetHealth();
 	const float ActualHealthDamage = FMath::Min(CurrentHealth, RemainingDamage);
 	const float NewHealth = FMath::Max(0.0f, CurrentHealth - RemainingDamage);
 	TargetASC->SetNumericAttributeBase(UBBMAttributeSet::GetHealthAttribute(), NewHealth);
 
+	// 5단계: 전투 로그 및 델타 수치 기록
+	FBBMCombatantActionLog& TargetLog = OutCombatLogs.FindOrAdd(Target);
+
+	if (TurnAbsorb > 0.0f)
+	{
+		float& Delta = TargetLog.AttributeDeltas.FindOrAdd(UBBMAttributeSet::GetTurnArmorAttribute());
+		Delta -= TurnAbsorb;
+	}
+
+	if (ArmorAbsorb > 0.0f)
+	{
+		float& Delta = TargetLog.AttributeDeltas.FindOrAdd(UBBMAttributeSet::GetArmorAttribute());
+		Delta -= ArmorAbsorb;
+	}
+
+	if (ActualHealthDamage > 0.0f)
+	{
+		float& Delta = TargetLog.AttributeDeltas.FindOrAdd(UBBMAttributeSet::GetHealthAttribute());
+		Delta -= ActualHealthDamage;
+	}
+
+	if (TurnAbsorb > 0.0f || ArmorAbsorb > 0.0f || ActualHealthDamage > 0.0f)
+	{
+		TargetLog.AnimationTags.AddTag(BBMAnimationTags::Animation_Hit);
+	}
+
+	if (Target->IsDead() == true)
+	{
+		TargetLog.bIsDead = true;
+		TargetLog.AnimationTags.AddTag(BBMAnimationTags::Animation_Death);
+	}
+
 	return ActualHealthDamage;
 }
 
-TArray<float> UBBMCombatManagerSubsystem::ResolveMultiAttack(ABBMCombatantBase* Instigator, const TArray<ABBMCombatantBase*>& Targets, float BaseDamage)
+TArray<float> UBBMCombatManagerSubsystem::ResolveMultiAttack(ABBMCombatantBase* Instigator, const TArray<ABBMCombatantBase*>& Targets, float BaseDamage, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs)
 {
 	TArray<float> DamageResults;
 	DamageResults.Reserve(Targets.Num());
 
 	for (ABBMCombatantBase* Target : Targets)
 	{
-		const float Dealt = ResolveAttack(Instigator, Target, BaseDamage, false);
+		const float Dealt = ResolveAttack(Instigator, Target, BaseDamage, false, OutCombatLogs);
 		DamageResults.Add(Dealt);
 	}
 
 	return DamageResults;
 }
 
-void UBBMCombatManagerSubsystem::AddPersistentArmor(ABBMCombatantBase* Target, float Amount)
+void UBBMCombatManagerSubsystem::AddPersistentArmor(ABBMCombatantBase* Target, float Amount, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs)
 {
 	if (Target == nullptr || Amount <= 0.0f)
 	{
@@ -527,10 +614,14 @@ void UBBMCombatManagerSubsystem::AddPersistentArmor(ABBMCombatantBase* Target, f
 	{
 		const float NewArmor = AttrSet->GetArmor() + Amount;
 		ASC->SetNumericAttributeBase(UBBMAttributeSet::GetArmorAttribute(), NewArmor);
+
+		FBBMCombatantActionLog& Log = OutCombatLogs.FindOrAdd(Target);
+		float& Delta = Log.AttributeDeltas.FindOrAdd(UBBMAttributeSet::GetArmorAttribute());
+		Delta += Amount;
 	}
 }
 
-void UBBMCombatManagerSubsystem::AddTurnArmor(ABBMCombatantBase* Target, float Amount)
+void UBBMCombatManagerSubsystem::AddTurnArmor(ABBMCombatantBase* Target, float Amount, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs)
 {
 	if (Target == nullptr || Amount <= 0.0f)
 	{
@@ -543,10 +634,14 @@ void UBBMCombatManagerSubsystem::AddTurnArmor(ABBMCombatantBase* Target, float A
 	{
 		const float NewTurnArmor = AttrSet->GetTurnArmor() + Amount;
 		ASC->SetNumericAttributeBase(UBBMAttributeSet::GetTurnArmorAttribute(), NewTurnArmor);
+
+		FBBMCombatantActionLog& Log = OutCombatLogs.FindOrAdd(Target);
+		float& Delta = Log.AttributeDeltas.FindOrAdd(UBBMAttributeSet::GetTurnArmorAttribute());
+		Delta += Amount;
 	}
 }
 
-void UBBMCombatManagerSubsystem::ClearTurnArmor(ABBMCombatantBase* Target)
+void UBBMCombatManagerSubsystem::ClearTurnArmor(ABBMCombatantBase* Target, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs)
 {
 	if (Target == nullptr)
 	{
@@ -554,26 +649,30 @@ void UBBMCombatManagerSubsystem::ClearTurnArmor(ABBMCombatantBase* Target)
 	}
 
 	UAbilitySystemComponent* ASC = Target->GetAbilitySystemComponent();
-	if (ASC != nullptr)
+	UBBMAttributeSet* AttrSet = Target->GetAttributeSet();
+	if (ASC != nullptr && AttrSet != nullptr)
 	{
+		const float PrevTurnArmor = AttrSet->GetTurnArmor();
 		ASC->SetNumericAttributeBase(UBBMAttributeSet::GetTurnArmorAttribute(), 0.0f);
+
+		if (PrevTurnArmor > 0.0f)
+		{
+			FBBMCombatantActionLog& Log = OutCombatLogs.FindOrAdd(Target);
+			float& Delta = Log.AttributeDeltas.FindOrAdd(UBBMAttributeSet::GetTurnArmorAttribute());
+			Delta -= PrevTurnArmor;
+		}
 	}
 }
 
-void UBBMCombatManagerSubsystem::ClearAllTurnArmors()
+void UBBMCombatManagerSubsystem::ClearAllTurnArmors(TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs)
 {
-	for (ABBMCombatantBase* Combatant : GetLivingCombatantsInLane(EBBMCombatLane::AllyLane))
+	for (ABBMCombatantBase* Combatant : GetAllLivingCombatants())
 	{
-		ClearTurnArmor(Combatant);
-	}
-
-	for (ABBMCombatantBase* Combatant : GetLivingCombatantsInLane(EBBMCombatLane::EnemyLane))
-	{
-		ClearTurnArmor(Combatant);
+		ClearTurnArmor(Combatant, OutCombatLogs);
 	}
 }
 
-void UBBMCombatManagerSubsystem::ApplyStatusEffect(ABBMCombatantBase* Target, const FGameplayTag& StatusTag, int32 StacksToAdd)
+void UBBMCombatManagerSubsystem::ApplyStatusEffect(ABBMCombatantBase* Target, const FGameplayTag& StatusTag, int32 StacksToAdd, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs)
 {
 	if (Target == nullptr || StatusTag.IsValid() == false || StacksToAdd <= 0)
 	{
@@ -583,6 +682,10 @@ void UBBMCombatManagerSubsystem::ApplyStatusEffect(ABBMCombatantBase* Target, co
 	if (UAbilitySystemComponent* ASC = Target->GetAbilitySystemComponent())
 	{
 		ASC->AddLooseGameplayTag(StatusTag, StacksToAdd);
+
+		FBBMCombatantActionLog& Log = OutCombatLogs.FindOrAdd(Target);
+		int32& Delta = Log.StatusStackDeltas.FindOrAdd(StatusTag);
+		Delta += StacksToAdd;
 	}
 }
 
@@ -601,13 +704,9 @@ int32 UBBMCombatManagerSubsystem::GetStatusStacks(const ABBMCombatantBase* Targe
 	return 0;
 }
 
-void UBBMCombatManagerSubsystem::ProcessTurnEndStatusTicks()
+void UBBMCombatManagerSubsystem::ProcessTurnEndStatusTicks(TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs)
 {
-	// 모든 살아있는 전투원 수집
-	TArray<ABBMCombatantBase*> AllCombatants = GetLivingCombatantsInLane(EBBMCombatLane::AllyLane);
-	AllCombatants.Append(GetLivingCombatantsInLane(EBBMCombatLane::EnemyLane));
-
-	for (ABBMCombatantBase* Combatant : AllCombatants)
+	for (ABBMCombatantBase* Combatant : GetAllCombatants())
 	{
 		if (Combatant == nullptr)
 		{
@@ -624,16 +723,24 @@ void UBBMCombatManagerSubsystem::ProcessTurnEndStatusTicks()
 		const int32 PoisonStacks = ASC->GetTagCount(BBMStatusTags::Status_Poison);
 		if (PoisonStacks > 0)
 		{
-			ResolveAttack(nullptr, Combatant, static_cast<float>(PoisonStacks), false);
+			ResolveAttack(nullptr, Combatant, static_cast<float>(PoisonStacks), false, OutCombatLogs);
 			ASC->RemoveLooseGameplayTag(BBMStatusTags::Status_Poison, 1);
+
+			FBBMCombatantActionLog& Log = OutCombatLogs.FindOrAdd(Combatant);
+			int32& StackDelta = Log.StatusStackDeltas.FindOrAdd(BBMStatusTags::Status_Poison);
+			StackDelta -= 1;
 		}
 
 		// 2. 화상 상태이상 처리 (기본 고정 피해 5.0f 적용 후 1스택 차감)
 		const int32 BurnStacks = ASC->GetTagCount(BBMStatusTags::Status_Burn);
 		if (BurnStacks > 0)
 		{
-			ResolveAttack(nullptr, Combatant, 5.0f, false);
+			ResolveAttack(nullptr, Combatant, 5.0f, false, OutCombatLogs);
 			ASC->RemoveLooseGameplayTag(BBMStatusTags::Status_Burn, 1);
+
+			FBBMCombatantActionLog& Log = OutCombatLogs.FindOrAdd(Combatant);
+			int32& StackDelta = Log.StatusStackDeltas.FindOrAdd(BBMStatusTags::Status_Burn);
+			StackDelta -= 1;
 		}
 	}
 }
@@ -730,72 +837,76 @@ void UBBMCombatManagerSubsystem::RemoveItemGrantedEffects(ABBMCombatantBase* Tar
 	}
 }
 
-namespace
+bool UBBMCombatManagerSubsystem::SimulateTurn(FBBMTurnVisualResult& OutTurnResult)
 {
-	FORCEINLINE EBBMVisualWindow MapActionCategoryToVisualWindow(EBBMActionCategory Category)
-	{
-		switch (Category)
-		{
-		case EBBMActionCategory::PreMovement:
-			return EBBMVisualWindow::PreMoveWindow;
-		case EBBMActionCategory::PreBuffDebuff:
-		case EBBMActionCategory::Defense:
-			return EBBMVisualWindow::PrepDefenseWindow;
-		case EBBMActionCategory::Damage:
-		case EBBMActionCategory::PostBuffDebuff:
-			return EBBMVisualWindow::ImpactWindow;
-		case EBBMActionCategory::PostMovement:
-			return EBBMVisualWindow::PostMoveWindow;
-		default:
-			return EBBMVisualWindow::ImpactWindow;
-		}
-	}
-}
+	OutTurnResult.BeatResults.Empty();
+	OutTurnResult.TurnEndResult = FBBMVisualWindowResult();
 
-bool UBBMCombatManagerSubsystem::SimulateTurn(TArray<FBBMCombatStepVisualEvent>& OutVisualEvents)
-{
-	OutVisualEvents.Empty();
-
-	// 2. 한 턴 시작 시 행동 처리 (플레이어 비트 시퀀스 업데이트) 및 캐릭터 죽음 및 승패 체크
-	for (ABBMCombatantBase* Ally : GetLivingCombatantsInLane(EBBMCombatLane::AllyLane))
+	// 1. 한 턴 시작 시 행동 처리: 플레이어 상인(ABBMPlayerMerchantBase) 비트 시퀀스 업데이트
+	for (ABBMCombatantBase* Combatant : GetAllCombatants())
 	{
-		if (Ally != nullptr)
+		if (ABBMPlayerMerchantBase* Merchant = Cast<ABBMPlayerMerchantBase>(Combatant))
 		{
-			Ally->UpdateBeatSequence();
+			Merchant->UpdateBeatSequence();
 		}
 	}
 
 	bool bEnded = false;
 	bool bVictory = false;
-	if (CheckBattleOutcome(bEnded, bVictory) == true && bEnded == true)
-	{
-		return false;
-	}
 
-	// 3. 비트 루프 (비트 0 ~ 7 순회: 4~8번 반복)
+	// 2. 비트 루프 (비트 0 ~ 7)
 	for (int32 BeatIndex = 0; BeatIndex < 8; ++BeatIndex)
 	{
-		// 4. 한 비트 시작: Effect Range / Anim Layer 시작점 일치 시 적용
-		ProcessBeatStart(BeatIndex);
+		FBBMBeatResult CurrentBeatResult;
+		CurrentBeatResult.BeatIndex = BeatIndex;
 
-		// 5. EBBMActionCategory의 순서대로(0~5) 논리 처리. 동일 카테고리에서는 아군->적군 순서대로 순차 처리
-		for (uint8 CatIdx = 0; CatIdx <= static_cast<uint8>(EBBMActionCategory::PostMovement); ++CatIdx)
+		// 3. 한 비트 시작: Effect Range 시작점 적용 및 Anim Layer 전환 태그 수집
+		ProcessBeatStart(BeatIndex, CurrentBeatResult.StartAnimLayerTags);
+
+		// 4. 4대 비주얼 윈도우 순차 연출 처리
+
+		uint8 VisualIdx = 0;
+		uint8 ActionIdx = 0;
+		for (; VisualIdx <= static_cast<uint8>(EBBMVisualWindow::PostMoveWindow); ++VisualIdx)
 		{
-			const EBBMActionCategory CurrentCategory = static_cast<EBBMActionCategory>(CatIdx);
-			const EBBMVisualWindow CurrentWindow = MapActionCategoryToVisualWindow(CurrentCategory);
+			const EBBMVisualWindow VisualWindow = static_cast<EBBMVisualWindow>(VisualIdx);
 
-			// 아군 처리
-			ExecuteCombatantsActionForCategory(EBBMCombatLane::AllyLane, BeatIndex, CurrentCategory, CurrentWindow, OutVisualEvents);
+			FBBMVisualWindowResult CurrentWindowResult;
+			CurrentWindowResult.VisualWindow = VisualWindow;
 
-			// 적군 처리
-			ExecuteCombatantsActionForCategory(EBBMCombatLane::EnemyLane, BeatIndex, CurrentCategory, CurrentWindow, OutVisualEvents);
+			for (; ActionIdx <= static_cast<uint8>(EBBMActionCategory::PostMovement); ++ActionIdx)
+			{
+				const EBBMActionCategory ActionCategory = static_cast<EBBMActionCategory>(ActionIdx);
+				if (MapActionCategoryToVisualWindow(ActionCategory) != VisualWindow)
+				{
+					break;
+				}
+
+				// 5. 아군 처리
+				ExecuteCombatantsActionForCategory(EBBMCombatLane::AllyLane, BeatIndex, ActionCategory, VisualWindow, CurrentWindowResult);
+				// 6. 적군 처리
+				ExecuteCombatantsActionForCategory(EBBMCombatLane::EnemyLane, BeatIndex, ActionCategory, VisualWindow, CurrentWindowResult);
+			}
+
+			// 해당 윈도우 종료 시점의 모든 전투원 스탯 스냅샷 기록
+			for (ABBMCombatantBase* Combatant : GetAllCombatants())
+			{
+				if (Combatant != nullptr)
+				{
+					CurrentWindowResult.Snapshots.Add(Combatant, Combatant->CreateAttributeSnapshot());
+				}
+			}
+
+			CurrentBeatResult.WindowResults.Add(MoveTemp(CurrentWindowResult));
 		}
 
-		// 7. 하나의 비트 종료: Effect Range / Anim Layer 종료점 일치 시 제거
-		ProcessBeatEnd(BeatIndex);
+		// 7. 하나의 비트 종료: Effect Range 종료점 해제 및 Anim Layer 해제 태그 수집
+		ProcessBeatEnd(BeatIndex, CurrentBeatResult.EndAnimLayerTags);
 
-		// 8. 캐릭터 죽음 및 승패 체크
-		CheckAndProcessDeadCombatants(OutVisualEvents, BeatIndex);
+		// 8. 캐릭터 죽음 정리 (순수 논리 정리만 수행)
+		CheckAndProcessDeadCombatants();
+
+		OutTurnResult.BeatResults.Add(MoveTemp(CurrentBeatResult));
 
 		if (CheckBattleOutcome(bEnded, bVictory) == true && bEnded == true)
 		{
@@ -803,42 +914,61 @@ bool UBBMCombatManagerSubsystem::SimulateTurn(TArray<FBBMCombatStepVisualEvent>&
 		}
 	}
 
-	// 6. UI쪽 ViewModel에 변화 목록 전달 (델리게이트 브로드캐스트)
-	if (OutVisualEvents.IsEmpty() == false)
+	// 9. 턴 종료 연출 처리 (미종료 시)
+	if (bEnded == false)
 	{
-		OnVisualEventsDispatched.Broadcast(OutVisualEvents);
+		ProcessTurnEndStatusTicks(OutTurnResult.StatusTickResult.CombatLogs);
+
+		// 해당 윈도우 종료 시점의 모든 전투원 스탯 스냅샷 기록
+		for (ABBMCombatantBase* Combatant : GetAllCombatants())
+		{
+			if (Combatant != nullptr)
+			{
+				OutTurnResult.StatusTickResult.Snapshots.Add(Combatant, Combatant->CreateAttributeSnapshot());
+			}
+		}
+
+		ClearAllTurnArmors(OutTurnResult.TurnEndResult.CombatLogs);
+
+		// 해당 윈도우 종료 시점의 모든 전투원 스탯 스냅샷 기록
+		for (ABBMCombatantBase* Combatant : GetAllCombatants())
+		{
+			if (Combatant != nullptr)
+			{
+				OutTurnResult.TurnEndResult.Snapshots.Add(Combatant, Combatant->CreateAttributeSnapshot());
+			}
+		}
+
+		CheckAndProcessDeadCombatants();
+		CheckBattleOutcome(bEnded, bVictory);
 	}
 
-	// 10. 턴 종료 시 행동 처리: 상태이상 틱, 턴 방어도 초기화, AI들의 비트 시퀀스 업데이트
-	ProcessTurnEndStatusTicks();
-	ClearAllTurnArmors();
+	// 턴 전체 완료 델리게이트 브로드캐스트
+	OnTurnSimulationFinishedNative.Broadcast(OutTurnResult);
 
-	for (ABBMCombatantBase* Enemy : GetLivingCombatantsInLane(EBBMCombatLane::EnemyLane))
+	if (bEnded == true)
 	{
-		if (Enemy != nullptr)
+		ProcessBattleOutcome(bVictory);
+	}
+	else
+	{
+		for (ABBMCombatantBase* Combatant : GetAllCombatants())
 		{
-			Enemy->UpdateBeatSequence();
+			if (ABBMAICombatantBase* AICombatant = Cast<ABBMAICombatantBase>(Combatant))
+			{
+				AICombatant->UpdateBeatSequence();
+			}
 		}
 	}
-
-	CheckAndProcessDeadCombatants(OutVisualEvents, 7);
-	CheckBattleOutcome(bEnded, bVictory);
-
-	// UI ViewModel 연출을 위한 비주얼 이벤트 디스패치
-	OnVisualEventsDispatched.Broadcast(OutVisualEvents);
-	OnVisualEventsDispatchedNative.Broadcast(OutVisualEvents);
 
 	return true;
 }
 
-void UBBMCombatManagerSubsystem::ProcessBeatStart(int32 BeatIndex)
+void UBBMCombatManagerSubsystem::ProcessBeatStart(int32 BeatIndex, TMap<TWeakObjectPtr<ABBMCombatantBase>, FGameplayTag>& OutStartAnimLayers)
 {
-	TArray<ABBMCombatantBase*> AllCombatants = GetLivingCombatantsInLane(EBBMCombatLane::AllyLane);
-	AllCombatants.Append(GetLivingCombatantsInLane(EBBMCombatLane::EnemyLane));
-
-	for (ABBMCombatantBase* Combatant : AllCombatants)
+	for (ABBMCombatantBase* Combatant : GetAllCombatants())
 	{
-		if (Combatant == nullptr || Combatant->IsDead() == true)
+		if (Combatant == nullptr)
 		{
 			continue;
 		}
@@ -849,7 +979,7 @@ void UBBMCombatManagerSubsystem::ProcessBeatStart(int32 BeatIndex)
 			continue;
 		}
 
-		const FBBMBeatSequence Seq = Combatant->GetCurrentBeatSequence();
+		const FBBMBeatSequence& Seq = Combatant->GetCurrentBeatSequence();
 
 		// 1. EffectRange 시작점 적용
 		for (const FBBMBeatEffectRange& Range : Seq.EffectRanges)
@@ -890,32 +1020,28 @@ void UBBMCombatManagerSubsystem::ProcessBeatStart(int32 BeatIndex)
 			}
 		}
 
-		// 2. AnimLayer 시작점 링크
+		// 2. AnimLayer 시작점 태그 수집 (실제 링크는 연출 시스템에 위임)
 		for (const FBBMBeatAnimLayerRange& LayerRange : Seq.AnimLayerRanges)
 		{
 			if (LayerRange.IsStartingAtBeat(BeatIndex) == true && LayerRange.AnimLayerTag.IsValid() == true)
 			{
-				Combatant->LinkAnimLayerByTag(LayerRange.AnimLayerTag);
-				ActiveBeatAnimLayerTags.FindOrAdd(Combatant).Add(LayerRange.AnimLayerTag);
+				OutStartAnimLayers.Add(Combatant, LayerRange.AnimLayerTag);
 			}
 		}
 	}
 }
 
-void UBBMCombatManagerSubsystem::ProcessBeatEnd(int32 BeatIndex)
+void UBBMCombatManagerSubsystem::ProcessBeatEnd(int32 BeatIndex, TMap<TWeakObjectPtr<ABBMCombatantBase>, FGameplayTag>& OutEndAnimLayers)
 {
-	TArray<ABBMCombatantBase*> AllCombatants = GetLivingCombatantsInLane(EBBMCombatLane::AllyLane);
-	AllCombatants.Append(GetLivingCombatantsInLane(EBBMCombatLane::EnemyLane));
-
-	for (ABBMCombatantBase* Combatant : AllCombatants)
+	for (ABBMCombatantBase* Combatant : GetAllCombatants())
 	{
-		if (Combatant == nullptr || Combatant->IsDead() == true)
+		if (Combatant == nullptr)
 		{
 			continue;
 		}
 
 		UAbilitySystemComponent* ASC = Combatant->GetAbilitySystemComponent();
-		const FBBMBeatSequence Seq = Combatant->GetCurrentBeatSequence();
+		const FBBMBeatSequence& Seq = Combatant->GetCurrentBeatSequence();
 
 		// 1. EffectRange 종료점 해제
 		for (const FBBMBeatEffectRange& Range : Seq.EffectRanges)
@@ -939,32 +1065,28 @@ void UBBMCombatManagerSubsystem::ProcessBeatEnd(int32 BeatIndex)
 			}
 		}
 
-		// 2. AnimLayer 종료점 언링크
+		// 2. AnimLayer 종료점 태그 수집 (실제 언링크는 연출 시스템에 위임)
 		for (const FBBMBeatAnimLayerRange& LayerRange : Seq.AnimLayerRanges)
 		{
 			if (LayerRange.IsEndingAtBeat(BeatIndex) == true && LayerRange.AnimLayerTag.IsValid() == true)
 			{
-				Combatant->UnlinkAnimLayerByTag(LayerRange.AnimLayerTag);
-				if (TArray<FGameplayTag>* TagsPtr = ActiveBeatAnimLayerTags.Find(Combatant))
-				{
-					TagsPtr->Remove(LayerRange.AnimLayerTag);
-				}
+				OutEndAnimLayers.Add(Combatant, LayerRange.AnimLayerTag);
 			}
 		}
 	}
 }
 
-void UBBMCombatManagerSubsystem::ExecuteCombatantsActionForCategory(EBBMCombatLane Lane, int32 BeatIndex, EBBMActionCategory Category, EBBMVisualWindow Window, TArray<FBBMCombatStepVisualEvent>& OutVisualEvents)
+void UBBMCombatManagerSubsystem::ExecuteCombatantsActionForCategory(EBBMCombatLane Lane, int32 BeatIndex, EBBMActionCategory Category, EBBMVisualWindow Window, FBBMVisualWindowResult& InOutWindowResult)
 {
-	TArray<ABBMCombatantBase*> LivingCombatants = GetLivingCombatantsInLane(Lane);
-	for (ABBMCombatantBase* Combatant : LivingCombatants)
+	TArray<ABBMCombatantBase*> Combatants = GetCombatantsInLane(Lane);
+	for (ABBMCombatantBase* Combatant : Combatants)
 	{
-		if (Combatant == nullptr || Combatant->IsDead() == true)
+		if (Combatant == nullptr)
 		{
 			continue;
 		}
 
-		const FBBMBeatSequence Seq = Combatant->GetCurrentBeatSequence();
+		const FBBMBeatSequence& Seq = Combatant->GetCurrentBeatSequence();
 		if (Seq.Beats.IsValidIndex(BeatIndex) == false)
 		{
 			continue;
@@ -973,17 +1095,15 @@ void UBBMCombatManagerSubsystem::ExecuteCombatantsActionForCategory(EBBMCombatLa
 		const FBBMBeatDefinition& BeatDef = Seq.Beats[BeatIndex];
 
 		// 해당 윈도우에 매칭되는 애니메이션 태그 조회
-		FGameplayTag MatchingAnimTag;
 		for (const FBBMBeatAnimationConfig& AnimConfig : BeatDef.Animations)
 		{
+			// 시전자 액션 애니메이션 기록
 			if (AnimConfig.VisualWindow == Window && AnimConfig.StateTag.IsValid())
 			{
-				MatchingAnimTag = AnimConfig.StateTag;
-				break;
+				FBBMCombatantActionLog& InstigatorLog = InOutWindowResult.CombatLogs.FindOrAdd(Combatant);
+				InstigatorLog.AnimationTags.AddTag(AnimConfig.StateTag);
 			}
 		}
-
-		bool bExecutedActionForCategory = false;
 
 		for (const TInstancedStruct<FBBMBeatAction>& ActionStruct : BeatDef.Actions)
 		{
@@ -991,125 +1111,20 @@ void UBBMCombatManagerSubsystem::ExecuteCombatantsActionForCategory(EBBMCombatLa
 			{
 				if (Action->GetActionCategory() == Category)
 				{
-					bExecutedActionForCategory = true;
-
-					// 행동 전 상대 대상 스냅샷 (이벤트 기록용)
-					ABBMCombatantBase* TargetCombatant = nullptr;
-					if (Lane == EBBMCombatLane::AllyLane)
-					{
-						TargetCombatant = GetFrontlineCombatant(EBBMCombatLane::EnemyLane);
-					}
-					else
-					{
-						TargetCombatant = GetFrontlineCombatant(EBBMCombatLane::AllyLane);
-					}
-
-					float PrevTurnArmor = 0.0f;
-					float PrevArmor = 0.0f;
-					float PrevHealth = 0.0f;
-					if (TargetCombatant != nullptr && TargetCombatant->GetAttributeSet() != nullptr)
-					{
-						PrevTurnArmor = TargetCombatant->GetAttributeSet()->GetTurnArmor();
-						PrevArmor = TargetCombatant->GetAttributeSet()->GetArmor();
-						PrevHealth = TargetCombatant->GetAttributeSet()->GetHealth();
-					}
-
-					// 다형성 커맨드 패턴 실행
-					Action->ExecuteAction(this, Combatant);
-
-					// 이벤트 기록
-					FBBMCombatStepVisualEvent Event;
-					Event.BeatIndex = BeatIndex;
-					Event.ActionCategory = Category;
-					Event.VisualWindow = Window;
-					Event.Instigator = Combatant;
-					Event.Target = TargetCombatant;
-					Event.AnimationStateTag = MatchingAnimTag;
-
-					if (TargetCombatant != nullptr && TargetCombatant->GetAttributeSet() != nullptr)
-					{
-						const float PostTurnArmor = TargetCombatant->GetAttributeSet()->GetTurnArmor();
-						const float PostArmor = TargetCombatant->GetAttributeSet()->GetArmor();
-						const float PostHealth = TargetCombatant->GetAttributeSet()->GetHealth();
-
-						Event.TurnArmorAbsorbed = FMath::Max(0.0f, PrevTurnArmor - PostTurnArmor);
-						Event.ArmorAbsorbed = FMath::Max(0.0f, PrevArmor - PostArmor);
-						Event.DamageDealt = FMath::Max(0.0f, PrevHealth - PostHealth);
-						Event.bTargetDied = TargetCombatant->IsDead();
-					}
-
-					OutVisualEvents.Add(Event);
-				}
-			}
-		}
-
-		// 액션이 실행되지 않았지만 해당 윈도우에 매칭되는 애니메이션 태그가 있고, 동일 윈도우 내 액션이 전혀 없는 경우 순수 애니메이션 이벤트 발행
-		if (bExecutedActionForCategory == false && MatchingAnimTag.IsValid())
-		{
-			const bool bIsPrimaryCategoryForWindow =
-				(Window == EBBMVisualWindow::PreMoveWindow && Category == EBBMActionCategory::PreMovement) ||
-				(Window == EBBMVisualWindow::PrepDefenseWindow && Category == EBBMActionCategory::PreBuffDebuff) ||
-				(Window == EBBMVisualWindow::ImpactWindow && Category == EBBMActionCategory::Damage) ||
-				(Window == EBBMVisualWindow::PostMoveWindow && Category == EBBMActionCategory::PostMovement);
-
-			if (bIsPrimaryCategoryForWindow)
-			{
-				bool bHasAnyActionInSameWindow = false;
-				for (const TInstancedStruct<FBBMBeatAction>& ActionStruct : BeatDef.Actions)
-				{
-					if (const FBBMBeatAction* Action = ActionStruct.GetPtr<FBBMBeatAction>())
-					{
-						if (MapActionCategoryToVisualWindow(Action->GetActionCategory()) == Window)
-						{
-							bHasAnyActionInSameWindow = true;
-							break;
-						}
-					}
-				}
-
-				if (bHasAnyActionInSameWindow == false)
-				{
-					FBBMCombatStepVisualEvent AnimEvent;
-					AnimEvent.BeatIndex = BeatIndex;
-					AnimEvent.ActionCategory = Category;
-					AnimEvent.VisualWindow = Window;
-					AnimEvent.Instigator = Combatant;
-					AnimEvent.AnimationStateTag = MatchingAnimTag;
-					OutVisualEvents.Add(AnimEvent);
+					// 다형성 커맨드 패턴 실행 및 전투 로그 전달
+					Action->ExecuteAction(this, Combatant, InOutWindowResult.CombatLogs);
 				}
 			}
 		}
 	}
 }
 
-void UBBMCombatManagerSubsystem::CheckAndProcessDeadCombatants(TArray<FBBMCombatStepVisualEvent>& OutVisualEvents, int32 BeatIndex)
+void UBBMCombatManagerSubsystem::CheckAndProcessDeadCombatants()
 {
-	TArray<ABBMCombatantBase*> AllCombatants;
-	for (const TWeakObjectPtr<ABBMCombatantBase>& Slot : AllyLane.Slots)
-	{
-		if (ABBMCombatantBase* C = Slot.Get())
-		{
-			AllCombatants.Add(C);
-		}
-	}
-	for (const TWeakObjectPtr<ABBMCombatantBase>& Slot : EnemyLane.Slots)
-	{
-		if (ABBMCombatantBase* C = Slot.Get())
-		{
-			AllCombatants.Add(C);
-		}
-	}
-
-	for (ABBMCombatantBase* Combatant : AllCombatants)
+	for (ABBMCombatantBase* Combatant : GetAllCombatants())
 	{
 		if (Combatant != nullptr && Combatant->IsDead() == true)
 		{
-			FBBMCombatStepVisualEvent DeathEvent;
-			DeathEvent.BeatIndex = BeatIndex;
-			DeathEvent.Target = Combatant;
-			DeathEvent.bTargetDied = true;
-			OutVisualEvents.Add(DeathEvent);
-
 			HandleCombatantDeath(Combatant);
 		}
 	}
@@ -1136,16 +1151,6 @@ void UBBMCombatManagerSubsystem::HandleCombatantDeath(ABBMCombatantBase* DeadCom
 			}
 		}
 		ActiveBeatRangeHandles.Remove(DeadCombatant);
-	}
-
-	// 1-2. 걸려있던 Anim Layer를 제거
-	if (TArray<FGameplayTag>* TagsPtr = ActiveBeatAnimLayerTags.Find(DeadCombatant))
-	{
-		for (const FGameplayTag& Tag : *TagsPtr)
-		{
-			DeadCombatant->UnlinkAnimLayerByTag(Tag);
-		}
-		ActiveBeatAnimLayerTags.Remove(DeadCombatant);
 	}
 
 	// 2. 캐싱된 자신과 연관된 행동, Effect Range, Anim Layer 제거 (비트 시퀀스 초기화)
@@ -1196,15 +1201,22 @@ bool UBBMCombatManagerSubsystem::CheckBattleOutcome(bool& bOutCombatEnded, bool&
 	{
 		bOutCombatEnded = true;
 		bOutPlayerVictory = false;
-		OnCombatDefeat.Broadcast();
-		OnCombatDefeatNative.Broadcast();
 		return true;
 	}
 	else if (bEnemiesDead == true)
 	{
 		bOutCombatEnded = true;
 		bOutPlayerVictory = true;
+		return true;
+	}
 
+	return false;
+}
+
+void UBBMCombatManagerSubsystem::ProcessBattleOutcome(bool bVictory)
+{
+	if (bVictory == true)
+	{
 		// 1. UsedEquipmentStorage 전달
 		TArray<UDISItemStack*> UsedEquipmentList;
 		if (ABBMCombatantBase* AllyFront = GetFrontlineCombatant(EBBMCombatLane::AllyLane))
@@ -1219,14 +1231,16 @@ bool UBBMCombatManagerSubsystem::CheckBattleOutcome(bool& bOutCombatEnded, bool&
 		}
 
 		// 2. 보상 아이템 PAD 목록 전달 (PendingRewardItemIds)
-		const TArray<FPrimaryAssetId> RewardItemIds = PendingRewardItemIds;
+		const TArray<FPrimaryAssetId>& RewardItemIds = PendingRewardItemIds;
 
 		OnCombatVictory.Broadcast(UsedEquipmentList, RewardItemIds);
 		OnCombatVictoryNative.Broadcast(UsedEquipmentList, RewardItemIds);
-		return true;
 	}
-
-	return false;
+	else
+	{
+		OnCombatDefeat.Broadcast();
+		OnCombatDefeatNative.Broadcast();
+	}
 }
 
 

@@ -37,16 +37,14 @@ public:
 	 * 위젯 클래스로부터 인스턴스를 생성하고 식별 키로 서브시스템에 등록합니다
 	 * @param WidgetClass 생성할 위젯 클래스 (UBBMUserWidgetBase 파생)
 	 * @param WidgetKey 등록에 사용할 고유 식별 키
-	 * @param ZOrderLayer 위젯의 ZOrder 레이어 (미지정 시 Base)
-	 * @param bAutoOpen 생성 직후 Open() 호출 여부 (기본값: true)
+	 * @param ZOrderLayer 위젯의 ZOrder 레이어 (미지정 시 클래스 자체의 기본값 유지)
 	 * @return 생성 및 등록된 위젯 인스턴스 포인터 (실패 시 nullptr)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI")
 	UBBMUserWidgetBase* CreateAndRegisterWidget(
 		TSubclassOf<UBBMUserWidgetBase> WidgetClass,
 		FName WidgetKey,
-		EBBMWidgetZOrder ZOrderLayer = EBBMWidgetZOrder::Base,
-		bool bAutoOpen = true
+		EBBMWidgetZOrder ZOrderLayer = EBBMWidgetZOrder::UseClassDefault
 	);
 
 	/**

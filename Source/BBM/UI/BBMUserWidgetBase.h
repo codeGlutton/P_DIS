@@ -20,7 +20,7 @@ DECLARE_DELEGATE(FBBMOnWidgetAnimFinishedSignature);
  * BBM 공용 사용자 위젯 베이스 클래스
  * 오픈/클로즈 상태 전환, 전용 애니메이션 연동 및 뷰포트 최적화 수명 주기 정책을 제공함
  */
-UCLASS(Abstract, Blueprintable, meta = (DisplayName = "BBM User Widget Base"))
+UCLASS(BlueprintType, Blueprintable, meta = (DisplayName = "BBM User Widget Base"))
 class BBM_API UBBMUserWidgetBase : public UUserWidget
 {
 	GENERATED_BODY()
@@ -82,6 +82,10 @@ public:
 	/* 기본 ZOrder 레이어 반환 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI")
 	EBBMWidgetZOrder GetDefaultZOrderLayer() const { return DefaultZOrderLayer; }
+
+	/* 기본 ZOrder 레이어 설정 */
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI")
+	void SetDefaultZOrderLayer(EBBMWidgetZOrder InZOrderLayer) { DefaultZOrderLayer = InZOrderLayer; }
 
 	/* 오픈/클로즈 이벤트 확장 */
 protected:

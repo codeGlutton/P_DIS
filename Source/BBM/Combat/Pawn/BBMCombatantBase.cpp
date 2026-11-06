@@ -148,7 +148,7 @@ void ABBMCombatantBase::UpdateBeatSequence()
 	CachedBeatSequence = FBBMBeatSequence();
 }
 
-FBBMBeatSequence ABBMCombatantBase::GetCurrentBeatSequence() const
+const FBBMBeatSequence& ABBMCombatantBase::GetCurrentBeatSequence() const
 {
 	return CachedBeatSequence;
 }
@@ -156,6 +156,15 @@ FBBMBeatSequence ABBMCombatantBase::GetCurrentBeatSequence() const
 UBBMAttributeSet* ABBMCombatantBase::GetAttributeSet() const
 {
 	return AttributeSet;
+}
+
+FBBMCombatantSnapshot ABBMCombatantBase::CreateAttributeSnapshot() const
+{
+	if (AttributeSet != nullptr)
+	{
+		return AttributeSet->CreateAttributeSnapshot();
+	}
+	return FBBMCombatantSnapshot();
 }
 
 void ABBMCombatantBase::InitializeStats()

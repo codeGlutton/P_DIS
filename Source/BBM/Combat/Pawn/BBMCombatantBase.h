@@ -12,6 +12,7 @@
 #include "AbilitySystemInterface.h"
 #include "GenericTeamAgentInterface.h"
 #include "Combat/Team/BBMTeamTypes.h"
+#include "Combat/BBMCombatTypes.h"
 #include "Item/BBMBeatTypes.h"
 #include "Containers/Queue.h"
 #include "BBMCombatantBase.generated.h"
@@ -81,13 +82,17 @@ public:
 
 	/* 이번 턴에 캐시된 8비트 행동 시퀀스 반환 */
 	UFUNCTION(Category = "BBM|Beat", BlueprintCallable, BlueprintPure)
-	virtual FBBMBeatSequence GetCurrentBeatSequence() const;
+	virtual const FBBMBeatSequence& GetCurrentBeatSequence() const;
 
 	/* 어트리뷰트 세트 조회 */
 public:
 	/* 전투원의 AttributeSet 반환 */
 	UFUNCTION(Category = "Combat|GAS", BlueprintCallable, BlueprintPure)
 	UBBMAttributeSet* GetAttributeSet() const;
+
+	/* 전투원의 어트리뷰트 스탯 스냅샷 생성 및 반환 */
+	UFUNCTION(Category = "Combat|GAS", BlueprintCallable, BlueprintPure)
+	FBBMCombatantSnapshot CreateAttributeSnapshot() const;
 
 	/* GAS 스탯 초기화 */
 public:

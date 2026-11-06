@@ -55,6 +55,7 @@ bool FBBMWidgetZOrderEnumTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Notification 레이어 값은 40이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::Notification), 40);
 	TestEqual(TEXT("FadeLoading 레이어 값은 50이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::FadeLoading), 50);
 	TestEqual(TEXT("System 레이어 값은 60이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::System), 60);
+	TestEqual(TEXT("UseClassDefault 값은 255여야 함"), static_cast<uint8>(EBBMWidgetZOrder::UseClassDefault), 255);
 
 	return true;
 }
@@ -86,18 +87,14 @@ bool FBBMUserWidgetBaseLifecycleTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("초기 상태에서 IsOpen은 false여야 함"), Widget->IsOpen());
 	TestEqual(TEXT("기본 ZOrder는 Base여야 함"), Widget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Base);
 
-	// 2. ZOrder 변경 세터/게터 검증
-	Widget->SetDefaultZOrderLayer(EBBMWidgetZOrder::Popup);
-	TestEqual(TEXT("ZOrder 변경 후 Popup이어야 함"), Widget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Popup);
-
-	// 3. Open 및 Close 호출 검증
+	// 2. Open 및 Close 호출 검증
 	Widget->Open();
 	TestTrue(TEXT("Open() 호출 후 IsOpen은 true여야 함"), Widget->IsOpen());
 
 	Widget->Close();
 	TestFalse(TEXT("Close() 호출 후 IsOpen은 false여야 함"), Widget->IsOpen());
 
-	// 4. 애니메이션이 없는 상태에서 OpenWithAnim 즉시 완료 검증
+	// 3. 애니메이션이 없는 상태에서 OpenWithAnim 즉시 완료 검증
 	bool bOpenCallbackFired = false;
 	Widget->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bOpenCallbackFired]()
 	{
@@ -106,7 +103,7 @@ bool FBBMUserWidgetBaseLifecycleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("OpenWithAnim 호출 시 애니메이션이 없으면 즉시 완료 대리자 호출됨"), bOpenCallbackFired);
 	TestTrue(TEXT("OpenWithAnim 호출 후 IsOpen은 true여야 함"), Widget->IsOpen());
 
-	// 5. 애니메이션이 없는 상태에서 CloseWithAnim 즉시 완료 검증
+	// 4. 애니메이션이 없는 상태에서 CloseWithAnim 즉시 완료 검증
 	bool bCloseCallbackFired = false;
 	Widget->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bCloseCallbackFired]()
 	{
@@ -147,38 +144,37 @@ bool FBBMWorldWidgetSubsystemTest::RunTest(const FString& Parameters)
 	TestNull(TEXT("nullptr 클래스 전달 시 nullptr 반환"), WidgetSS->CreateAndRegisterWidget(nullptr, TEXT("Invalid")));
 	TestNull(TEXT("NAME_None 키 전달 시 nullptr 반환"), WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), NAME_None));
 
-	// 2. 정상 등록 검증
+	// 2. 기본값 등록 검증 (ZOrder 미지정 시 클래스 자체의 DefaultZOrderLayer=Base 유지, AutoOpen 제거로 닫힌 채 등록)
 	const FName HUDKey(TEXT("MainHUD"));
 	UBBMUserWidgetBase* HUDWidget = WidgetSS->CreateAndRegisterWidget(
 		UBBMUserWidgetBase::StaticClass(),
-		HUDKey,
-		EBBMWidgetZOrder::Base,
-		true
+		HUDKey
 	);
 	TestNotNull(TEXT("MainHUD 등록 성공"), HUDWidget);
 	if (HUDWidget != nullptr)
 	{
-		TestTrue(TEXT("bAutoOpen true일 때 IsOpen은 true여야 함"), HUDWidget->IsOpen());
-		TestEqual(TEXT("ZOrderLayer가 Base로 설정되어야 함"), HUDWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Base);
+		TestFalse(TEXT("등록 직후에는 열려있지 않아야 함"), HUDWidget->IsOpen());
+		TestEqual(TEXT("ZOrder 미지정 시 클래스 기본값(Base) 유지"), HUDWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Base);
+		HUDWidget->Open();
+		TestTrue(TEXT("수동 Open() 후 열림 상태 확인"), HUDWidget->IsOpen());
 	}
 
 	TestEqual(TEXT("등록된 위젯 수는 1이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 1);
 	TestEqual(TEXT("GetWidget으로 등록된 위젯 조회 일치"), WidgetSS->GetWidget(HUDKey), HUDWidget);
 	TestEqual(TEXT("GetWidgetAs 템플릿 조회 일치"), WidgetSS->GetWidgetAs<UBBMUserWidgetBase>(HUDKey), HUDWidget);
 
-	// 3. 동일 키 중복 등록 시 기존 위젯 교체 검증
+	// 3. 동일 키 중복 등록 시 기존 위젯 교체 및 명시적 ZOrder 적용 검증
 	UBBMUserWidgetBase* NewHUDWidget = WidgetSS->CreateAndRegisterWidget(
 		UBBMUserWidgetBase::StaticClass(),
 		HUDKey,
-		EBBMWidgetZOrder::Notification,
-		false
+		EBBMWidgetZOrder::Notification
 	);
 	TestNotNull(TEXT("새 위젯 교체 등록 성공"), NewHUDWidget);
 	if (NewHUDWidget != nullptr && HUDWidget != nullptr)
 	{
 		TestNotEqual(TEXT("기존 위젯과 다른 새 인스턴스여야 함"), HUDWidget, NewHUDWidget);
-		TestFalse(TEXT("bAutoOpen false일 때 IsOpen은 false여야 함"), NewHUDWidget->IsOpen());
-		TestEqual(TEXT("교체된 위젯의 ZOrderLayer는 Notification이어야 함"), NewHUDWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Notification);
+		TestFalse(TEXT("등록 직후에는 열려있지 않아야 함"), NewHUDWidget->IsOpen());
+		TestEqual(TEXT("명시적으로 지정된 ZOrderLayer(Notification)가 적용되어야 함"), NewHUDWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Notification);
 		TestEqual(TEXT("동일 키 교체 후에도 총 등록 위젯 수는 1이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 1);
 		TestEqual(TEXT("조회 시 새로 등록된 위젯이 반환되어야 함"), WidgetSS->GetWidget(HUDKey), NewHUDWidget);
 		TestFalse(TEXT("교체된 이전 위젯은 Close되었어야 함"), HUDWidget->IsOpen());
@@ -191,9 +187,9 @@ bool FBBMWorldWidgetSubsystemTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("이미 제거된 키를 다시 제거하면 false 반환"), WidgetSS->RemoveWidget(HUDKey));
 
 	// 5. 다중 위젯 등록 및 ClearAllWidgets 검증
-	WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), TEXT("WidgetA"), EBBMWidgetZOrder::Base, true);
-	WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), TEXT("WidgetB"), EBBMWidgetZOrder::Popup, true);
-	WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), TEXT("WidgetC"), EBBMWidgetZOrder::FadeLoading, true);
+	WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), TEXT("WidgetA"), EBBMWidgetZOrder::Base);
+	WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), TEXT("WidgetB"), EBBMWidgetZOrder::Popup);
+	WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), TEXT("WidgetC"), EBBMWidgetZOrder::FadeLoading);
 
 	TestEqual(TEXT("다중 등록 후 위젯 수는 3이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 3);
 
@@ -226,20 +222,38 @@ bool FBBMGameModeHierarchyTest::RunTest(const FString& Parameters)
 		ABBMStageGameMode::StaticClass()->IsChildOf(ABBMGameModeBase::StaticClass())
 	);
 
-	// 2. ABBMGameModeBase 기본 CDO 설정 검증
-	const ABBMGameModeBase* GameModeCDO = GetDefault<ABBMGameModeBase>();
-	TestNotNull(TEXT("GameMode CDO가 유효해야 함"), GameModeCDO);
-	if (GameModeCDO != nullptr)
+	// 2. ABBMGameModeBase 기본 CDO 설정 검증 (베이스 클래스는 폰/컨트롤러 비움)
+	const ABBMGameModeBase* GameModeBaseCDO = GetDefault<ABBMGameModeBase>();
+	TestNotNull(TEXT("GameModeBase CDO가 유효해야 함"), GameModeBaseCDO);
+	if (GameModeBaseCDO != nullptr)
+	{
+		TestNull(TEXT("ABBMGameModeBase의 PlayerControllerClass는 nullptr여야 함"), GameModeBaseCDO->PlayerControllerClass.Get());
+		TestNull(TEXT("ABBMGameModeBase의 DefaultPawnClass는 nullptr여야 함"), GameModeBaseCDO->DefaultPawnClass.Get());
+	}
+
+	// 3. ABBMTitleGameMode 기본 CDO 설정 검증 (타이틀은 폰/컨트롤러 비움)
+	const ABBMTitleGameMode* TitleGameModeCDO = GetDefault<ABBMTitleGameMode>();
+	TestNotNull(TEXT("TitleGameMode CDO가 유효해야 함"), TitleGameModeCDO);
+	if (TitleGameModeCDO != nullptr)
+	{
+		TestNull(TEXT("ABBMTitleGameMode의 PlayerControllerClass는 nullptr여야 함"), TitleGameModeCDO->PlayerControllerClass.Get());
+		TestNull(TEXT("ABBMTitleGameMode의 DefaultPawnClass는 nullptr여야 함"), TitleGameModeCDO->DefaultPawnClass.Get());
+	}
+
+	// 4. ABBMStageGameMode 기본 CDO 설정 검증 (스테이지만 컨트롤러와 카메라 폰 설정)
+	const ABBMStageGameMode* StageGameModeCDO = GetDefault<ABBMStageGameMode>();
+	TestNotNull(TEXT("StageGameMode CDO가 유효해야 함"), StageGameModeCDO);
+	if (StageGameModeCDO != nullptr)
 	{
 		TestEqual(
-			TEXT("PlayerControllerClass는 ABBMPlayerController여야 함"),
-			GameModeCDO->PlayerControllerClass.Get(),
+			TEXT("ABBMStageGameMode의 PlayerControllerClass는 ABBMPlayerController여야 함"),
+			StageGameModeCDO->PlayerControllerClass.Get(),
 			ABBMPlayerController::StaticClass()
 		);
 
 		TestEqual(
-			TEXT("DefaultPawnClass는 ABBMCameraActorBase여야 함"),
-			GameModeCDO->DefaultPawnClass.Get(),
+			TEXT("ABBMStageGameMode의 DefaultPawnClass는 ABBMCameraActorBase여야 함"),
+			StageGameModeCDO->DefaultPawnClass.Get(),
 			ABBMCameraActorBase::StaticClass()
 		);
 	}

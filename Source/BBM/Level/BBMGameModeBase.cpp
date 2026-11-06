@@ -5,16 +5,15 @@
  *********************************************************************/
 
 #include "Level/BBMGameModeBase.h"
-#include "Level/BBMPlayerController.h"
-#include "Level/BBMCameraActorBase.h"
 #include "UI/BBMWorldWidgetSubsystem.h"
 #include "UI/BBMUserWidgetBase.h"
 #include "Engine/World.h"
 
 ABBMGameModeBase::ABBMGameModeBase()
 {
-	PlayerControllerClass = ABBMPlayerController::StaticClass();
-	DefaultPawnClass = ABBMCameraActorBase::StaticClass();
+	// 베이스 게임모드는 폰 및 플레이어 컨트롤러를 기본적으로 비워둠 (파생 클래스에서 필요 시 지정)
+	PlayerControllerClass = nullptr;
+	DefaultPawnClass = nullptr;
 }
 
 void ABBMGameModeBase::BeginPlay()
@@ -52,8 +51,7 @@ void ABBMGameModeBase::CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase Phase)
 			WidgetSS->CreateAndRegisterWidget(
 				Config.WidgetClass,
 				Config.WidgetKey,
-				Config.ZOrderLayer,
-				Config.bAutoOpen
+				Config.ZOrderLayer
 			);
 		}
 	}

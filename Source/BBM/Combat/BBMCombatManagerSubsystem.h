@@ -31,63 +31,6 @@ class UBBMItemEntry;
 class UDISItemStack;
 struct FBBMRuntimeEncounterData;
 
-/**
- * 한 비트 단위 액션 실행 시 발생하는 비주얼 연출 및 상태 변화 이벤트 페이로드
- */
-USTRUCT(BlueprintType)
-struct BBM_API FBBMCombatStepVisualEvent
-{
-	GENERATED_BODY()
-
-	/* 비트 인덱스 (0~7) */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	int32 BeatIndex = 0;
-
-	/* 6대 논리 실행 범주 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	EBBMActionCategory ActionCategory = EBBMActionCategory::PreMovement;
-
-	/* 4대 비주얼 윈도우 매칭 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	EBBMVisualWindow VisualWindow = EBBMVisualWindow::PreMoveWindow;
-
-	/* 행동 주체 전투원 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	TWeakObjectPtr<ABBMCombatantBase> Instigator = nullptr;
-
-	/* 행동 대상 전투원 (단수 또는 최전방) */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	TWeakObjectPtr<ABBMCombatantBase> Target = nullptr;
-
-	/* 적용된 최종 체력 피해 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	float DamageDealt = 0.0f;
-
-	/* 흡수된 턴 방어도 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	float TurnArmorAbsorbed = 0.0f;
-
-	/* 흡수된 지속 방어도 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	float ArmorAbsorbed = 0.0f;
-
-	/* 대상의 사망 여부 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	bool bTargetDied = false;
-
-	/* 부여된 상태이상 태그 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	FGameplayTag StatusTag = FGameplayTag();
-
-	/* 부여된 상태이상 스택 수 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	int32 StatusStacks = 0;
-
-	/* 비트 윈도우에서 실행할 애니메이션 상태 태그 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	FGameplayTag AnimationStateTag = FGameplayTag();
-};
-
 /* 전투 승리 델리게이트 (UsedEquipmentStorage 보관소 장비 목록 및 보상 아이템 PAD 목록 전달) */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FBBMOnCombatVictorySignature,
@@ -104,14 +47,10 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FBBMOnCombatDefeatSignature);
 DECLARE_MULTICAST_DELEGATE(FBBMOnCombatDefeatNativeSignature);
 
-/* 비주얼 연출 이벤트 디스패치 델리게이트 (UI ViewModel 전달용) */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
-	FBBMOnVisualEventsDispatchedSignature,
-	const TArray<FBBMCombatStepVisualEvent>&, Events
-);
+/* 턴 시뮬레이션 완료 델리게이트 (C++ 네이티브 바인딩용, 1턴 전체 계층형 연출 결과 전달) */
 DECLARE_MULTICAST_DELEGATE_OneParam(
-	FBBMOnVisualEventsDispatchedNativeSignature,
-	const TArray<FBBMCombatStepVisualEvent>& /* Events */
+	FBBMOnTurnSimulationFinishedNativeSignature,
+	const FBBMTurnVisualResult& /* TurnResult */
 );
 
 /**
@@ -197,12 +136,30 @@ public:
 	bool RemoveCombatantFromLane(ABBMCombatantBase* Combatant);
 
 	/**
+	 * 상대 팀 배열과 맞닿아 있는 첫 번째 최전방 객체 반환
+	 * @param Lane 대상 진영 레인
+	 * @param bLivingOnly 생존자만 필터링할지 여부 (기본값: false)
+	 * @return 상대 팀과 맞닿아 있는 유효한 첫 번째 전투원 포인터 (없으면 nullptr)
+	 */
+	UFUNCTION(Category = "BBM|CombatManager|Formation", BlueprintCallable, BlueprintPure)
+	ABBMCombatantBase* GetFrontlineCombatant(EBBMCombatLane Lane, bool bLivingOnly = false) const;
+
+	/**
 	 * 상대 팀 배열과 맞닿아 있는 첫 번째 생존 최전방 객체 반환
 	 * @param Lane 대상 진영 레인
 	 * @return 상대 팀과 맞닿아 있는 유효한 첫 번째 전투원 포인터 (없으면 nullptr)
 	 */
 	UFUNCTION(Category = "BBM|CombatManager|Formation", BlueprintCallable, BlueprintPure)
-	ABBMCombatantBase* GetFrontlineCombatant(EBBMCombatLane Lane) const;
+	ABBMCombatantBase* GetLivingFrontlineCombatant(EBBMCombatLane Lane) const;
+
+	/**
+	 * 특정 레인에서 모든 전투원 목록 반환
+	 * @param Lane 대상 진영 레인
+	 * @param bLivingOnly 생존자만 필터링할지 여부 (기본값: false)
+	 * @return 전투원 포인터 배열
+	 */
+	UFUNCTION(Category = "BBM|CombatManager|Formation", BlueprintCallable, BlueprintPure)
+	TArray<ABBMCombatantBase*> GetCombatantsInLane(EBBMCombatLane Lane, bool bLivingOnly = false) const;
 
 	/**
 	 * 특정 레인에서 살아있는 모든 전투원 목록 반환
@@ -211,6 +168,21 @@ public:
 	 */
 	UFUNCTION(Category = "BBM|CombatManager|Formation", BlueprintCallable, BlueprintPure)
 	TArray<ABBMCombatantBase*> GetLivingCombatantsInLane(EBBMCombatLane Lane) const;
+
+	/**
+	 * 양측 진영(Ally / Enemy)의 모든 전투원 목록 반환
+	 * @param bLivingOnly 생존자만 필터링할지 여부 (기본값: false)
+	 * @return 조건에 맞는 전투원 포인터 배열
+	 */
+	UFUNCTION(Category = "BBM|CombatManager|Formation", BlueprintCallable, BlueprintPure)
+	TArray<ABBMCombatantBase*> GetAllCombatants(bool bLivingOnly = false) const;
+
+	/**
+	 * 양측 진영(Ally / Enemy)에서 살아있는 모든 전투원 목록 반환
+	 * @return 생존 전투원 포인터 배열
+	 */
+	UFUNCTION(Category = "BBM|CombatManager|Formation", BlueprintCallable, BlueprintPure)
+	TArray<ABBMCombatantBase*> GetAllLivingCombatants() const;
 
 	/**
 	 * 특정 레인의 1D 타일 슬롯들을 전진(Frontward) 또는 후퇴(Backward) 방향으로 N칸 시프트
@@ -233,68 +205,68 @@ public:
 	/* 3. 공격 및 피해 처리 (Instant Attack) */
 public:
 	/**
-	 * 특정 객체가 상대 단일 객체를 공격하는 데미지 해결 계산 (Instant Effect 방식)
+	 * 특정 객체가 상대 단일 객체를 공격하는 데미지 해결 계산 및 전투 로그 기록
 	 * 1단계: 패링 체크 (피해 0) -> 2단계: TurnArmor 차감 -> 3단계: Armor 차감 -> 4단계: Health 차감
 	 * @param Instigator 공격 시전자
 	 * @param Target 피격 대상
 	 * @param BaseDamage 기본 피해량
 	 * @param bTargetParrying 대상이 현재 패링 상태인지 여부
+	 * @param OutCombatLogs 전투 로그 수집 맵
 	 * @return 최종적으로 대상의 Health에 적용된 실제 피해량
 	 */
-	UFUNCTION(Category = "BBM|CombatManager|Combat", BlueprintCallable)
-	float ResolveAttack(ABBMCombatantBase* Instigator, ABBMCombatantBase* Target, float BaseDamage, bool bTargetParrying = false);
+	float ResolveAttack(ABBMCombatantBase* Instigator, ABBMCombatantBase* Target, float BaseDamage, bool bTargetParrying, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs);
 
 	/**
-	 * 특정 객체가 상대 복수 객체를 동시 공격하는 광역 데미지 해결 계산
+	 * 특정 객체가 상대 복수 객체를 동시 공격하는 광역 데미지 해결 계산 및 전투 로그 기록
 	 * @param Instigator 공격 시전자
 	 * @param Targets 피격 대상 목록
 	 * @param BaseDamage 기본 피해량
+	 * @param OutCombatLogs 전투 로그 수집 맵
 	 * @return 각 대상의 Health에 적용된 실제 피해량 배열
 	 */
-	UFUNCTION(Category = "BBM|CombatManager|Combat", BlueprintCallable)
-	TArray<float> ResolveMultiAttack(ABBMCombatantBase* Instigator, const TArray<ABBMCombatantBase*>& Targets, float BaseDamage);
+	TArray<float> ResolveMultiAttack(ABBMCombatantBase* Instigator, const TArray<ABBMCombatantBase*>& Targets, float BaseDamage, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs);
 
 	/* 4. 방어도 증가 관리 (지속 방어도 vs 턴 방어도) */
 public:
 	/**
-	 * 대상 객체의 지속 방어도(Armor) 증가 (전투 내내 유지됨)
+	 * 대상 객체의 지속 방어도(Armor) 증가 및 전투 로그 기록
 	 * @param Target 대상 전투원
 	 * @param Amount 증가할 방어도 수치
+	 * @param OutCombatLogs 전투 로그 수집 맵
 	 */
-	UFUNCTION(Category = "BBM|CombatManager|Armor", BlueprintCallable)
-	void AddPersistentArmor(ABBMCombatantBase* Target, float Amount);
+	void AddPersistentArmor(ABBMCombatantBase* Target, float Amount, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs);
 
 	/**
-	 * 대상 객체의 턴 방어도(TurnArmor) 증가 (해당 턴(8비트) 동안만 유지됨)
+	 * 대상 객체의 턴 방어도(TurnArmor) 증가 및 전투 로그 기록
 	 * @param Target 대상 전투원
 	 * @param Amount 증가할 턴 방어도 수치
+	 * @param OutCombatLogs 전투 로그 수집 맵
 	 */
-	UFUNCTION(Category = "BBM|CombatManager|Armor", BlueprintCallable)
-	void AddTurnArmor(ABBMCombatantBase* Target, float Amount);
+	void AddTurnArmor(ABBMCombatantBase* Target, float Amount, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs);
 
 	/**
-	 * 특정 대상 객체의 턴 방어도(TurnArmor)를 0으로 리셋
+	 * 특정 대상 객체의 턴 방어도(TurnArmor)를 0으로 리셋 및 전투 로그 기록
 	 * @param Target 대상 전투원
+	 * @param OutCombatLogs 전투 로그 수집 맵
 	 */
-	UFUNCTION(Category = "BBM|CombatManager|Armor", BlueprintCallable)
-	void ClearTurnArmor(ABBMCombatantBase* Target);
+	void ClearTurnArmor(ABBMCombatantBase* Target, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs);
 
 	/**
-	 * 전투에 참여 중인 모든 객체의 턴 방어도(TurnArmor)를 0으로 일괄 초기화 (턴 종료 시 호출)
+	 * 전투에 참여 중인 모든 객체의 턴 방어도(TurnArmor)를 0으로 일괄 초기화 및 전투 로그 기록
+	 * @param OutCombatLogs 전투 로그 수집 맵
 	 */
-	UFUNCTION(Category = "BBM|CombatManager|Armor", BlueprintCallable)
-	void ClearAllTurnArmors();
+	void ClearAllTurnArmors(TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs);
 
 	/* 5. GameplayTag 기반 상태이상 관리 */
 public:
 	/**
-	 * 대상 객체에 상태이상 태그 스택을 추가
+	 * 대상 객체에 상태이상 태그 스택을 추가 및 전투 로그 기록
 	 * @param Target 대상 전투원
 	 * @param StatusTag 상태이상 태그 (BBM.Status.Poison, BBM.Status.Burn 등)
 	 * @param StacksToAdd 추가할 스택 수
+	 * @param OutCombatLogs 전투 로그 수집 맵
 	 */
-	UFUNCTION(Category = "BBM|CombatManager|Status", BlueprintCallable)
-	void ApplyStatusEffect(ABBMCombatantBase* Target, const FGameplayTag& StatusTag, int32 StacksToAdd = 1);
+	void ApplyStatusEffect(ABBMCombatantBase* Target, const FGameplayTag& StatusTag, int32 StacksToAdd, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs);
 
 	/**
 	 * 대상 객체의 특정 상태이상 태그 현재 누적 스택 수 반환
@@ -305,13 +277,8 @@ public:
 	UFUNCTION(Category = "BBM|CombatManager|Status", BlueprintCallable, BlueprintPure)
 	int32 GetStatusStacks(const ABBMCombatantBase* Target, const FGameplayTag& StatusTag) const;
 
-	/**
-	 * 턴(8비트) 종료 시 등록된 모든 전투원의 상태이상 틱(Tick)을 일괄 처리하고 스택을 1씩 차감
-	 * 독: 현재 스택 수만큼 피해 적용 후 스택 1 감소
-	 * 화상: 고정 기본 피해(5.0f) 적용 후 스택 1 감소
-	 */
-	UFUNCTION(Category = "BBM|CombatManager|Status", BlueprintCallable)
-	void ProcessTurnEndStatusTicks();
+	/* 턴 종료 상태이상 틱 처리 및 윈도우 결과(속성/상태이상 델타 및 스냅샷) 기록 (C++ 전용) */
+	void ProcessTurnEndStatusTicks(TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs);
 
 	/* 6. 비트 단위 아이템 GAS GameplayEffect 라이프사이클 관리 */
 public:
@@ -336,12 +303,11 @@ public:
 	/* 7. 기획 표준 턴(8비트) 시뮬레이션 및 교전 파이프라인 */
 public:
 	/**
-	 * 1턴(8비트) 동안의 전체 전투 교전을 시뮬레이션하고, UI 연출용 비주얼 이벤트 목록 반환
-	 * @param OutVisualEvents 1비트씩 순차 누적된 단계별 비주얼 이벤트 목록
+	 * 1턴(8비트) 동안의 전체 전투 교전을 시뮬레이션하고, UI 연출용 계층형 결과 패킷 반환
+	 * @param OutTurnResult 8비트 및 턴 종료 시점의 비주얼 윈도우별 스냅샷/로그 계층형 결과
 	 * @return 턴 시뮬레이션 정상 완료 여부
 	 */
-	UFUNCTION(Category = "BBM|CombatManager|Simulation", BlueprintCallable)
-	bool SimulateTurn(TArray<FBBMCombatStepVisualEvent>& OutVisualEvents);
+	bool SimulateTurn(FBBMTurnVisualResult& OutTurnResult);
 
 	/**
 	 * 전투원 사망 시 공통 정리 처리
@@ -363,6 +329,13 @@ public:
 	 */
 	UFUNCTION(Category = "BBM|CombatManager|Simulation", BlueprintCallable)
 	bool CheckBattleOutcome(bool& bOutCombatEnded, bool& bOutPlayerVictory);
+
+	/**
+	 * 전투 종료 후 보상 아이템 및 사용 장비 전달과 승리/패배 델리게이트 브로드캐스트 처리
+	 * @param bVictory 플레이어 승리 여부
+	 */
+	UFUNCTION(Category = "BBM|CombatManager|Simulation", BlueprintCallable)
+	void ProcessBattleOutcome(bool bVictory);
 
 	/* 8. 전투 보상 아이템 관리 */
 public:
@@ -398,26 +371,22 @@ public:
 	/* 패배 시 이벤트 디스패처 (C++ 네이티브 바인딩용) */
 	FBBMOnCombatDefeatNativeSignature OnCombatDefeatNative;
 
-	/* 비트 연출 이벤트 목록 디스패처 (UI ViewModel 통지용) */
-	UPROPERTY(BlueprintAssignable, Category = "BBM|CombatManager|Event")
-	FBBMOnVisualEventsDispatchedSignature OnVisualEventsDispatched;
-
-	/* 비트 연출 이벤트 목록 디스패처 (C++ 네이티브 바인딩용) */
-	FBBMOnVisualEventsDispatchedNativeSignature OnVisualEventsDispatchedNative;
+	/* 턴 시뮬레이션 완료 디스패처 (C++ 네이티브 바인딩용, 1턴 전체 계층형 연출 결과 통지) */
+	FBBMOnTurnSimulationFinishedNativeSignature OnTurnSimulationFinishedNative;
 
 	/* 헬퍼 및 내부 관리 */
 protected:
-	/* 비트 시작 시 Effect Range 및 Anim Layer 부여/링크 */
-	void ProcessBeatStart(int32 BeatIndex);
+	/* 비트 시작 시 Effect Range 적용 및 Anim Layer 전환 태그 수집 */
+	void ProcessBeatStart(int32 BeatIndex, TMap<TWeakObjectPtr<ABBMCombatantBase>, FGameplayTag>& OutStartAnimLayers);
 
-	/* 비트 종료 시 Effect Range 및 Anim Layer 해제/언링크 */
-	void ProcessBeatEnd(int32 BeatIndex);
+	/* 비트 종료 시 Effect Range 해제 및 Anim Layer 해제 태그 수집 */
+	void ProcessBeatEnd(int32 BeatIndex, TMap<TWeakObjectPtr<ABBMCombatantBase>, FGameplayTag>& OutEndAnimLayers);
 
-	/* 특정 비트 및 특정 카테고리의 전투원 액션 실행 및 비주얼 이벤트 기록 */
-	void ExecuteCombatantsActionForCategory(EBBMCombatLane Lane, int32 BeatIndex, EBBMActionCategory Category, EBBMVisualWindow Window, TArray<FBBMCombatStepVisualEvent>& OutVisualEvents);
+	/* 특정 비트 및 특정 카테고리의 전투원 액션 실행 및 윈도우 결과 기록 */
+	void ExecuteCombatantsActionForCategory(EBBMCombatLane Lane, int32 BeatIndex, EBBMActionCategory Category, EBBMVisualWindow Window, FBBMVisualWindowResult& InOutWindowResult);
 
-	/* 체력이 0 이하인 전투원 검사 및 사망 처리 수행 */
-	void CheckAndProcessDeadCombatants(TArray<FBBMCombatStepVisualEvent>& OutVisualEvents, int32 BeatIndex);
+	/* 체력이 0 이하인 전투원 검사 및 사망 처리 수행 (순수 논리 정리만 수행) */
+	void CheckAndProcessDeadCombatants();
 
 	/* 내부 프로퍼티 */
 protected:
@@ -431,9 +400,6 @@ protected:
 
 	/* 비트 진행 중 각 전투원에 부여된 Active Effect 핸들 관리 */
 	TMap<TWeakObjectPtr<ABBMCombatantBase>, TArray<FActiveGameplayEffectHandle>> ActiveBeatRangeHandles;
-
-	/* 비트 진행 중 각 전투원에 링크된 Anim Layer 식별 태그 관리 */
-	TMap<TWeakObjectPtr<ABBMCombatantBase>, TArray<FGameplayTag>> ActiveBeatAnimLayerTags;
 
 	/* 아군 1D 라인 레인 */
 	UPROPERTY(VisibleAnywhere, Category = "BBM|CombatManager")

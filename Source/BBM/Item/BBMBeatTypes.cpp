@@ -18,7 +18,7 @@ EBBMActionCategory FBBMBeatAction::GetActionCategory() const
 	return ActionCategory;
 }
 
-void FBBMBeatAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const
+void FBBMBeatAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs) const
 {
 	// 베이스는 아무 동작도 수행하지 않음
 }
@@ -44,7 +44,7 @@ float FBBMCombatAction::CalculateMagnitude(float InAttributeValue) const
 	return (InAttributeValue * Coefficient) + BaseValue;
 }
 
-void FBBMCombatAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const
+void FBBMCombatAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs) const
 {
 	if (CombatMgr == nullptr || Instigator == nullptr)
 	{
@@ -97,16 +97,16 @@ void FBBMCombatAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBM
 	}
 	const float Magnitude = CalculateMagnitude(AttrStat);
 
-	// 4. 액션 범주별 명령 실행
+	// 4. 액션 범주별 명령 실행 및 로그 기록 위임
 	if (ActionCategory == EBBMActionCategory::Damage)
 	{
-		CombatMgr->ResolveMultiAttack(Instigator, Targets, Magnitude);
+		CombatMgr->ResolveMultiAttack(Instigator, Targets, Magnitude, OutCombatLogs);
 	}
 	else if (ActionCategory == EBBMActionCategory::Defense)
 	{
 		for (ABBMCombatantBase* Target : Targets)
 		{
-			CombatMgr->AddTurnArmor(Target, Magnitude);
+			CombatMgr->AddTurnArmor(Target, Magnitude, OutCombatLogs);
 		}
 	}
 }
@@ -125,7 +125,7 @@ FBBMMovementAction::FBBMMovementAction(EBBMActionCategory InCategory, EBBMLaneSh
 {
 }
 
-void FBBMMovementAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const
+void FBBMMovementAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs) const
 {
 	if (CombatMgr == nullptr || Instigator == nullptr)
 	{
@@ -164,7 +164,7 @@ float FBBMArmorAction::CalculateMagnitude(float InAttributeValue) const
 	return (InAttributeValue * Coefficient) + BaseValue;
 }
 
-void FBBMArmorAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const
+void FBBMArmorAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs) const
 {
 	if (CombatMgr == nullptr || Instigator == nullptr)
 	{
@@ -207,16 +207,16 @@ void FBBMArmorAction::ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMC
 	}
 	const float Magnitude = CalculateMagnitude(DefPower);
 
-	// 4. 지속 방어도 또는 턴 방어도 부여
+	// 4. 지속 방어도 또는 턴 방어도 부여 및 로그 기록 위임
 	for (ABBMCombatantBase* Target : Targets)
 	{
 		if (bIsTurnArmor == true)
 		{
-			CombatMgr->AddTurnArmor(Target, Magnitude);
+			CombatMgr->AddTurnArmor(Target, Magnitude, OutCombatLogs);
 		}
 		else
 		{
-			CombatMgr->AddPersistentArmor(Target, Magnitude);
+			CombatMgr->AddPersistentArmor(Target, Magnitude, OutCombatLogs);
 		}
 	}
 }

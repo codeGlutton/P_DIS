@@ -5,11 +5,15 @@
  *********************************************************************/
 
 #include "Level/BBMStageGameMode.h"
+#include "Level/BBMPlayerController.h"
+#include "Level/BBMCameraActorBase.h"
 #include "Stage/BBMStageSubsystem.h"
 #include "Engine/GameInstance.h"
 
 ABBMStageGameMode::ABBMStageGameMode()
 {
+	PlayerControllerClass = ABBMPlayerController::StaticClass();
+	DefaultPawnClass = ABBMCameraActorBase::StaticClass();
 }
 
 void ABBMStageGameMode::InitializeLevelSpecificGameMode()

@@ -34,7 +34,7 @@ void ABBMPlayerMerchantBase::UpdateBeatSequence()
 	GenerateBeatSequenceFromInventory();
 }
 
-FBBMBeatSequence ABBMPlayerMerchantBase::GetCurrentBeatSequence() const
+const FBBMBeatSequence& ABBMPlayerMerchantBase::GetCurrentBeatSequence() const
 {
 	return CachedBeatSequence;
 }

@@ -38,7 +38,7 @@ public:
 	virtual void UpdateBeatSequence() override;
 
 	/* 이번 턴에 실행할 8비트 행동 시퀀스 반환 (캐시된 시퀀스 반환) */
-	virtual FBBMBeatSequence GetCurrentBeatSequence() const override;
+	virtual const FBBMBeatSequence& GetCurrentBeatSequence() const override;
 
 	/* AI 패턴 선정 및 관리 */
 public:

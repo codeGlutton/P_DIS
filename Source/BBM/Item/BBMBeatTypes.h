@@ -19,20 +19,6 @@ class ABBMCombatantBase;
 class UAnimInstance;
 
 /**
- * 액션이 실행되는 6대 논리 실행 범주 (6-Phase Logical Action Pipeline)
- */
-UENUM(BlueprintType)
-enum class EBBMActionCategory : uint8
-{
-	PreMovement		= 0 UMETA(DisplayName = "1. 선 Movement"),
-	PreBuffDebuff	= 1 UMETA(DisplayName = "2. 선 버프/디버프"),
-	Defense			= 2 UMETA(DisplayName = "3. 방어"),
-	Damage			= 3 UMETA(DisplayName = "4. 데미지"),
-	PostBuffDebuff	= 4 UMETA(DisplayName = "5. 후 버프/디버프"),
-	PostMovement	= 5 UMETA(DisplayName = "6. 후 Movement")
-};
-
-/**
  * 비트 액션의 대상 적용 범위 (1D 라인 전투 타깃 규격)
  */
 UENUM(BlueprintType)
@@ -43,18 +29,6 @@ enum class EBBMTargetScope : uint8
 	Self			= 2 UMETA(DisplayName = "시전자 본인"),
 	AllAllies		= 3 UMETA(DisplayName = "아군 전체"),
 	AllyFrontline	= 4 UMETA(DisplayName = "아군 최전방 (단일)")
-};
-
-/**
- * 1비트 내 4대 비주얼 연출 윈도우 (4-Slot Visual Timeline)
- */
-UENUM(BlueprintType)
-enum class EBBMVisualWindow : uint8
-{
-	PreMoveWindow		= 0 UMETA(DisplayName = "1구간 (0~25%): 선 이동 모션"),
-	PrepDefenseWindow	= 1 UMETA(DisplayName = "2구간 (25~50%): 선 버프 및 방어 모션"),
-	ImpactWindow		= 2 UMETA(DisplayName = "3구간 (50~75%): 타격 및 후속 디버프"),
-	PostMoveWindow		= 3 UMETA(DisplayName = "4구간 (75~100%): 넉백 및 후퇴 모션")
 };
 
 /**
@@ -76,8 +50,8 @@ public:
 public:
 	EBBMActionCategory GetActionCategory() const;
 
-	/* 전투 매니저를 통해 다형적 액션 명령 직접 실행 (커맨드 패턴) */
-	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const;
+	/* 전투 매니저를 통해 다형적 액션 명령 직접 실행 및 전투 로그 기록 (커맨드 패턴) */
+	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs) const;
 
 	/* 프로퍼티 */
 public:
@@ -105,7 +79,7 @@ public:
 	float CalculateMagnitude(float InAttributeValue) const;
 
 	/* 다형적 교전 실행 오버라이드 */
-	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const override;
+	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs) const override;
 
 	/* 프로퍼티 */
 public:
@@ -137,7 +111,7 @@ public:
 	explicit FBBMMovementAction(EBBMActionCategory InCategory, EBBMLaneShiftDirection InDirection = EBBMLaneShiftDirection::Frontward, int32 InStepCount = 1);
 
 	/* 다형적 이동/넉백 실행 오버라이드 */
-	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const override;
+	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs) const override;
 
 	/* 프로퍼티 */
 public:
@@ -169,7 +143,7 @@ public:
 	float CalculateMagnitude(float InAttributeValue) const;
 
 	/* 다형적 방어도 부여 실행 오버라이드 */
-	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator) const override;
+	virtual void ExecuteAction(UBBMCombatManagerSubsystem* CombatMgr, ABBMCombatantBase* Instigator, TMap<TWeakObjectPtr<ABBMCombatantBase>, FBBMCombatantActionLog>& OutCombatLogs) const override;
 
 	/* 프로퍼티 */
 public:

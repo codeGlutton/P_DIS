@@ -347,6 +347,29 @@ void ABBMCombatantBase::StartDissolve()
 	// [TODO] 디졸브 머티리얼 파라미터 애니메이션 또는 타임라인 연출 구현 예정 (현재는 껍데기 가상 함수로 유지)
 }
 
+void ABBMCombatantBase::EnqueueAnimationTag(const FGameplayTag& InTag)
+{
+	if (InTag.IsValid() == true)
+	{
+		AnimationTagQueue.Enqueue(InTag);
+	}
+}
+
+bool ABBMCombatantBase::DequeueAnimationTag(FGameplayTag& OutTag)
+{
+	return AnimationTagQueue.Dequeue(OutTag);
+}
+
+bool ABBMCombatantBase::HasPendingAnimationTags() const
+{
+	return AnimationTagQueue.IsEmpty() == false;
+}
+
+void ABBMCombatantBase::ClearAnimationTags()
+{
+	AnimationTagQueue.Empty();
+}
+
 #if WITH_EDITORONLY_DATA
 UArrowComponent* ABBMCombatantBase::GetArrowComponent() const
 {

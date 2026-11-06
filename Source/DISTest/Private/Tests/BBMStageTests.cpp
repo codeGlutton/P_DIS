@@ -25,6 +25,7 @@
 #include "Combat/Pawn/BBMPlayerCharacterDefinition.h"
 #include "Combat/Pawn/BBMPlayerMerchantBase.h"
 #include "Combat/Pawn/BBMAICombatantDefinition.h"
+#include "Combat/GAS/BBMAttributeSet.h"
 #include "Inventory/BBMInventoryDefinition.h"
 #include "Inventory/BBMInventoryComponent.h"
 #include "Inventory/BBMInventory.h"
@@ -456,6 +457,7 @@ bool FBBMFiveEncounterProgressionTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("5회차 진행 중에는 여전히 지역 미완료"), StageSubsystem->IsCurrentRegionCompleted());
 
 	// 4. 5회차 만남 완료 -> 지역 클리어 상태(CurrentEncounterIndex = 6)로 전환 검증
+	// 5회차 완료 시에는 방 이동 트랜지션을 실행하지 않고 분기 선택 대기 상태로 전환됨
 	StageSubsystem->AdvanceToNextEncounter(nullptr);
 
 	TestEqual(TEXT("5회 완료 후 인덱스는 6이어야 함"), StageSubsystem->GetCurrentEncounterIndex(), 6);
@@ -772,6 +774,116 @@ bool FBBMTwoStepRarityItemSelectionTest::RunTest(const FString& Parameters)
 		UniquePicked[1] != UniquePicked[2] &&
 		UniquePicked[0] != UniquePicked[2]);
 
+	return true;
+}
+
+/**
+ * 런 세이브 데이터(UBBMRunSaveGame) -> 상인 폰(ABBMPlayerMerchantBase) 복원(Restore) 및 역방향 추출(Extract) 검증
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMRunSaveMerchantRestoreTest,
+	"DIS.BBM.Save.RestoreMerchantFromRunSave",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMRunSaveMerchantRestoreTest::RunTest(const FString& Parameters)
+{
+	FBBMStageScopedTestWorld ScopedWorld;
+	UWorld* World = ScopedWorld.World;
+	TestNotNull(TEXT("테스트 월드 유효성 검증"), World);
+	if (World == nullptr)
+	{
+		return false;
+	}
+
+	// 1. 테스트용 플레이어 상인 스폰
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ABBMPlayerMerchantBase* Merchant = World->SpawnActor<ABBMPlayerMerchantBase>(
+		ABBMPlayerMerchantBase::StaticClass(),
+		FTransform::Identity,
+		SpawnParams
+	);
+	TestNotNull(TEXT("플레이어 상인 스폰 검증"), Merchant);
+	if (Merchant == nullptr)
+	{
+		return false;
+	}
+
+	// 2. 3x3 배낭 인벤토리 초기화
+	UBBMInventoryDefinition* InvenDef = NewObject<UBBMInventoryDefinition>();
+	InvenDef->DefaultCapacity = 9;
+	InvenDef->LineBreakTileCount = 3;
+	Merchant->GetInventoryComponent()->InitializeInventory(InvenDef);
+	TestNotNull(TEXT("상인 인벤토리 인스턴스 유효성 검증"), Merchant->GetInventory());
+
+	// 3. 테스트용 아이템 정의 에셋 생성 (1x1 단검)
+	UBBMItemDefinition* DaggerDef = NewObject<UBBMItemDefinition>();
+	DaggerDef->Shape.Points = { FIntPoint(0, 0) };
+
+	// 4. 런 세이브 데이터 준비 (체력 42.0, 골드 350, 슬롯 4(중앙 칸) 단검 배치)
+	UBBMRunSaveGame* RunSave = NewObject<UBBMRunSaveGame>();
+	RunSave->bHasActiveRun = true;
+	RunSave->CurrentHealth = 42.0f;
+	RunSave->MaxHealth = 100.0f;
+	RunSave->CurrentGold = 350;
+
+	FBBMInventorySlotSaveRecord SlotRecord;
+	SlotRecord.SlotIndex = 4;
+	SlotRecord.ItemDefinitionPath = FSoftObjectPath(DaggerDef);
+	SlotRecord.StackCount = 1;
+	SlotRecord.Rotation = EDISItemRotation::Rotate0;
+	RunSave->SavedInventorySlots.Add(SlotRecord);
+
+	// 5. 세이브 -> 상인 데이터 복원 (ApplyRunSaveData)
+	const bool bRestoreSuccess = Merchant->ApplyRunSaveData(RunSave);
+	TestTrue(TEXT("세이브 데이터 상인 복원 성공 검증"), bRestoreSuccess);
+
+	// 6. 복원된 스탯/골드/인벤토리 단언
+	TestEqual(TEXT("체력 스탯 복원 값 검증 (42.0f)"), Merchant->GetAttributeSet()->GetHealth(), 42.0f);
+	TestEqual(TEXT("골드 복원 값 검증 (350)"), Merchant->GetGold(), 350);
+	TestFalse(TEXT("슬롯 4가 비어있지 않아야 함"), Merchant->GetInventory()->IsSlotEmpty(4));
+
+	const UDISItemStack* RestoredStack = Merchant->GetInventory()->GetSlotItemStack(4);
+	TestNotNull(TEXT("슬롯 4의 아이템 스택 유효성 검증"), RestoredStack);
+	if (RestoredStack != nullptr)
+	{
+		TestEqual(TEXT("슬롯 4 아이템 정의 일치 검증"), RestoredStack->GetTopEntry()->GetItemDefinition(), static_cast<const UDISItemDefinition*>(DaggerDef));
+		TestEqual(TEXT("슬롯 4 수량 검증 (1)"), RestoredStack->GetStackCount(), 1);
+	}
+
+	// 7. 상인 -> 세이브 역방향 추출(ExtractLevelData) 검증
+	UGameInstance* GameInstance = NewObject<UGameInstance>();
+	UBBMGameDataSubsystem* GameData = NewObject<UBBMGameDataSubsystem>(GameInstance);
+	FSubsystemCollection<UGameInstanceSubsystem> SubsystemCollection;
+	GameData->Initialize(SubsystemCollection);
+
+	const FPrimaryAssetId DummyRegionId(TEXT("BBMRegionDefinition"), TEXT("DA_Region_Forest"));
+	TArray<FPrimaryAssetId> DummyPlannedIds;
+
+	GameData->ExtractLevelData(
+		Merchant,
+		DummyRegionId,
+		2,
+		DummyPlannedIds,
+		12345
+	);
+
+	const UBBMRunSaveGame* ExtractedRun = GameData->GetCurrentRunData();
+	TestNotNull(TEXT("추출된 런 세이브 데이터 유효성 검증"), ExtractedRun);
+	if (ExtractedRun != nullptr)
+	{
+		TestEqual(TEXT("추출된 체력 검증 (42.0f)"), ExtractedRun->CurrentHealth, 42.0f);
+		TestEqual(TEXT("추출된 골드 검증 (350)"), ExtractedRun->CurrentGold, 350);
+		TestEqual(TEXT("추출된 다음 인카운터 인덱스 검증 (2)"), ExtractedRun->CurrentEncounterIndex, 2);
+		TestEqual(TEXT("추출된 슬롯 레코드 수 검증 (1개)"), ExtractedRun->SavedInventorySlots.Num(), 1);
+		if (ExtractedRun->SavedInventorySlots.Num() > 0)
+		{
+			TestEqual(TEXT("추출된 슬롯 번호 검증 (4)"), ExtractedRun->SavedInventorySlots[0].SlotIndex, 4);
+		}
+	}
+
+	Merchant->Destroy();
 	return true;
 }
 

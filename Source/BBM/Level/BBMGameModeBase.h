@@ -29,6 +29,12 @@ public:
 public:
 	virtual void BeginPlay() override;
 
+	/* 설정 조회 */
+public:
+	/* 인카운터 및 전투 매니저 자동 연동 활성화 여부 반환 */
+	UFUNCTION(Category = "BBM|Encounter", BlueprintCallable, BlueprintPure)
+	bool IsCombatEncounterEnabled() const;
+
 	/* 설정 프로퍼티 */
 protected:
 	/* 해당 레벨에서 인카운터 및 전투 매니저 초기화 자동 연동 활성화 여부 (인게임: true, 타이틀: false) */

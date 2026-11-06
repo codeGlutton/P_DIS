@@ -26,6 +26,7 @@ class ABBMChestActorBase;
 class ABBMEventNpcBase;
 class UBBMAICombatantDefinition;
 class UBBMCombatEncounterDefinition;
+class UBBMPlayerCharacterDefinition;
 class UBBMItemEntry;
 class UDISItemStack;
 struct FBBMRuntimeEncounterData;
@@ -131,21 +132,35 @@ public:
 	/* 1. 인카운터 액터 라이프사이클 관리 (스폰 및 퇴장 정리) */
 public:
 	/**
-	 * 런타임 만남 데이터를 기반으로 적절한 인카운터 액터들을 월드에 스폰하고 초기 진형을 구축 (C++ 전용)
+	 * 런타임 만남 데이터를 기반으로 1D 배틀 중앙점에 인카운터 액터 및 상인을 스폰/배치 (C++ 전용)
 	 * @param RuntimeData 다형성 만남 런타임 데이터 포인터
-	 * @param Merchant 레벨 내 플레이어 상인 폰
+	 * @param RoomStartPointActor 1D 배틀 타일 라인의 기준 중앙점 액터 (WorldSettings에서 제공)
+	 * @param PlayerDef 플레이어 상인 정적 정의 에셋 (스폰 필요 시 활용, 없으면 기존 상인 재활용)
 	 * @return 인카운터 초기화 성공 여부
 	 */
-	bool SetupEncounter(const FBBMRuntimeEncounterData* RuntimeData, ABBMPlayerMerchantBase* Merchant);
+	bool SetupEncounter(
+		const FBBMRuntimeEncounterData* RuntimeData,
+		AActor* RoomStartPointActor,
+		const UBBMPlayerCharacterDefinition* PlayerDef = nullptr
+	);
 
 	/**
 	 * TInstancedStruct 래퍼 버전 인카운터 구축 (블루프린트 지원)
 	 * @param InEncounterData 다형성 만남 인스턴스 구조체
-	 * @param Merchant 레벨 내 플레이어 상인 폰
+	 * @param RoomStartPointActor 1D 배틀 타일 라인의 기준 중앙점 액터
+	 * @param PlayerDef 플레이어 상인 정적 정의 에셋
 	 * @return 인카운터 초기화 성공 여부
 	 */
 	UFUNCTION(Category = "BBM|CombatManager", BlueprintCallable)
-	bool SetupEncounterFromInstancedStruct(const TInstancedStruct<FBBMRuntimeEncounterData>& InEncounterData, ABBMPlayerMerchantBase* Merchant);
+	bool SetupEncounterFromInstancedStruct(
+		const TInstancedStruct<FBBMRuntimeEncounterData>& InEncounterData,
+		AActor* RoomStartPointActor,
+		const UBBMPlayerCharacterDefinition* PlayerDef = nullptr
+	);
+
+	/* 현재 레벨에서 활성화된 플레이어 상인 전투원 반환 */
+	UFUNCTION(Category = "BBM|CombatManager", BlueprintCallable, BlueprintPure)
+	ABBMPlayerMerchantBase* GetActivePlayerMerchant() const { return ActivePlayerMerchant; }
 
 	/**
 	 * 현재 만남에서 스폰되었던 모든 월드 액터를 안전하게 파괴하고 레인 슬롯을 초기화
@@ -404,14 +419,15 @@ protected:
 	/* 체력이 0 이하인 전투원 검사 및 사망 처리 수행 */
 	void CheckAndProcessDeadCombatants(TArray<FBBMCombatStepVisualEvent>& OutVisualEvents, int32 BeatIndex);
 
-	/* 1D 타일 앵커 포인트 및 유닛들의 월드 좌표 동기화 */
-	void SynchronizeLaneWorldTransforms();
-
 	/* 내부 프로퍼티 */
 protected:
 	/* 활성화된 전투 만남 정의 에셋 (보상 아이템 조회용) */
 	UPROPERTY(Transient)
 	TObjectPtr<const UBBMCombatEncounterDefinition> ActiveCombatEncounterDef;
+
+	/* 현재 레벨에서 활성화된 플레이어 상인 (인카운터 전환 시 파괴되지 않고 유지됨) */
+	UPROPERTY(Transient)
+	TObjectPtr<ABBMPlayerMerchantBase> ActivePlayerMerchant;
 
 	/* 비트 진행 중 각 전투원에 부여된 Active Effect 핸들 관리 */
 	TMap<TWeakObjectPtr<ABBMCombatantBase>, TArray<FActiveGameplayEffectHandle>> ActiveBeatRangeHandles;

@@ -15,6 +15,7 @@
 class UBBMInventoryComponent;
 class UBBMInventory;
 class UBBMPlayerCharacterDefinition;
+class UBBMRunSaveGame;
 
 /**
  * BBM 플레이어 상인 베이스 폰 클래스
@@ -68,9 +69,37 @@ public:
 	UFUNCTION(Category = "BBM|Inventory", BlueprintCallable)
 	void InitializeInventoryFromDefinition();
 
-	/* 컴포넌트 프로퍼티 */
+	/* 골드(재화) 관리 */
+public:
+	/* 플레이어 소지 골드 반환 */
+	UFUNCTION(Category = "BBM|Gold", BlueprintCallable, BlueprintPure)
+	int32 GetGold() const;
+
+	/* 플레이어 소지 골드 직접 설정 */
+	UFUNCTION(Category = "BBM|Gold", BlueprintCallable)
+	void SetGold(int32 InGold);
+
+	/* 플레이어 소지 골드 증감 */
+	UFUNCTION(Category = "BBM|Gold", BlueprintCallable)
+	void AddGold(int32 InAmount);
+
+	/* 세이브 데이터 복원 */
+public:
+	/**
+	 * 런 세이브 데이터(UBBMRunSaveGame)를 바탕으로 체력, 골드, 배낭 인벤토리 슬롯 및 보관 장비를 복원
+	 * @param RunData 복원할 런 세이브 데이터 객체
+	 * @return 복원 성공 여부
+	 */
+	UFUNCTION(Category = "BBM|Save", BlueprintCallable)
+	bool ApplyRunSaveData(const UBBMRunSaveGame* RunData);
+
+	/* 컴포넌트 및 프로퍼티 */
 protected:
 	/* 플레이어 전용 배낭 인벤토리 래퍼 컴포넌트 */
 	UPROPERTY(Category = "BBM|Inventory", VisibleAnywhere, BlueprintReadOnly)
 	TObjectPtr<UBBMInventoryComponent> InventoryComponent;
+
+	/* 플레이어 소지 골드 */
+	UPROPERTY(Category = "BBM|Gold", VisibleAnywhere, BlueprintReadOnly)
+	int32 CurrentGold;
 };

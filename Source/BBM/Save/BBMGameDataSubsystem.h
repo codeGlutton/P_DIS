@@ -23,6 +23,7 @@ class USaveGame;
 class UBBMUserSaveGame;
 class UBBMRunSaveGame;
 class ABBMPlayerMerchantBase;
+class UBBMPlayerCharacterDefinition;
 
 /**
  * BBM 영속 게임 데이터(PersistData) 관리 및 비동기 직렬화 전담 서브시스템
@@ -52,6 +53,20 @@ public:
 	/* 현재 런 세이브 데이터 객체 반환 */
 	UFUNCTION(Category = "BBM|Save", BlueprintCallable, BlueprintPure)
 	UBBMRunSaveGame* GetCurrentRunData() const;
+
+	/* 세이브 데이터 로드 보장 및 런 초기화 / 복원 */
+public:
+	/* 유저 세이브 및 런 세이브 객체가 인메모리에 로드/생성되어 있는지 보장 */
+	UFUNCTION(Category = "BBM|Save", BlueprintCallable)
+	bool EnsureSaveDataLoaded();
+
+	/* 새로운 런 시작을 위해 플레이어 캐릭터 정의를 바탕으로 런 세이브 데이터 초기화 */
+	UFUNCTION(Category = "BBM|Save", BlueprintCallable)
+	void ResetAndInitializeNewRun(const UBBMPlayerCharacterDefinition* PlayerDef);
+
+	/* 런 세이브 데이터를 실제 상인 폰에 역방향 복원 주입 */
+	UFUNCTION(Category = "BBM|Save", BlueprintCallable)
+	bool ApplyRunDataToMerchant(ABBMPlayerMerchantBase* TargetMerchant);
 
 	/* 레벨 객체로부터 런 데이터 추출 및 갱신 */
 public:

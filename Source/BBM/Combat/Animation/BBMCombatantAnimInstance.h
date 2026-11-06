@@ -25,6 +25,24 @@ class BBM_API UBBMCombatantAnimInstance : public UAnimInstance
 public:
 	UBBMCombatantAnimInstance();
 
+	/* UAnimInstance 가상 함수 */
+public:
+	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
+
+	/* 애니메이션 상태 태그 조회 및 조작 */
+public:
+	/* 현재 활성화된 애니메이션 상태 태그 반환 */
+	UFUNCTION(Category = "BBM|Animation", BlueprintCallable, BlueprintPure)
+	FGameplayTag GetCurrentAnimationStateTag() const;
+
+	/* 현재 애니메이션 상태 태그 직접 설정 */
+	UFUNCTION(Category = "BBM|Animation", BlueprintCallable)
+	void SetCurrentAnimationStateTag(const FGameplayTag& InTag);
+
+	/* 현재 애니메이션 상태 태그 비우기 */
+	UFUNCTION(Category = "BBM|Animation", BlueprintCallable)
+	void ClearAnimationStateTag();
+
 	/* 애님 레이어 조회 및 검사 헬퍼 */
 public:
 	/* 특정 태그에 해당하는 Linked Anim Layer 클래스 조회 (미등록 시 nullptr) */
@@ -41,6 +59,10 @@ public:
 
 	/* 프로퍼티 */
 protected:
+	/* 현재 활성화된 애니메이션 상태 태그 (스테이트 머신 트랜지션 규칙 평가에 사용) */
+	UPROPERTY(Category = "Animation|State", VisibleInstanceOnly, BlueprintReadOnly)
+	FGameplayTag CurrentAnimationStateTag;
+
 	/* 태그별 Linked Anim Layer 클래스 매핑 테이블 (예: BBM.AnimLayer.Weapon.Sword -> ABP_SwordLayer) */
 	UPROPERTY(Category = "Animation|Layers", EditDefaultsOnly, BlueprintReadOnly)
 	TMap<FGameplayTag, TSubclassOf<UAnimInstance>> AnimLayerMap;

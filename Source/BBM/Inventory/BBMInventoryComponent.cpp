@@ -8,7 +8,9 @@
 #include "Inventory/BBMInventory.h"
 #include "Inventory/BBMInventoryDefinition.h"
 #include "Item/DISItemStack.h"
+#include "Item/DISItemEntry.h"
 #include "Item/DISItemTypes.h"
+#include "Item/BBMItemDefinition.h"
 
 UBBMInventoryComponent::UBBMInventoryComponent() :
 	Inventory(nullptr)
@@ -32,6 +34,95 @@ void UBBMInventoryComponent::InitializeInventory(const UBBMInventoryDefinition* 
 
 	// 정적 정의 에셋 기반으로 인벤토리 슬롯 및 강화 초기화 실행 (인벤토리 내부에서 정의 참조 보관)
 	Inventory->InitializeInventory(InDefinition);
+}
+
+void UBBMInventoryComponent::ClearAllInventory()
+{
+	if (Inventory != nullptr)
+	{
+		const int32 TotalSlots = Inventory->GetSlotCount();
+		for (int32 SlotIdx = 0; SlotIdx < TotalSlots; ++SlotIdx)
+		{
+			Inventory->ClearSlot(SlotIdx);
+		}
+	}
+
+	UsedEquipmentStorage.Empty();
+}
+
+bool UBBMInventoryComponent::RestoreInventoryFromSaveRecords(
+	const TArray<FBBMInventorySlotSaveRecord>& SlotRecords,
+	const TArray<FBBMEquipmentSaveRecord>& ArchivedRecords
+)
+{
+	if (Inventory == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMInventoryComponent] RestoreInventoryFromSaveRecords failed: Inventory is nullptr."));
+		return false;
+	}
+
+	// 1. 기존 슬롯 및 분리 보관소 초기화
+	ClearAllInventory();
+
+	// 2. 인벤토리 슬롯 아이템 복원
+	for (const FBBMInventorySlotSaveRecord& Record : SlotRecords)
+	{
+		if (Record.SlotIndex == INDEX_NONE || Record.ItemDefinitionPath.IsNull() == true || Record.StackCount <= 0)
+		{
+			continue;
+		}
+
+		UBBMItemDefinition* ItemDef = Cast<UBBMItemDefinition>(Record.ItemDefinitionPath.TryLoad());
+		if (ItemDef == nullptr)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[UBBMInventoryComponent] Restore failed to load ItemDefinition at path: %s"), *Record.ItemDefinitionPath.ToString());
+			continue;
+		}
+
+		UDISItemStack* ItemStack = NewObject<UDISItemStack>(Inventory);
+		for (int32 i = 0; i < Record.StackCount; ++i)
+		{
+			UDISItemEntry* Entry = NewObject<UDISItemEntry>(ItemStack);
+			Entry->InitializeEntry(ItemDef);
+			ItemStack->PushEntry(Entry);
+		}
+
+		ItemStack->SetRotation(Record.Rotation);
+
+		const FDISItemPlacementResult PlacementResult = Inventory->SetSlotItemStack(Record.SlotIndex, ItemStack);
+		if (PlacementResult.bSuccess == false)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[UBBMInventoryComponent] Restore failed to place item at slot %d (Item: %s)"), Record.SlotIndex, *ItemDef->GetName());
+		}
+	}
+
+	// 3. 분리 보관소(UsedEquipmentStorage) 장비 복원
+	for (const FBBMEquipmentSaveRecord& EquipRecord : ArchivedRecords)
+	{
+		if (EquipRecord.ItemDefinitionPath.IsNull() == true || EquipRecord.StackCount <= 0)
+		{
+			continue;
+		}
+
+		UBBMItemDefinition* EquipDef = Cast<UBBMItemDefinition>(EquipRecord.ItemDefinitionPath.TryLoad());
+		if (EquipDef == nullptr)
+		{
+			continue;
+		}
+
+		UDISItemStack* EquipStack = NewObject<UDISItemStack>(this);
+		for (int32 i = 0; i < EquipRecord.StackCount; ++i)
+		{
+			UDISItemEntry* Entry = NewObject<UDISItemEntry>(EquipStack);
+			Entry->InitializeEntry(EquipDef);
+			EquipStack->PushEntry(Entry);
+		}
+
+		EquipStack->SetRotation(EquipRecord.Rotation);
+		UsedEquipmentStorage.Add(EquipStack);
+	}
+
+	return true;
 }
 
 UBBMInventory* UBBMInventoryComponent::GetInventory() const

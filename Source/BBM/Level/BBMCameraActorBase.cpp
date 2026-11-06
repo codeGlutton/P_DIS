@@ -11,6 +11,11 @@ ABBMCameraActorBase::ABBMCameraActorBase()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
+	AutoPossessPlayer = EAutoReceiveInput::Disabled;
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationYaw = false;
+	bUseControllerRotationRoll = false;
+
 	// 스프링암 없이 UCameraComponent를 루트 컴포넌트로 생성
 	CameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("CameraComponent"));
 	SetRootComponent(CameraComponent);

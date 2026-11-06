@@ -7,9 +7,12 @@
 #include "Item/BBMItemEntry.h"
 #include "Item/BBMItemDefinition.h"
 #include "Item/BBMItemProfileTypes.h"
+#include "Save/BBMRunSaveGame.h"
+#include "Combat/GAS/BBMAttributeSet.h"
 
 ABBMPlayerMerchantBase::ABBMPlayerMerchantBase() :
-	InventoryComponent(nullptr)
+	InventoryComponent(nullptr),
+	CurrentGold(0)
 {
 	// 플레이어 상인 기본 팀 설정
 	SetGenericTeamId(FGenericTeamId(static_cast<uint8>(EBBMTeamType::Player)));
@@ -208,4 +211,59 @@ void ABBMPlayerMerchantBase::InitializeInventoryFromDefinition()
 			InventoryComponent->InitializeInventory(InvenDef);
 		}
 	}
+}
+
+int32 ABBMPlayerMerchantBase::GetGold() const
+{
+	return CurrentGold;
+}
+
+void ABBMPlayerMerchantBase::SetGold(int32 InGold)
+{
+	CurrentGold = FMath::Max(0, InGold);
+}
+
+void ABBMPlayerMerchantBase::AddGold(int32 InAmount)
+{
+	CurrentGold = FMath::Max(0, CurrentGold + InAmount);
+}
+
+bool ABBMPlayerMerchantBase::ApplyRunSaveData(const UBBMRunSaveGame* RunData)
+{
+	if (RunData == nullptr)
+	{
+		return false;
+	}
+
+	// 1. 골드 복원
+	SetGold(RunData->CurrentGold);
+
+	// 2. GAS 체력 스탯 복원
+	if (UBBMAttributeSet* AttrSet = GetAttributeSet())
+	{
+		if (RunData->CurrentHealth > 0.0f)
+		{
+			AttrSet->SetHealth(RunData->CurrentHealth);
+		}
+		if (RunData->MaxHealth > 0.0f)
+		{
+			AttrSet->SetMaxHealth(RunData->MaxHealth);
+		}
+	}
+
+	// 3. 배낭 인벤토리 슬롯 및 보관 장비 복원
+	if (InventoryComponent != nullptr)
+	{
+		if (RunData->SavedInventorySlots.Num() > 0 || RunData->ArchivedEquipments.Num() > 0)
+		{
+			InventoryComponent->RestoreInventoryFromSaveRecords(RunData->SavedInventorySlots, RunData->ArchivedEquipments);
+		}
+		else
+		{
+			// 저장된 인벤토리 레코드가 비어있다면 정적 정의 기본 인벤토리로 초기화
+			InitializeInventoryFromDefinition();
+		}
+	}
+
+	return true;
 }

@@ -9,6 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Save/BBMSaveTypes.h"
 #include "BBMInventoryComponent.generated.h"
 
 /* 독립 전방 선언 (상단에 단독 배치) */
@@ -38,6 +39,24 @@ public:
 	 */
 	UFUNCTION(Category = "BBM|Inventory", BlueprintCallable)
 	void InitializeInventory(const UBBMInventoryDefinition* InDefinition);
+
+	/* 세이브 데이터 복원 */
+public:
+	/**
+	 * 세이브 레코드 목록(FBBMInventorySlotSaveRecord)을 바탕으로 배낭 인벤토리 슬롯 배치 및 분리 보관소 장비를 복원
+	 * @param SlotRecords 슬롯별 아이템 배치 레코드 배열
+	 * @param ArchivedRecords 일시 분리 보관된 장비 레코드 배열
+	 * @return 복원 성공 여부
+	 */
+	UFUNCTION(Category = "BBM|Inventory|Save", BlueprintCallable)
+	bool RestoreInventoryFromSaveRecords(
+		const TArray<FBBMInventorySlotSaveRecord>& SlotRecords,
+		const TArray<FBBMEquipmentSaveRecord>& ArchivedRecords
+	);
+
+	/* 배낭 인벤토리의 모든 슬롯 아이템 및 분리 보관소 장비 완전 초기화 */
+	UFUNCTION(Category = "BBM|Inventory", BlueprintCallable)
+	void ClearAllInventory();
 
 	/* 인벤토리 접근자 */
 public:

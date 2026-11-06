@@ -52,6 +52,10 @@ public:
 	UFUNCTION(Category = "BBM|Stage", BlueprintCallable)
 	bool StartNewRun(const UBBMPlayerCharacterDefinition* PlayerDef);
 
+	/* 현재 런에 바인딩된 플레이어 캐릭터 정적 정의 에셋 반환 */
+	UFUNCTION(Category = "BBM|Stage", BlueprintCallable, BlueprintPure)
+	const UBBMPlayerCharacterDefinition* GetActivePlayerDefinition() const { return ActivePlayerDefinition; }
+
 	/* 현재 진행 상태 조회 */
 public:
 	/* 현재 진입 중인 지역 정적 정의 반환 */
@@ -118,14 +122,14 @@ public:
 	/**
 	 * 현재 만남을 완료하고 다음 만남 또는 다음 지역 분기로 전진
 	 * 만남 직전 레벨 데이터 추출 -> 비동기 파일 저장 -> 스폰/카메라 전환 -> Loading UI 해제 순차 실행
-	 * @param CurrentMerchant 현재 레벨에 위치한 플레이어 상인 폰
+	 * @param CurrentMerchant 현재 레벨에 위치한 플레이어 상인 폰 (생략 시 CombatManager의 활성 상인 참조)
 	 */
 	UFUNCTION(Category = "BBM|Stage", BlueprintCallable)
-	void AdvanceToNextEncounter(ABBMPlayerMerchantBase* CurrentMerchant);
+	void AdvanceToNextEncounter(ABBMPlayerMerchantBase* CurrentMerchant = nullptr);
 
 	/* 만남을 현재 레벨의 WorldSettings 스폰/카메라 포인트에 적용 */
 	UFUNCTION(Category = "BBM|Stage", BlueprintCallable)
-	bool ApplyCurrentEncounterToLevel(ABBMPlayerMerchantBase* CurrentMerchant);
+	bool ApplyCurrentEncounterToLevel(ABBMPlayerMerchantBase* CurrentMerchant = nullptr);
 
 	/* 지역 분기 선택 및 다음 지역 진입 */
 public:
@@ -140,7 +144,7 @@ public:
 	 * @return 지역 전환 성공 여부
 	 */
 	UFUNCTION(Category = "BBM|Stage", BlueprintCallable)
-	bool SelectNextRegion(const UBBMRegionDefinition* InChosenRegion, ABBMPlayerMerchantBase* CurrentMerchant);
+	bool SelectNextRegion(const UBBMRegionDefinition* InChosenRegion, ABBMPlayerMerchantBase* CurrentMerchant = nullptr);
 
 	/* 델리게이트 이벤트 */
 public:
@@ -165,8 +169,19 @@ protected:
 	/* 지역 정적 정의로부터 5회 만남 시퀀스 및 다형성 런타임 데이터 생성 */
 	void GenerateRuntimeEncounters(const UBBMRegionDefinition* InRegion);
 
+	/**
+	 * 지역 진입 시 비동기 프리로드 및 레벨 전환을 총괄하는 공통 내부 파이프라인
+	 * @param InTargetRegion 진입할 지역 정적 정의 에셋
+	 * @param CurrentMerchant 동일 레벨 유지 시 전달할 상인 포인터
+	 */
+	void ExecuteRegionTransition(const UBBMRegionDefinition* InTargetRegion, ABBMPlayerMerchantBase* CurrentMerchant = nullptr);
+
 	/* 내부 프로퍼티 */
 protected:
+	/* 현재 활성화된 런의 플레이어 캐릭터 정적 정의 에셋 */
+	UPROPERTY(Category = "BBM|Stage", Transient, BlueprintReadOnly)
+	TObjectPtr<const UBBMPlayerCharacterDefinition> ActivePlayerDefinition;
+
 	/* 현재 진입 중인 지역 정적 정의 에셋 */
 	UPROPERTY(Category = "BBM|Stage", Transient, BlueprintReadOnly)
 	TObjectPtr<const UBBMRegionDefinition> CurrentRegion;

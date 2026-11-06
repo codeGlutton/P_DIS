@@ -13,6 +13,7 @@
 #include "GenericTeamAgentInterface.h"
 #include "Combat/Team/BBMTeamTypes.h"
 #include "Item/BBMBeatTypes.h"
+#include "Containers/Queue.h"
 #include "BBMCombatantBase.generated.h"
 
 /* 독립 전방 선언 (상단에 단독 배치) */
@@ -168,6 +169,23 @@ public:
 	UFUNCTION(Category = "Combat|Animation", BlueprintCallable)
 	virtual void UnlinkAnimLayers(const TArray<TSubclassOf<UAnimInstance>>& InLayers);
 
+	/* 애니메이션 상태 태그 큐 관리 인터페이스 */
+public:
+	/* 애니메이션 상태 태그를 FIFO 큐에 삽입 */
+	UFUNCTION(Category = "Combat|Animation", BlueprintCallable)
+	void EnqueueAnimationTag(const FGameplayTag& InTag);
+
+	/* 애니메이션 상태 태그 큐에서 1개 추출 (큐가 비어있으면 false) */
+	bool DequeueAnimationTag(FGameplayTag& OutTag);
+
+	/* 대기 중인 애니메이션 태그가 존재하는지 여부 반환 */
+	UFUNCTION(Category = "Combat|Animation", BlueprintCallable, BlueprintPure)
+	bool HasPendingAnimationTags() const;
+
+	/* 애니메이션 상태 태그 큐 전체 비우기 */
+	UFUNCTION(Category = "Combat|Animation", BlueprintCallable)
+	void ClearAnimationTags();
+
 	/* 사망 시 디졸브(Dissolve) 연출 시작 가상 함수 (껍데기 함수) */
 	UFUNCTION(Category = "Combat|Visual", BlueprintCallable)
 	virtual void StartDissolve();
@@ -226,4 +244,7 @@ protected:
 	/* 이번 턴에 실행할 캐시된 8비트 행동 시퀀스 */
 	UPROPERTY(Category = "BBM|Beat", Transient, BlueprintReadOnly)
 	FBBMBeatSequence CachedBeatSequence;
+
+	/* 애님 인스턴스가 순차 소비할 애니메이션 상태 태그 FIFO 큐 */
+	TQueue<FGameplayTag> AnimationTagQueue;
 };

@@ -5,6 +5,8 @@
  *********************************************************************/
 
 #include "Level/BBMGameModeBase.h"
+#include "Level/BBMPlayerController.h"
+#include "Level/BBMCameraActorBase.h"
 #include "Stage/BBMStageSubsystem.h"
 #include "Combat/Pawn/BBMPlayerMerchantBase.h"
 #include "Engine/GameInstance.h"
@@ -13,6 +15,13 @@
 ABBMGameModeBase::ABBMGameModeBase() :
 	bEnableCombatEncounter(true)
 {
+	PlayerControllerClass = ABBMPlayerController::StaticClass();
+	DefaultPawnClass = ABBMCameraActorBase::StaticClass();
+}
+
+bool ABBMGameModeBase::IsCombatEncounterEnabled() const
+{
+	return bEnableCombatEncounter;
 }
 
 void ABBMGameModeBase::BeginPlay()
@@ -29,9 +38,8 @@ void ABBMGameModeBase::BeginPlay()
 				// 활성화된 런 상태가 존재하는지 검증
 				if (StageSS->GetCurrentRegion() != nullptr)
 				{
-					// 레벨 내 플레이어 상인 폰 획득
-					ABBMPlayerMerchantBase* Merchant = Cast<ABBMPlayerMerchantBase>(UGameplayStatics::GetPlayerPawn(this, 0));
-					StageSS->ApplyCurrentEncounterToLevel(Merchant);
+					// 인카운터 및 1D 배틀 진형을 레벨에 적용 (카메라 이동, 상인/적 스폰, OnEncounterChanged 및 OnTransitionFinished 완결)
+					StageSS->ApplyCurrentEncounterToLevel();
 				}
 			}
 		}

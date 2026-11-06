@@ -9,12 +9,14 @@
 #include "Combat/Pawn/BBMPlayerMerchantBase.h"
 #include "Combat/Pawn/BBMAICombatantBase.h"
 #include "Combat/Pawn/BBMAICombatantDefinition.h"
+#include "Combat/Pawn/BBMPlayerCharacterDefinition.h"
 #include "Combat/GAS/BBMAttributeSet.h"
 #include "Stage/BBMStageTypes.h"
 #include "Stage/BBMEncounterDefinition.h"
 #include "Stage/BBMChestActorBase.h"
 #include "Stage/BBMEventNpcBase.h"
 #include "Level/BBMWorldSettings.h"
+#include "Save/BBMGameDataSubsystem.h"
 #include "Item/BBMItemEntry.h"
 #include "Item/DISItemStack.h"
 #include "Inventory/BBMInventoryComponent.h"
@@ -39,7 +41,11 @@ void UBBMCombatManagerSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-bool UBBMCombatManagerSubsystem::SetupEncounter(const FBBMRuntimeEncounterData* RuntimeData, ABBMPlayerMerchantBase* Merchant)
+bool UBBMCombatManagerSubsystem::SetupEncounter(
+	const FBBMRuntimeEncounterData* RuntimeData,
+	AActor* RoomStartPointActor,
+	const UBBMPlayerCharacterDefinition* PlayerDef
+)
 {
 	// 1단계: 이전 만남 액터 전량 정리
 	ClearCurrentEncounter();
@@ -61,14 +67,83 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(const FBBMRuntimeEncounterData* 
 		return false;
 	}
 
-	const FName& SpawnKey = EncounterDef->GetSpawnSettingKey();
-	const ABBMWorldSettings* WorldSettings = ABBMWorldSettings::GetBBMWorldSettings(Merchant ? Cast<UObject>(Merchant) : Cast<UObject>(World));
-	AActor* StartPointActor = WorldSettings ? WorldSettings->GetRoomStartPoint(SpawnKey) : nullptr;
-	const FTransform BaseSpawnTransform = StartPointActor ? StartPointActor->GetActorTransform() : FTransform::Identity;
+	// 1D 배틀 타일 라인의 기준 중앙점(Center Point) 및 방향 계산
+	const FTransform CenterTransform = RoomStartPointActor ? RoomStartPointActor->GetActorTransform() : FTransform::Identity;
+	const FVector CenterLocation = CenterTransform.GetLocation();
+	const FRotator CenterRotation = CenterTransform.GetRotation().Rotator();
+	const FVector LineForward = CenterTransform.GetRotation().GetForwardVector();
+
+	// 1D 배틀 라인 중앙점 기준 좌우 배치 간격 (Centimeters)
+	constexpr float BattleLineCenterOffset = 180.0f;  // 중앙점에서 최전방 전투원까지의 거리 (총 대치 간격 360cm)
+	constexpr float BattleLineSlotSpacing = 120.0f;   // 슬롯(2열, 3열...) 간격
+
+	// 2단계: 플레이어 상인 지연 스폰(SpawnActorDeferred) 또는 기존 상인 위치 텔레포트 (아군: 중앙점 왼쪽 -LineForward 방향)
+	const FVector PlayerLocation = CenterLocation - (LineForward * BattleLineCenterOffset);
+	const FRotator PlayerRotation = CenterRotation; // 오른쪽(적 방향)을 바라봄
+	const FTransform PlayerTransform(PlayerRotation, PlayerLocation);
+
+	if (ActivePlayerMerchant == nullptr || !IsValid(ActivePlayerMerchant))
+	{
+		TSubclassOf<ABBMPlayerMerchantBase> MerchantClass = ABBMPlayerMerchantBase::StaticClass();
+		if (PlayerDef != nullptr)
+		{
+			if (UClass* LoadedClass = PlayerDef->GetPawnClass().LoadSynchronous())
+			{
+				if (LoadedClass->IsChildOf(ABBMPlayerMerchantBase::StaticClass()))
+				{
+					MerchantClass = LoadedClass;
+				}
+			}
+		}
+
+		ActivePlayerMerchant = World->SpawnActorDeferred<ABBMPlayerMerchantBase>(
+			MerchantClass,
+			PlayerTransform,
+			nullptr,
+			nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn
+		);
+
+		if (ActivePlayerMerchant != nullptr)
+		{
+			// PostInitializeComponents 및 BeginPlay 실행 전에 CharacterDefinition을 우선 주입하여 초기화 무결성 보장
+			if (PlayerDef != nullptr)
+			{
+				ActivePlayerMerchant->SetCharacterDefinition(PlayerDef);
+			}
+
+			ActivePlayerMerchant->FinishSpawning(PlayerTransform);
+
+			// 런 세이브 데이터가 존재할 경우 플레이어 상인에게 세이브 데이터(체력, 골드, 배낭 슬롯, 장비) 역방향 복원 적용
+			if (UGameInstance* GI = World->GetGameInstance())
+			{
+				if (UBBMGameDataSubsystem* GameData = GI->GetSubsystem<UBBMGameDataSubsystem>())
+				{
+					if (GameData->HasActiveRun() == true)
+					{
+						GameData->ApplyRunDataToMerchant(ActivePlayerMerchant);
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		// 이전 인카운터에서 유지된 상인 위치 텔레포트
+		ActivePlayerMerchant->SetActorLocationAndRotation(
+			PlayerLocation,
+			PlayerRotation,
+			false,
+			nullptr,
+			ETeleportType::TeleportPhysics
+		);
+	}
 
 	const EBBMEncounterType EncType = EncounterDef->GetEncounterType();
 
-	// 2단계: 만남 유형별 액터 스폰 및 배치
+	// 3단계: 만남 유형별 액터 스폰 및 배치 (적/상자/NPC: 중앙점 오른쪽 +LineForward 방향)
+	const FRotator FacingPlayerRotation = (CenterRotation + FRotator(0.0f, 180.0f, 0.0f)).GetNormalized();
+
 	if (EncType == EBBMEncounterType::Treasure)
 	{
 		if (const UBBMTreasureEncounterDefinition* TreasureDef = Cast<UBBMTreasureEncounterDefinition>(EncounterDef))
@@ -79,9 +154,13 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(const FBBMRuntimeEncounterData* 
 				ChestClass = ABBMChestActorBase::StaticClass();
 			}
 
+			// 상자는 중앙선 약간 오른쪽 또는 중앙에 플레이어를 마주보게 배치
+			const FVector ChestLocation = CenterLocation + (LineForward * (BattleLineCenterOffset * 0.5f));
+			const FTransform ChestTransform(FacingPlayerRotation, ChestLocation);
+
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			ABBMChestActorBase* SpawnedChest = World->SpawnActor<ABBMChestActorBase>(ChestClass, BaseSpawnTransform, SpawnParams);
+			ABBMChestActorBase* SpawnedChest = World->SpawnActor<ABBMChestActorBase>(ChestClass, ChestTransform, SpawnParams);
 			if (SpawnedChest != nullptr)
 			{
 				SpawnedEncounterActors.Add(SpawnedChest);
@@ -92,10 +171,8 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(const FBBMRuntimeEncounterData* 
 	else if (EncType == EBBMEncounterType::Event)
 	{
 		const FBBMRuntimeEventEncounterData* EventData = static_cast<const FBBMRuntimeEventEncounterData*>(RuntimeData);
-		const UBBMTreasureEncounterDefinition* DummyCheck = nullptr;
-
 		const TArray<FBBMRuntimeNpcData>& NpcList = EventData->EventNpcs;
-		float OffsetX = 200.0f;
+
 		for (int32 i = 0; i < NpcList.Num(); ++i)
 		{
 			TSubclassOf<ABBMEventNpcBase> NpcClass = NpcList[i].NpcClass.LoadSynchronous();
@@ -104,8 +181,8 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(const FBBMRuntimeEncounterData* 
 				NpcClass = ABBMEventNpcBase::StaticClass();
 			}
 
-			FTransform NpcTransform = BaseSpawnTransform;
-			NpcTransform.AddToTranslation(FVector((i + 1) * OffsetX, 0.0f, 0.0f));
+			const FVector NpcLocation = CenterLocation + (LineForward * (BattleLineCenterOffset + (i * BattleLineSlotSpacing)));
+			const FTransform NpcTransform(FacingPlayerRotation, NpcLocation);
 
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -123,7 +200,6 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(const FBBMRuntimeEncounterData* 
 		TArray<ABBMAICombatantBase*> SpawnedMonsters;
 		if (const UBBMCombatEncounterDefinition* CombatDef = Cast<UBBMCombatEncounterDefinition>(EncounterDef))
 		{
-			float MonsterSpacing = 150.0f;
 			int32 MonsterIndex = 0;
 			for (const TSoftObjectPtr<UBBMAICombatantDefinition>& MonsterDefPtr : CombatDef->GetMonsterList())
 			{
@@ -138,16 +214,23 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(const FBBMRuntimeEncounterData* 
 						}
 					}
 
-					FTransform MonsterTransform = BaseSpawnTransform;
-					MonsterTransform.AddToTranslation(FVector(300.0f + (MonsterIndex * MonsterSpacing), 0.0f, 0.0f));
+					const FVector MonsterLocation = CenterLocation + (LineForward * (BattleLineCenterOffset + (MonsterIndex * BattleLineSlotSpacing)));
+					const FTransform MonsterTransform(FacingPlayerRotation, MonsterLocation);
 
-					FActorSpawnParameters SpawnParams;
-					SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-					ABBMAICombatantBase* MonsterActor = World->SpawnActor<ABBMAICombatantBase>(AIClass, MonsterTransform, SpawnParams);
+					ABBMAICombatantBase* MonsterActor = World->SpawnActorDeferred<ABBMAICombatantBase>(
+						AIClass,
+						MonsterTransform,
+						nullptr,
+						nullptr,
+						ESpawnActorCollisionHandlingMethod::AlwaysSpawn
+					);
+
 					if (MonsterActor != nullptr)
 					{
+						// PostInitializeComponents 및 BeginPlay 실행 전에 CharacterDefinition을 우선 주입하여 초기화 무결성 보장
 						MonsterActor->SetCharacterDefinition(MonsterDef);
-						MonsterActor->InitializeFromDefinition();
+						MonsterActor->FinishSpawning(MonsterTransform);
+
 						SpawnedMonsters.Add(MonsterActor);
 						SpawnedEncounterActors.Add(MonsterActor);
 					}
@@ -156,22 +239,26 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(const FBBMRuntimeEncounterData* 
 			}
 		}
 
-		// 1D 전투 라인 초기 진형 구축
-		InitializeBattleFormation(Merchant, SpawnedMonsters);
+		// 1D 전투 라인 초기 진형 구축 (아군: ActivePlayerMerchant, 적군: SpawnedMonsters)
+		InitializeBattleFormation(ActivePlayerMerchant, SpawnedMonsters);
 		return true;
 	}
 
 	return false;
 }
 
-bool UBBMCombatManagerSubsystem::SetupEncounterFromInstancedStruct(const TInstancedStruct<FBBMRuntimeEncounterData>& InEncounterData, ABBMPlayerMerchantBase* Merchant)
+bool UBBMCombatManagerSubsystem::SetupEncounterFromInstancedStruct(
+	const TInstancedStruct<FBBMRuntimeEncounterData>& InEncounterData,
+	AActor* RoomStartPointActor,
+	const UBBMPlayerCharacterDefinition* PlayerDef
+)
 {
 	if (InEncounterData.IsValid() == false)
 	{
 		return false;
 	}
 
-	return SetupEncounter(InEncounterData.GetPtr<FBBMRuntimeEncounterData>(), Merchant);
+	return SetupEncounter(InEncounterData.GetPtr<FBBMRuntimeEncounterData>(), RoomStartPointActor, PlayerDef);
 }
 
 void UBBMCombatManagerSubsystem::ClearCurrentEncounter()

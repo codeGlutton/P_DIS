@@ -9,6 +9,8 @@
 #include "Save/BBMRunSaveGame.h"
 #include "Combat/Pawn/BBMPlayerMerchantBase.h"
 #include "Combat/Pawn/BBMCharacterDefinition.h"
+#include "Combat/Pawn/BBMPlayerCharacterDefinition.h"
+#include "Stage/BBMRegionDefinition.h"
 #include "Combat/GAS/BBMAttributeSet.h"
 #include "Inventory/BBMInventoryComponent.h"
 #include "Inventory/BBMInventory.h"
@@ -81,6 +83,77 @@ UBBMRunSaveGame* UBBMGameDataSubsystem::GetCurrentRunData() const
 	return CurrentRunData;
 }
 
+bool UBBMGameDataSubsystem::EnsureSaveDataLoaded()
+{
+	bool bLoadedOrCreated = true;
+
+	if (UserSaveData == nullptr)
+	{
+		UserSaveData = NewObject<UBBMUserSaveGame>(this, UBBMUserSaveGame::StaticClass());
+		RestoreFromBackupIfNeeded(UBBMUserSaveGame::SlotName);
+		if (UGameplayStatics::DoesSaveGameExist(UBBMUserSaveGame::SlotName, UBBMUserSaveGame::UserIndex) == true)
+		{
+			if (USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(UBBMUserSaveGame::SlotName, UBBMUserSaveGame::UserIndex))
+			{
+				if (UBBMUserSaveGame* CastedUser = Cast<UBBMUserSaveGame>(Loaded))
+				{
+					UserSaveData = CastedUser;
+				}
+			}
+		}
+	}
+
+	if (CurrentRunData == nullptr)
+	{
+		CurrentRunData = NewObject<UBBMRunSaveGame>(this, UBBMRunSaveGame::StaticClass());
+		RestoreFromBackupIfNeeded(UBBMRunSaveGame::SlotName);
+		if (UGameplayStatics::DoesSaveGameExist(UBBMRunSaveGame::SlotName, UBBMRunSaveGame::UserIndex) == true)
+		{
+			if (USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(UBBMRunSaveGame::SlotName, UBBMRunSaveGame::UserIndex))
+			{
+				if (UBBMRunSaveGame* CastedRun = Cast<UBBMRunSaveGame>(Loaded))
+				{
+					CurrentRunData = CastedRun;
+				}
+			}
+		}
+	}
+
+	return bLoadedOrCreated;
+}
+
+void UBBMGameDataSubsystem::ResetAndInitializeNewRun(const UBBMPlayerCharacterDefinition* PlayerDef)
+{
+	EnsureSaveDataLoaded();
+
+	if (CurrentRunData != nullptr)
+	{
+		CurrentRunData->ResetRunData();
+		CurrentRunData->bHasActiveRun = true;
+		CurrentRunData->CurrentGold = 0;
+		CurrentRunData->CurrentEncounterIndex = 1;
+
+		if (PlayerDef != nullptr)
+		{
+			CurrentRunData->PlayerCharacterId = PlayerDef->GetPrimaryAssetId();
+			if (const UBBMRegionDefinition* StartRegion = PlayerDef->GetStartRegionDefinition())
+			{
+				CurrentRunData->CurrentRegionId = StartRegion->GetPrimaryAssetId();
+			}
+		}
+	}
+}
+
+bool UBBMGameDataSubsystem::ApplyRunDataToMerchant(ABBMPlayerMerchantBase* TargetMerchant)
+{
+	if (TargetMerchant == nullptr || CurrentRunData == nullptr)
+	{
+		return false;
+	}
+
+	return TargetMerchant->ApplyRunSaveData(CurrentRunData);
+}
+
 void UBBMGameDataSubsystem::ExtractLevelData(
 	const ABBMPlayerMerchantBase* InMerchant,
 	const FPrimaryAssetId& InCurrentRegionId,
@@ -129,6 +202,9 @@ void UBBMGameDataSubsystem::ExtractLevelData(
 		CurrentRunData->CurrentHealth = AttrSet->GetHealth();
 		CurrentRunData->MaxHealth = AttrSet->GetMaxHealth();
 	}
+
+	// 플레이어 골드(재화) 추출
+	CurrentRunData->CurrentGold = InMerchant->GetGold();
 
 	// 배낭 인벤토리 슬롯 상태 추출
 	CurrentRunData->SavedInventorySlots.Empty();

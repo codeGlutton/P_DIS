@@ -22,6 +22,7 @@
 #include "Engine/AssetManager.h"
 #include "DISAssetBundles.h"
 #include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
 
 UBBMStageSubsystem::UBBMStageSubsystem() :
 	CurrentRegion(nullptr),
@@ -60,46 +61,24 @@ bool UBBMStageSubsystem::StartNewRun(const UBBMPlayerCharacterDefinition* Player
 		return false;
 	}
 
-	StageRngStream.GenerateNewSeed();
-	CurrentRegion = StartRegion;
-	CurrentEncounterIndex = 1;
-
-	// 5회 만남 시퀀스 및 다형성 런타임 데이터 생성
-	GenerateRuntimeEncounters(CurrentRegion.Get());
-
-	// 1번 만남 에셋 비동기 사전 로드(Preload) 트리거 (초기 진입 시 팝인 방지)
-	PreloadEncounterAssets(CurrentEncounterIndex);
-
-	// GameDataSubsystem 초기 런 상태 동기화
+	// 1. GameDataSubsystem 초기 런 상태 초기화 (신규 런 확정을 최우선 실행)
 	if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UBBMGameDataSubsystem* GameData = GI->GetSubsystem<UBBMGameDataSubsystem>())
 		{
-			TArray<FPrimaryAssetId> PlannedIds;
-			for (const TInstancedStruct<FBBMRuntimeEncounterData>& EncInst : PlannedEncounters)
-			{
-				if (EncInst.IsValid() == true)
-				{
-					const FBBMRuntimeEncounterData& BaseData = EncInst.Get<FBBMRuntimeEncounterData>();
-					if (const UBBMEncounterDefinition* LoadedDef = BaseData.EncounterDefinition.LoadSynchronous())
-					{
-						PlannedIds.Add(LoadedDef->GetPrimaryAssetId());
-					}
-				}
-			}
-
-			GameData->ExtractLevelData(
-				nullptr,
-				CurrentRegion->GetPrimaryAssetId(),
-				CurrentEncounterIndex,
-				PlannedIds,
-				StageRngStream.GetCurrentSeed(),
-				PlannedEncounters
-			);
+			GameData->ResetAndInitializeNewRun(PlayerDef);
 		}
 	}
 
-	OnEncounterChanged.Broadcast(GetCurrentEncounter());
+	// 2. 런 상태 갱신
+	StageRngStream.GenerateNewSeed();
+	ActivePlayerDefinition = PlayerDef;
+	CurrentRegion = StartRegion;
+	CurrentEncounterIndex = 1;
+
+	// 3. 지역 진입, 비동기 프리로드 및 레벨 전환 파이프라인 실행
+	ExecuteRegionTransition(CurrentRegion.Get(), nullptr);
+
 	return true;
 }
 
@@ -202,124 +181,77 @@ TSharedPtr<FStreamableHandle> UBBMStageSubsystem::GetCurrentEncounterStreamableH
 
 void UBBMStageSubsystem::AdvanceToNextEncounter(ABBMPlayerMerchantBase* CurrentMerchant)
 {
-	// 1단계: 트랜지션 UI 표시 및 Fade-out 애니메이션 브로드캐스트
+	// 5회차 만남 완료 시: 불필요한 방 이동 트랜지션 없이 다음 지역 분기 선택 UI를 오픈하고 유저 입력 대기
+	if (CurrentEncounterIndex >= 5)
+	{
+		CurrentEncounterIndex = 6;
+		OnRegionCompleted.Broadcast(CurrentRegion.Get());
+		return;
+	}
+
+	// 1~4회차 일반 방 이동: 트랜지션 UI 표시 및 Fade-out 애니메이션 브로드캐스트
 	OnTransitionStarted.Broadcast();
 
 	const int32 NextEncounterIndex = CurrentEncounterIndex + 1;
 
-	// 2단계: 다음 인카운터가 유효한 범위(<= 5)인 경우 비동기 프리로드를 즉시 실행하여 저장과 병렬 수행
-	if (NextEncounterIndex <= 5)
-	{
-		PreloadEncounterAssets(NextEncounterIndex);
-	}
+	// 다음 인카운터(2~5) 비동기 프리로드 실행
+	PreloadEncounterAssets(NextEncounterIndex);
 
-	// 3단계: 현재 레벨 객체 데이터 추출 및 비동기 저장
-	UBBMGameDataSubsystem* GameData = nullptr;
-	if (UGameInstance* GI = GetGameInstance())
+	// 인자로 전달된 상인이 없는 경우 CombatManager의 활성 상인 참조
+	ABBMPlayerMerchantBase* TargetMerchant = CurrentMerchant;
+	if (TargetMerchant == nullptr)
 	{
-		GameData = GI->GetSubsystem<UBBMGameDataSubsystem>();
-	}
-
-	TArray<FPrimaryAssetId> PlannedIds;
-	for (const TInstancedStruct<FBBMRuntimeEncounterData>& EncInst : PlannedEncounters)
-	{
-		if (EncInst.IsValid() == true)
+		if (UWorld* World = GetWorld())
 		{
-			const FBBMRuntimeEncounterData& BaseData = EncInst.Get<FBBMRuntimeEncounterData>();
-			if (const UBBMEncounterDefinition* LoadedDef = BaseData.EncounterDefinition.LoadSynchronous())
+			if (UBBMCombatManagerSubsystem* CombatMgr = World->GetSubsystem<UBBMCombatManagerSubsystem>())
 			{
-				PlannedIds.Add(LoadedDef->GetPrimaryAssetId());
+				TargetMerchant = CombatMgr->GetActivePlayerMerchant();
 			}
 		}
 	}
 
-	auto FinalizeTransition = [this, CurrentMerchant, NextEncounterIndex]()
+	auto FinalizeTransition = [this, TargetMerchant, NextEncounterIndex]()
 	{
 		CurrentEncounterIndex = NextEncounterIndex;
 
-		// 5회 만남 완료 여부 분기
-		if (CurrentEncounterIndex > 5)
-		{
-			// 지역 클리어 및 다음 분기 선택 대기
-			OnRegionCompleted.Broadcast(CurrentRegion.Get());
-			OnTransitionFinished.Broadcast();
-		}
-		else
-		{
-			// 동일 레벨 내 다음 만남 스폰/카메라 적용 (사전 프리로드로 팝인 없음)
-			ApplyCurrentEncounterToLevel(CurrentMerchant);
-			OnEncounterChanged.Broadcast(GetCurrentEncounter());
-			OnTransitionFinished.Broadcast();
-		}
+		// 동일 레벨 내 다음 만남 스폰/카메라 적용 (내부에서 세이브 저장, OnEncounterChanged, OnTransitionFinished 브로드캐스트 완결)
+		ApplyCurrentEncounterToLevel(TargetMerchant);
 	};
 
-	if (GameData != nullptr)
+	// 비동기 프리로드 완료 대기 후 전환 마무리 (다음 방 진입 직후 ApplyCurrentEncounterToLevel에서 세이브 저장 실행)
+	if (CurrentEncounterStreamableHandle.IsValid() == true && CurrentEncounterStreamableHandle->HasLoadCompleted() == false)
 	{
-		const FPrimaryAssetId RegionId = (CurrentRegion != nullptr) ? CurrentRegion->GetPrimaryAssetId() : FPrimaryAssetId();
-		GameData->ExtractLevelData(
-			CurrentMerchant,
-			RegionId,
-			NextEncounterIndex,
-			PlannedIds,
-			StageRngStream.GetCurrentSeed(),
-			PlannedEncounters
-		);
-
-		// 4단계: 비동기 파일 저장 완료 대기 후 프리로드 완료 상태와 결합하여 전환 마무리
-		FSimpleDelegate OnSaveComplete;
-		OnSaveComplete.BindWeakLambda(this, [this, FinalizeTransition]()
+		const bool bBound = CurrentEncounterStreamableHandle->BindCompleteDelegate(FStreamableDelegate::CreateWeakLambda(this, [FinalizeTransition]()
 		{
-			if (CurrentEncounterStreamableHandle.IsValid() == true && CurrentEncounterStreamableHandle->HasLoadCompleted() == false)
-			{
-				const bool bBound = CurrentEncounterStreamableHandle->BindCompleteDelegate(FStreamableDelegate::CreateWeakLambda(this, [FinalizeTransition]()
-				{
-					FinalizeTransition();
-				}));
+			FinalizeTransition();
+		}));
 
-				if (bBound == false)
-				{
-					FinalizeTransition();
-				}
-			}
-			else
-			{
-				FinalizeTransition();
-			}
-		});
-
-		GameData->SaveCurrentRunAsync(OnSaveComplete);
-	}
-	else
-	{
-		// GameDataSubsystem이 없는 경우 프리로드 완료 후 즉시 전환
-		if (CurrentEncounterStreamableHandle.IsValid() == true && CurrentEncounterStreamableHandle->HasLoadCompleted() == false)
-		{
-			const bool bBound = CurrentEncounterStreamableHandle->BindCompleteDelegate(FStreamableDelegate::CreateWeakLambda(this, [FinalizeTransition]()
-			{
-				FinalizeTransition();
-			}));
-
-			if (bBound == false)
-			{
-				FinalizeTransition();
-			}
-		}
-		else
+		if (bBound == false)
 		{
 			FinalizeTransition();
 		}
+	}
+	else
+	{
+		FinalizeTransition();
 	}
 }
 
 bool UBBMStageSubsystem::ApplyCurrentEncounterToLevel(ABBMPlayerMerchantBase* CurrentMerchant)
 {
 	const UBBMEncounterDefinition* Encounter = GetCurrentEncounter();
-	if (Encounter == nullptr || CurrentMerchant == nullptr)
+	if (Encounter == nullptr)
 	{
 		return false;
 	}
 
-	const ABBMWorldSettings* WorldSettings = ABBMWorldSettings::GetBBMWorldSettings(CurrentMerchant);
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return false;
+	}
+
+	const ABBMWorldSettings* WorldSettings = ABBMWorldSettings::GetBBMWorldSettings(World);
 	if (WorldSettings == nullptr)
 	{
 		return false;
@@ -329,35 +261,77 @@ bool UBBMStageSubsystem::ApplyCurrentEncounterToLevel(ABBMPlayerMerchantBase* Cu
 	AActor* CameraActor = WorldSettings->GetMainCameraPoint(SpawnKey);
 	AActor* StartPointActor = WorldSettings->GetRoomStartPoint(SpawnKey);
 
-	// 카메라 뷰타깃 전환
+	// 1. Default Pawn(카메라 폰)의 트랜스폼을 MainCameraPoint로 텔레포트 이동
 	if (CameraActor != nullptr)
 	{
-		if (APlayerController* PC = Cast<APlayerController>(CurrentMerchant->GetController()))
+		if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
 		{
-			PC->SetViewTargetWithBlend(CameraActor, 0.0f);
+			if (APawn* DefaultPawn = PC->GetPawn())
+			{
+				DefaultPawn->SetActorTransform(
+					CameraActor->GetActorTransform(),
+					false,
+					nullptr,
+					ETeleportType::TeleportPhysics
+				);
+			}
 		}
 	}
 
-	// 플레이어 폰을 해당 룸 시작 지점으로 텔레포트
-	if (StartPointActor != nullptr)
+	// 2. WorldSubsystem에 인카운터(전투/보물/이벤트) 액터 및 플레이어 상인 스폰/배치 위임 (중앙점 기준)
+	if (UBBMCombatManagerSubsystem* CombatMgr = World->GetSubsystem<UBBMCombatManagerSubsystem>())
 	{
-		CurrentMerchant->SetActorLocationAndRotation(
-			StartPointActor->GetActorLocation(),
-			StartPointActor->GetActorRotation(),
-			false,
-			nullptr,
-			ETeleportType::TeleportPhysics
+		CombatMgr->SetupEncounter(
+			GetCurrentRuntimeEncounterData(),
+			StartPointActor,
+			ActivePlayerDefinition.Get()
 		);
 	}
 
-	// WorldSubsystem을 통해 해당 만남의 인카운터 액터(보물 상자 / NPC / 몬스터) 스폰 및 1D 타일 진형 배치 위임
-	if (UWorld* World = CurrentMerchant->GetWorld())
+	// 3. 매 인카운터 시작 시점: 현재 캐릭터 상태를 세이브 객체에 추출하고 파일로 비동기 저장
+	// (전투 승리/보상 획득 직후 미저장 및 다음 방 진입 직후 세이브 갱신 원칙 준수)
+	if (UGameInstance* GI = GetGameInstance())
 	{
-		if (UBBMCombatManagerSubsystem* CombatMgr = World->GetSubsystem<UBBMCombatManagerSubsystem>())
+		if (UBBMGameDataSubsystem* GameData = GI->GetSubsystem<UBBMGameDataSubsystem>())
 		{
-			CombatMgr->SetupEncounter(GetCurrentRuntimeEncounterData(), CurrentMerchant);
+			ABBMPlayerMerchantBase* TargetMerchant = CurrentMerchant;
+			if (TargetMerchant == nullptr)
+			{
+				if (UBBMCombatManagerSubsystem* CombatMgr = World->GetSubsystem<UBBMCombatManagerSubsystem>())
+				{
+					TargetMerchant = CombatMgr->GetActivePlayerMerchant();
+				}
+			}
+
+			const FPrimaryAssetId RegionId = (CurrentRegion != nullptr) ? CurrentRegion->GetPrimaryAssetId() : FPrimaryAssetId();
+			TArray<FPrimaryAssetId> PlannedIds;
+			for (const TInstancedStruct<FBBMRuntimeEncounterData>& EncInst : PlannedEncounters)
+			{
+				if (EncInst.IsValid() == true)
+				{
+					const FBBMRuntimeEncounterData& BaseData = EncInst.Get<FBBMRuntimeEncounterData>();
+					if (const UBBMEncounterDefinition* LoadedDef = BaseData.EncounterDefinition.LoadSynchronous())
+					{
+						PlannedIds.Add(LoadedDef->GetPrimaryAssetId());
+					}
+				}
+			}
+
+			GameData->ExtractLevelData(
+				TargetMerchant,
+				RegionId,
+				CurrentEncounterIndex,
+				PlannedIds,
+				StageRngStream.GetCurrentSeed(),
+				PlannedEncounters
+			);
+			GameData->SaveCurrentRunAsync();
 		}
 	}
+
+	// 4. 레벨 배치, 세이브 추출 완료 및 트랜지션 종료 브로드캐스트 (내부 일원화)
+	OnEncounterChanged.Broadcast(Encounter);
+	OnTransitionFinished.Broadcast();
 
 	return true;
 }
@@ -381,20 +355,82 @@ bool UBBMStageSubsystem::SelectNextRegion(const UBBMRegionDefinition* InChosenRe
 	CurrentRegion = InChosenRegion;
 	CurrentEncounterIndex = 1;
 
-	// 신규 5회 만남 시퀀스 및 다형성 런타임 데이터 생성
-	GenerateRuntimeEncounters(CurrentRegion.Get());
+	// 신규 지역 진입, 비동기 프리로드 및 레벨 전환 파이프라인 실행
+	ExecuteRegionTransition(CurrentRegion.Get(), CurrentMerchant);
 
-	// 신규 지역 1번 만남 에셋 비동기 사전 로드(Preload) 트리거 (초기 진입 시 팝인 방지)
-	PreloadEncounterAssets(CurrentEncounterIndex);
+	return true;
+}
 
-	// 새 레벨 적용
-	if (CurrentMerchant != nullptr)
+void UBBMStageSubsystem::ExecuteRegionTransition(const UBBMRegionDefinition* InTargetRegion, ABBMPlayerMerchantBase* CurrentMerchant)
+{
+	if (InTargetRegion == nullptr)
 	{
-		ApplyCurrentEncounterToLevel(CurrentMerchant);
+		return;
 	}
 
-	OnEncounterChanged.Broadcast(GetCurrentEncounter());
-	return true;
+	// 1. 신규 5회 만남 시퀀스 및 다형성 런타임 데이터 생성
+	GenerateRuntimeEncounters(InTargetRegion);
+
+	// 2. 지역 전환 트랜지션 UI 시작 (암전/로딩 UI 표시)
+	OnTransitionStarted.Broadcast();
+
+	// 3. 신규 지역 1번 만남 에셋 비동기 사전 로드(Preload) 트리거
+	PreloadEncounterAssets(1);
+
+	// 인자로 전달된 상인이 없는 경우 CombatManager의 활성 상인 참조
+	ABBMPlayerMerchantBase* TargetMerchant = CurrentMerchant;
+	if (TargetMerchant == nullptr)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (UBBMCombatManagerSubsystem* CombatMgr = World->GetSubsystem<UBBMCombatManagerSubsystem>())
+			{
+				TargetMerchant = CombatMgr->GetActivePlayerMerchant();
+			}
+		}
+	}
+
+	auto FinalizeRegionTransition = [this, InTargetRegion, TargetMerchant]()
+	{
+		UWorld* World = GetWorld();
+		const TSoftObjectPtr<UWorld>& TargetLevelRef = InTargetRegion->GetLevelReference();
+
+		// 대상 레벨이 유효하고 실제 게임 월드인 경우 레벨 전환(OpenLevel) 여부 판단
+		if (World != nullptr && World->IsGameWorld() == true && TargetLevelRef.IsNull() == false)
+		{
+			const FString CurrentMapName = UGameplayStatics::GetCurrentLevelName(World, true);
+			const FString TargetMapName = TargetLevelRef.GetAssetName();
+
+			// 현재 로드된 레벨과 다른 레벨로 진입하는 경우: OpenLevel 실행
+			// (새 레벨이 열리면 ABBMGameModeBase::BeginPlay에서 ApplyCurrentEncounterToLevel 자동 호출)
+			if (TargetMapName.IsEmpty() == false && CurrentMapName != TargetMapName)
+			{
+				UGameplayStatics::OpenLevelBySoftObjectPtr(World, TargetLevelRef);
+				return;
+			}
+		}
+
+		// 동일 레벨 내 진행 또는 단위 테스트 환경: 즉시 현재 레벨에 1번 만남 적용 (내부에서 OnEncounterChanged, OnTransitionFinished 완결)
+		ApplyCurrentEncounterToLevel(TargetMerchant);
+	};
+
+	// 4. 1번 만남 에셋 비동기 로딩 완료 대기 후 레벨 전환/적용 마무리
+	if (CurrentEncounterStreamableHandle.IsValid() == true && CurrentEncounterStreamableHandle->HasLoadCompleted() == false)
+	{
+		const bool bBound = CurrentEncounterStreamableHandle->BindCompleteDelegate(FStreamableDelegate::CreateWeakLambda(this, [FinalizeRegionTransition]()
+		{
+			FinalizeRegionTransition();
+		}));
+
+		if (bBound == false)
+		{
+			FinalizeRegionTransition();
+		}
+	}
+	else
+	{
+		FinalizeRegionTransition();
+	}
 }
 
 void UBBMStageSubsystem::GenerateRuntimeEncounters(const UBBMRegionDefinition* InRegion)

@@ -35,6 +35,8 @@
 #include "Item/BBMItemGameplayEffectTypes.h"
 #include "Item/BBMBeatTypes.h"
 #include "Item/BBMItemProfileTypes.h"
+#include "Stage/BBMEncounterDefinition.h"
+#include "Stage/BBMStageTypes.h"
 #include "Animation/AnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Combat/Animation/BBMCombatantAnimInstance.h"
@@ -1608,6 +1610,118 @@ bool FBBMCombatantAnimInstanceMappingTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("매핑 등록 후 HasAnimLayer는 true여야 함"), AnimInst->HasAnimLayer(SwordLayerTag));
 	TestEqual(TEXT("매핑 등록 후 FindAnimLayerClass는 UAnimInstance::StaticClass()여야 함"), AnimInst->FindAnimLayerClass(SwordLayerTag).Get(), UAnimInstance::StaticClass());
+
+	return true;
+}
+
+// 17. 1D 배틀 타일 라인 중앙점(Center Point) 기준 좌/우 대치 배치 및 상인 스폰 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMCombatManagerCenterPointLayoutTest,
+	"DIS.BBM.Combat.CenterPointFormationLayout",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMCombatManagerCenterPointLayoutTest::RunTest(const FString& Parameters)
+{
+	FBBMScopedTestWorld TestWorld;
+	TestNotNull(TEXT("테스트 월드 유효 검증"), TestWorld.World);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	UBBMCombatManagerSubsystem* CombatMgr = TestWorld.World->GetSubsystem<UBBMCombatManagerSubsystem>();
+	TestNotNull(TEXT("CombatManagerSubsystem 유효 검증"), CombatMgr);
+	if (CombatMgr == nullptr)
+	{
+		return false;
+	}
+
+	// 1. 기준 중앙점 더미 액터 스폰 (위치: (1000, 2000, 100), 회전: Yaw = 0)
+	const FVector CenterLoc(1000.0f, 2000.0f, 100.0f);
+	const FRotator CenterRot(0.0f, 0.0f, 0.0f);
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AActor* CenterActor = TestWorld.World->SpawnActor<AActor>(AActor::StaticClass(), FTransform(CenterRot, CenterLoc), SpawnParams);
+	TestNotNull(TEXT("중앙점 기준 액터 스폰 유효 검증"), CenterActor);
+	if (CenterActor != nullptr)
+	{
+		USceneComponent* SceneComp = NewObject<USceneComponent>(CenterActor);
+		CenterActor->SetRootComponent(SceneComp);
+		CenterActor->SetActorLocationAndRotation(CenterLoc, CenterRot);
+	}
+
+	// 2. 몬스터 1마리를 포함한 전투 인카운터 정의 생성
+	UBBMAICombatantDefinition* MonsterDef = NewObject<UBBMAICombatantDefinition>();
+	MonsterDef->TableKeyName = FName(TEXT("TestSlime"));
+
+	UBBMCombatEncounterDefinition* CombatDef = NewObject<UBBMCombatEncounterDefinition>();
+	CombatDef->EncounterType = EBBMEncounterType::Combat;
+	CombatDef->MonsterList.Add(MonsterDef);
+
+	FBBMRuntimeCombatEncounterData RuntimeData;
+	RuntimeData.EncounterDefinition = CombatDef;
+
+	// 3. SetupEncounter 호출 (PlayerDef는 nullptr 전달하여 기본 ABBMPlayerMerchantBase 스폰 유도)
+	const bool bSetupSuccess = CombatMgr->SetupEncounter(&RuntimeData, CenterActor, nullptr);
+	TestTrue(TEXT("중앙점 기준 SetupEncounter 성공 검증"), bSetupSuccess);
+
+	// 4. 플레이어 상인(아군) 위치 및 회전 검증 (중앙점에서 -LineForward 방향으로 180cm, 적을 바라봄)
+	ABBMPlayerMerchantBase* Merchant = CombatMgr->GetActivePlayerMerchant();
+	TestNotNull(TEXT("스폰된 ActivePlayerMerchant 유효 검증"), Merchant);
+	if (Merchant != nullptr)
+	{
+		const FVector PlayerLoc = Merchant->GetActorLocation();
+		TestEqual(TEXT("상인 X 좌표는 CenterX - 180 이어야 함"), PlayerLoc.X, 1000.0 - 180.0);
+		TestEqual(TEXT("상인 Y 좌표는 CenterY 여야 함"), PlayerLoc.Y, 2000.0);
+		TestEqual(TEXT("상인 Yaw는 CenterRot(적 방향)과 일치해야 함"), Merchant->GetActorRotation().Yaw, 0.0);
+		TestEqual(TEXT("아군 레인 슬롯 0에 상인이 배치되어야 함"), CombatMgr->GetFrontlineCombatant(EBBMCombatLane::AllyLane), Cast<ABBMCombatantBase>(Merchant));
+	}
+
+	// 5. 몬스터(적군) 위치 및 회전 검증 (중앙점에서 +LineForward 방향으로 180cm, 플레이어를 마주봄)
+	ABBMCombatantBase* EnemyFront = CombatMgr->GetFrontlineCombatant(EBBMCombatLane::EnemyLane);
+	TestNotNull(TEXT("스폰된 적 최전방 몬스터 유효 검증"), EnemyFront);
+	if (EnemyFront != nullptr)
+	{
+		const FVector MonsterLoc = EnemyFront->GetActorLocation();
+		TestEqual(TEXT("몬스터 X 좌표는 CenterX + 180 이어야 함"), MonsterLoc.X, 1000.0 + 180.0);
+		TestEqual(TEXT("몬스터 Y 좌표는 CenterY 여야 함"), MonsterLoc.Y, 2000.0);
+		TestEqual(TEXT("몬스터 Yaw는 플레이어를 마주보는 180도여야 함"), FMath::Abs(EnemyFront->GetActorRotation().Yaw), 180.0);
+	}
+
+	// 6. 다음 인카운터 진입 시 상인 재활용(텔레포트) 검증
+	const FVector NewCenterLoc(3000.0f, 4000.0f, 100.0f);
+	AActor* NewCenterActor = TestWorld.World->SpawnActor<AActor>(AActor::StaticClass(), FTransform(CenterRot, NewCenterLoc), SpawnParams);
+	if (NewCenterActor != nullptr)
+	{
+		USceneComponent* SceneComp2 = NewObject<USceneComponent>(NewCenterActor);
+		NewCenterActor->SetRootComponent(SceneComp2);
+		NewCenterActor->SetActorLocationAndRotation(NewCenterLoc, CenterRot);
+	}
+
+	const bool bSecondSetup = CombatMgr->SetupEncounter(&RuntimeData, NewCenterActor, nullptr);
+	TestTrue(TEXT("두 번째 인카운터 SetupEncounter 성공 검증"), bSecondSetup);
+	TestEqual(TEXT("상인 객체는 새로 생성되지 않고 기존 객체가 재활용되어야 함"), CombatMgr->GetActivePlayerMerchant(), Merchant);
+	if (Merchant != nullptr)
+	{
+		TestEqual(TEXT("재활용된 상인은 새 중앙점 왼쪽으로 텔레포트되어야 함"), Merchant->GetActorLocation().X, 3000.0 - 180.0);
+		TestEqual(TEXT("재활용된 상인 Y 좌표 일치"), Merchant->GetActorLocation().Y, 4000.0);
+	}
+
+	// 정리
+	CombatMgr->ClearCurrentEncounter();
+	if (Merchant != nullptr)
+	{
+		Merchant->Destroy();
+	}
+	if (CenterActor != nullptr)
+	{
+		CenterActor->Destroy();
+	}
+	if (NewCenterActor != nullptr)
+	{
+		NewCenterActor->Destroy();
+	}
 
 	return true;
 }

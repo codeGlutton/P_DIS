@@ -8,18 +8,18 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
 #include "BBMCameraActorBase.generated.h"
 
 /* 독립 전방 선언 (상단에 단독 배치) */
 class UCameraComponent;
 
 /**
- * BBM 메인 뷰 카메라 액터 베이스 클래스
- * 레벨 내 룸/만남별 WorldSettings의 메인 카메라 포인트에 배치되거나 뷰타깃 전환에 활용됨
+ * BBM 메인 뷰 카메라 액터(폰) 베이스 클래스
+ * 레벨 내 DefaultPawnClass로 지정되어 플레이어 컨트롤러가 빙의하며, WorldSettings의 메인 카메라 포인트 위치로 이동함
  */
 UCLASS(Blueprintable, meta = (DisplayName = "BBM Camera Actor Base"))
-class BBM_API ABBMCameraActorBase : public AActor
+class BBM_API ABBMCameraActorBase : public APawn
 {
 	GENERATED_BODY()
 

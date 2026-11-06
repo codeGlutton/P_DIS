@@ -7,42 +7,59 @@
 #include "Level/BBMGameModeBase.h"
 #include "Level/BBMPlayerController.h"
 #include "Level/BBMCameraActorBase.h"
-#include "Stage/BBMStageSubsystem.h"
-#include "Combat/Pawn/BBMPlayerMerchantBase.h"
-#include "Engine/GameInstance.h"
-#include "Kismet/GameplayStatics.h"
+#include "UI/BBMWorldWidgetSubsystem.h"
+#include "UI/BBMUserWidgetBase.h"
+#include "Engine/World.h"
 
-ABBMGameModeBase::ABBMGameModeBase() :
-	bEnableCombatEncounter(true)
+ABBMGameModeBase::ABBMGameModeBase()
 {
 	PlayerControllerClass = ABBMPlayerController::StaticClass();
 	DefaultPawnClass = ABBMCameraActorBase::StaticClass();
-}
-
-bool ABBMGameModeBase::IsCombatEncounterEnabled() const
-{
-	return bEnableCombatEncounter;
 }
 
 void ABBMGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 인게임 레벨에서 인카운터 연동이 활성화된 경우에만 실행 (타이틀 레벨 격리)
-	if (bEnableCombatEncounter == true)
+	// 1단계: 인카운터 초기화 전 위젯 생성 (예: FadeLoading 위젯 등)
+	CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase::BeforeEncounter);
+
+	// 2단계: 레벨 특화 게임모드 초기화 실행 (스테이지 게임모드에서 인카운터 배치 실행)
+	InitializeLevelSpecificGameMode();
+
+	// 3단계: 인카운터 초기화 후 위젯 생성 (예: 인게임 전투 HUD 등)
+	CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase::AfterEncounter);
+}
+
+void ABBMGameModeBase::CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase Phase)
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
 	{
-		if (UGameInstance* GI = GetGameInstance())
+		return;
+	}
+
+	UBBMWorldWidgetSubsystem* WidgetSS = World->GetSubsystem<UBBMWorldWidgetSubsystem>();
+	if (WidgetSS == nullptr)
+	{
+		return;
+	}
+
+	for (const FBBMWorldWidgetConfig& Config : AutoCreateWidgets)
+	{
+		if (Config.CreationPhase == Phase && Config.WidgetClass != nullptr && Config.WidgetKey != NAME_None)
 		{
-			if (UBBMStageSubsystem* StageSS = GI->GetSubsystem<UBBMStageSubsystem>())
-			{
-				// 활성화된 런 상태가 존재하는지 검증
-				if (StageSS->GetCurrentRegion() != nullptr)
-				{
-					// 인카운터 및 1D 배틀 진형을 레벨에 적용 (카메라 이동, 상인/적 스폰, OnEncounterChanged 및 OnTransitionFinished 완결)
-					StageSS->ApplyCurrentEncounterToLevel();
-				}
-			}
+			WidgetSS->CreateAndRegisterWidget(
+				Config.WidgetClass,
+				Config.WidgetKey,
+				Config.ZOrderLayer,
+				Config.bAutoOpen
+			);
 		}
 	}
 }
 
+void ABBMGameModeBase::InitializeLevelSpecificGameMode()
+{
+	// 베이스 클래스는 기본적으로 빈 구현 (파생 클래스에서 오버라이드)
+}

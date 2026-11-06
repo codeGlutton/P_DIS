@@ -27,6 +27,11 @@ public class BBM : ModuleRules
 			"AIModule",
 			"DeveloperSettings",
 
+			/* UI 모듈 */
+			"UMG",
+			"Slate",
+			"SlateCore",
+
 			/* 인벤토리 플러그인 런타임 모듈 */
 			"DISRuntime" 
 		});

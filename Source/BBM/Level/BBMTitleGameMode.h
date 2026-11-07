@@ -23,5 +23,9 @@ class BBM_API ABBMTitleGameMode : public ABBMGameModeBase
 	/* 생성자 */
 public:
 	ABBMTitleGameMode();
+
+	/* ABBMGameModeBase 가상 함수 오버라이드 */
+protected:
+	virtual void InitializeLevelSpecificGameMode() override;
 };
 

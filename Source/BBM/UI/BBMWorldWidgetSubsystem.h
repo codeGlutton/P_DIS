@@ -14,6 +14,7 @@
 
 /* 독립 전방 선언 */
 class UBBMUserWidgetBase;
+class UBBMViewModelBase;
 
 /**
  * BBM 월드 위젯 관리 서브시스템
@@ -34,18 +35,12 @@ public:
 	/* 위젯 등록, 조회 및 제거 인터페이스 */
 public:
 	/**
-	 * 위젯 클래스로부터 인스턴스를 생성하고 식별 키로 서브시스템에 등록합니다
-	 * @param WidgetClass 생성할 위젯 클래스 (UBBMUserWidgetBase 파생)
-	 * @param WidgetKey 등록에 사용할 고유 식별 키
-	 * @param ZOrderLayer 위젯의 ZOrder 레이어 (미지정 시 클래스 자체의 기본값 유지)
+	 * FBBMWorldWidgetConfig 구조체 설정을 기반으로 위젯을 생성하고 등록합니다
+	 * @param Config 위젯 클래스, 식별 키, ZOrder 오버라이드 여부 및 ViewModel 클래스 설정
 	 * @return 생성 및 등록된 위젯 인스턴스 포인터 (실패 시 nullptr)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI")
-	UBBMUserWidgetBase* CreateAndRegisterWidget(
-		TSubclassOf<UBBMUserWidgetBase> WidgetClass,
-		FName WidgetKey,
-		EBBMWidgetZOrder ZOrderLayer = EBBMWidgetZOrder::UseClassDefault
-	);
+	UBBMUserWidgetBase* CreateAndRegisterWidgetByConfig(const FBBMWorldWidgetConfig& Config);
 
 	/**
 	 * 식별 키로 등록된 위젯 인스턴스를 조회합니다
@@ -64,6 +59,25 @@ public:
 	T* GetWidgetAs(FName WidgetKey) const
 	{
 		return Cast<T>(GetWidget(WidgetKey));
+	}
+
+	/**
+	 * 식별 키로 등록된 MVVM 뷰모델 인스턴스를 조회합니다
+	 * @param WidgetKey 조회할 식별 키
+	 * @return 등록된 뷰모델 포인터 (미등록 시 nullptr)
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|MVVM")
+	UBBMViewModelBase* GetViewModel(FName WidgetKey) const;
+
+	/**
+	 * 특정 타입으로 캐스팅하여 등록된 뷰모델을 조회하는 C++ 템플릿 헬퍼
+	 * @param WidgetKey 조회할 식별 키
+	 * @return 캐스팅된 뷰모델 포인터
+	 */
+	template<typename T>
+	T* GetViewModelAs(FName WidgetKey) const
+	{
+		return Cast<T>(GetViewModel(WidgetKey));
 	}
 
 	/**
@@ -91,5 +105,9 @@ protected:
 	/* 식별 키별 등록된 활성 월드 위젯 맵 (UPROPERTY 보관으로 GC 방지) */
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UBBMUserWidgetBase>> ActiveWidgets;
+
+	/* 식별 키별 등록된 활성 MVVM 뷰모델 맵 (UPROPERTY 보관으로 GC 방지) */
+	UPROPERTY(Transient)
+	TMap<FName, TObjectPtr<UBBMViewModelBase>> ActiveViewModels;
 };
 

@@ -14,6 +14,7 @@
 
 /* 독립 전방 선언 */
 class UBBMUserWidgetBase;
+class UBBMViewModelBase;
 
 /**
  * BBM UI 위젯 ZOrder 레이어 구분 열거형 (10 간격)
@@ -40,10 +41,7 @@ enum class EBBMWidgetZOrder : uint8
 	FadeLoading  = 50  UMETA(DisplayName = "Fade & Loading (50)"),
 
 	/* 최상단 시스템 메시지, 에러 팝업, 디버그 오버레이 (60) */
-	System          = 60  UMETA(DisplayName = "System / Debug (60)"),
-
-	/* 위젯 클래스 정의의 DefaultZOrderLayer 사용 (255) */
-	UseClassDefault = 255 UMETA(DisplayName = "Use Class Default")
+	System       = 60  UMETA(DisplayName = "System / Debug (60)")
 };
 
 /**
@@ -60,6 +58,29 @@ enum class EBBMWidgetLifecyclePolicy : uint8
 };
 
 /**
+ * BBM 위젯 애니메이션 재생 모드 열거형
+ * (EUMGSequencePlayMode 절대 시작 3종 + 현재 진행 상태 기반 상대 재생 2종)
+ */
+UENUM(BlueprintType)
+enum class EBBMWidgetAnimPlayMode : uint8
+{
+	/* 0.0초(시작점)부터 정방향 재생 [PlayAnimation] */
+	Forward          UMETA(DisplayName = "Forward (From Start)"),
+
+	/* 끝 프레임부터 역방향 재생 [PlayAnimation] */
+	Reverse          UMETA(DisplayName = "Reverse (From End)"),
+
+	/* 시작 -> 끝 -> 시작 왕복 재생 [PlayAnimation] */
+	PingPong         UMETA(DisplayName = "Ping-Pong (Loop)"),
+
+	/* 현재 진행 프레임을 기준으로 끊김 없이 정방향 재생/반전 [PlayAnimationForward] */
+	RelativeForward  UMETA(DisplayName = "Relative Forward (Seamless)"),
+
+	/* 현재 진행 프레임을 기준으로 끊김 없이 역방향 되감기/반전 [PlayAnimationReverse] */
+	RelativeReverse  UMETA(DisplayName = "Relative Reverse (Seamless)")
+};
+
+/**
  * BBM 위젯 애니메이션 재생 설정 구조체
  */
 USTRUCT(BlueprintType)
@@ -71,9 +92,9 @@ struct BBM_API FBBMWidgetAnimConfig
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BBM|UI|Animation")
 	TObjectPtr<UWidgetAnimation> Animation = nullptr;
 
-	/* 재생 방향 (Forward / Reverse / PingPong) */
+	/* 재생 모드 (절대 시작 3종 + 상대적 반전 2종) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BBM|UI|Animation")
-	TEnumAsByte<EUMGSequencePlayMode::Type> PlayMode = EUMGSequencePlayMode::Forward;
+	EBBMWidgetAnimPlayMode PlayMode = EBBMWidgetAnimPlayMode::RelativeForward;
 
 	/* 재생 속도 배율 (기본값: 1.0f) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BBM|UI|Animation")
@@ -113,8 +134,16 @@ struct BBM_API FBBMWorldWidgetConfig
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
 	EBBMWidgetCreationPhase CreationPhase = EBBMWidgetCreationPhase::BeforeEncounter;
 
-	/* 뷰포트 ZOrder 레이어 (UseClassDefault일 경우 위젯 클래스 자체의 기본값 유지) */
+	/* 뷰포트 ZOrder 레이어 오버라이드 여부 (false일 경우 위젯 클래스 자체의 DefaultZOrderLayer 유지) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
-	EBBMWidgetZOrder ZOrderLayer = EBBMWidgetZOrder::UseClassDefault;
+	bool bOverrideZOrder = false;
+
+	/* 오버라이드할 뷰포트 ZOrder 레이어 (bOverrideZOrder가 true일 때만 수정 및 적용) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI", meta = (EditCondition = "bOverrideZOrder"))
+	EBBMWidgetZOrder ZOrderLayer = EBBMWidgetZOrder::Base;
+
+	/* 연결할 MVVM ViewModel 클래스 (선택 사항: 지정 시 ViewModel 인스턴스를 자동 생성하여 위젯과 연동) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
+	TSubclassOf<UBBMViewModelBase> ViewModelClass = nullptr;
 };
 

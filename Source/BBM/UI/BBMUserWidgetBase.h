@@ -16,6 +16,9 @@
 DECLARE_DYNAMIC_DELEGATE(FBBMOnWidgetAnimFinishedDynamicSignature);
 DECLARE_DELEGATE(FBBMOnWidgetAnimFinishedSignature);
 
+/* 독립 전방 선언 */
+class UBBMViewModelBase;
+
 /**
  * BBM 공용 사용자 위젯 베이스 클래스
  * 오픈/클로즈 상태 전환, 전용 애니메이션 연동 및 뷰포트 최적화 수명 주기 정책을 제공함
@@ -108,6 +111,12 @@ private:
 	UFUNCTION()
 	void HandleCloseAnimationFinished();
 
+	/* 현재 등록된 모든 위젯 애니메이션 완료 대리자 바인딩 해제 */
+	void ClearAnimationFinishedBindings();
+
+	/* 애니메이션 설정(EBBMWidgetAnimPlayMode, 속도)에 따른 UMG 분기 재생 헬퍼 */
+	void PlayAnimationByConfig(UWidgetAnimation* InAnim, const FBBMWidgetAnimConfig& InConfig);
+
 	FBBMOnWidgetAnimFinishedDynamicSignature PendingOpenAnimDynamicCallback;
 	FBBMOnWidgetAnimFinishedSignature PendingOpenAnimCallback;
 
@@ -135,4 +144,43 @@ protected:
 	/* 현재 열려 있는지 여부 */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "BBM|UI")
 	bool bIsOpen;
+
+	/* MVVM 뷰모델 수동(Manual) 바인딩 주입 인터페이스 */
+public:
+	/**
+	 * 위젯에 뷰모델 인스턴스를 수동(Manual) 주입하고 UMG MVVM 뷰 확장에 바인딩
+	 * @param InViewModel 주입할 뷰모델 인스턴스
+	 */
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|MVVM")
+	void SetViewModelInstance(UBBMViewModelBase* InViewModel);
+
+	/**
+	 * UMG MVVMView 확장으로부터 특정 클래스 타입에 매칭되는 뷰모델 인스턴스 반환
+	 * @param InViewModelClass 조회할 뷰모델 클래스
+	 * @return 매칭된 뷰모델 인스턴스 (없을 경우 nullptr)
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|MVVM", meta = (DeterminesOutputType = "InViewModelClass"))
+	UBBMViewModelBase* GetViewModelByClass(TSubclassOf<UBBMViewModelBase> InViewModelClass) const;
+
+	/**
+	 * 특정 타입으로 캐스팅하여 UMG MVVMView에서 뷰모델을 반환하는 C++ 템플릿 헬퍼
+	 */
+	template<typename T>
+	T* GetViewModelAs() const
+	{
+		return Cast<T>(GetViewModelByClass(T::StaticClass()));
+	}
+
+	/**
+	 * 위젯의 UMG MVVMView 확장에 등록된 모든 UBBMViewModelBase 인스턴스를 순회하는 헬퍼 함수
+	 * @param Callback 각 뷰모델 인스턴스에 대해 실행할 콜백
+	 */
+	void ForEachViewModel(TFunctionRef<void(UBBMViewModelBase*)> Callback) const;
+
+protected:
+	/**
+	 * 뷰모델이 주입되었을 때 블루프린트에서 추가 바인딩이나 처리를 수행할 수 있는 이벤트
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "BBM|UI|MVVM", meta = (DisplayName = "On ViewModel Assigned"))
+	void BP_OnViewModelAssigned(UBBMViewModelBase* InViewModel);
 };

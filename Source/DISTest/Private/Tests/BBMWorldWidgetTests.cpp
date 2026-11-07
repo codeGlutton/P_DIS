@@ -55,7 +55,22 @@ bool FBBMWidgetZOrderEnumTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Notification 레이어 값은 40이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::Notification), 40);
 	TestEqual(TEXT("FadeLoading 레이어 값은 50이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::FadeLoading), 50);
 	TestEqual(TEXT("System 레이어 값은 60이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::System), 60);
-	TestEqual(TEXT("UseClassDefault 값은 255여야 함"), static_cast<uint8>(EBBMWidgetZOrder::UseClassDefault), 255);
+
+	// FBBMWorldWidgetConfig 기본 설정 검증
+	FBBMWorldWidgetConfig DefaultConfig;
+	TestFalse(TEXT("기본 Config의 bOverrideZOrder는 false여야 함"), DefaultConfig.bOverrideZOrder);
+	TestEqual(TEXT("기본 Config의 ZOrderLayer는 Base(10)여야 함"), DefaultConfig.ZOrderLayer, EBBMWidgetZOrder::Base);
+
+	// EBBMWidgetAnimPlayMode 5종 및 FBBMWidgetAnimConfig 기본 설정 검증
+	TestEqual(TEXT("Forward 열거형 값은 0이어야 함"), static_cast<uint8>(EBBMWidgetAnimPlayMode::Forward), 0);
+	TestEqual(TEXT("Reverse 열거형 값은 1이어야 함"), static_cast<uint8>(EBBMWidgetAnimPlayMode::Reverse), 1);
+	TestEqual(TEXT("PingPong 열거형 값은 2이어야 함"), static_cast<uint8>(EBBMWidgetAnimPlayMode::PingPong), 2);
+	TestEqual(TEXT("RelativeForward 열거형 값은 3이어야 함"), static_cast<uint8>(EBBMWidgetAnimPlayMode::RelativeForward), 3);
+	TestEqual(TEXT("RelativeReverse 열거형 값은 4이어야 함"), static_cast<uint8>(EBBMWidgetAnimPlayMode::RelativeReverse), 4);
+
+	FBBMWidgetAnimConfig DefaultAnimConfig;
+	TestEqual(TEXT("기본 AnimConfig의 PlayMode는 RelativeForward여야 함"), DefaultAnimConfig.PlayMode, EBBMWidgetAnimPlayMode::RelativeForward);
+	TestEqual(TEXT("기본 AnimConfig의 PlaybackSpeed는 1.0f여야 함"), DefaultAnimConfig.PlaybackSpeed, 1.0f);
 
 	return true;
 }
@@ -141,15 +156,21 @@ bool FBBMWorldWidgetSubsystemTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("초기 등록 위젯 수는 0이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 0);
 
 	// 1. 유효하지 않은 인자 방어 검사
-	TestNull(TEXT("nullptr 클래스 전달 시 nullptr 반환"), WidgetSS->CreateAndRegisterWidget(nullptr, TEXT("Invalid")));
-	TestNull(TEXT("NAME_None 키 전달 시 nullptr 반환"), WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), NAME_None));
+	FBBMWorldWidgetConfig InvalidConfig1;
+	InvalidConfig1.WidgetKey = TEXT("Invalid");
+	TestNull(TEXT("nullptr 클래스 전달 시 nullptr 반환"), WidgetSS->CreateAndRegisterWidgetByConfig(InvalidConfig1));
 
-	// 2. 기본값 등록 검증 (ZOrder 미지정 시 클래스 자체의 DefaultZOrderLayer=Base 유지, AutoOpen 제거로 닫힌 채 등록)
+	FBBMWorldWidgetConfig InvalidConfig2;
+	InvalidConfig2.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	InvalidConfig2.WidgetKey = NAME_None;
+	TestNull(TEXT("NAME_None 키 전달 시 nullptr 반환"), WidgetSS->CreateAndRegisterWidgetByConfig(InvalidConfig2));
+
+	// 2. 기본값 등록 검증 (bOverrideZOrder false 시 클래스 자체의 DefaultZOrderLayer=Base 유지, AutoOpen 제거로 닫힌 채 등록)
 	const FName HUDKey(TEXT("MainHUD"));
-	UBBMUserWidgetBase* HUDWidget = WidgetSS->CreateAndRegisterWidget(
-		UBBMUserWidgetBase::StaticClass(),
-		HUDKey
-	);
+	FBBMWorldWidgetConfig HUDConfig;
+	HUDConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	HUDConfig.WidgetKey = HUDKey;
+	UBBMUserWidgetBase* HUDWidget = WidgetSS->CreateAndRegisterWidgetByConfig(HUDConfig);
 	TestNotNull(TEXT("MainHUD 등록 성공"), HUDWidget);
 	if (HUDWidget != nullptr)
 	{
@@ -164,11 +185,12 @@ bool FBBMWorldWidgetSubsystemTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("GetWidgetAs 템플릿 조회 일치"), WidgetSS->GetWidgetAs<UBBMUserWidgetBase>(HUDKey), HUDWidget);
 
 	// 3. 동일 키 중복 등록 시 기존 위젯 교체 및 명시적 ZOrder 적용 검증
-	UBBMUserWidgetBase* NewHUDWidget = WidgetSS->CreateAndRegisterWidget(
-		UBBMUserWidgetBase::StaticClass(),
-		HUDKey,
-		EBBMWidgetZOrder::Notification
-	);
+	FBBMWorldWidgetConfig NewHUDConfig;
+	NewHUDConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	NewHUDConfig.WidgetKey = HUDKey;
+	NewHUDConfig.bOverrideZOrder = true;
+	NewHUDConfig.ZOrderLayer = EBBMWidgetZOrder::Notification;
+	UBBMUserWidgetBase* NewHUDWidget = WidgetSS->CreateAndRegisterWidgetByConfig(NewHUDConfig);
 	TestNotNull(TEXT("새 위젯 교체 등록 성공"), NewHUDWidget);
 	if (NewHUDWidget != nullptr && HUDWidget != nullptr)
 	{
@@ -187,9 +209,26 @@ bool FBBMWorldWidgetSubsystemTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("이미 제거된 키를 다시 제거하면 false 반환"), WidgetSS->RemoveWidget(HUDKey));
 
 	// 5. 다중 위젯 등록 및 ClearAllWidgets 검증
-	WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), TEXT("WidgetA"), EBBMWidgetZOrder::Base);
-	WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), TEXT("WidgetB"), EBBMWidgetZOrder::Popup);
-	WidgetSS->CreateAndRegisterWidget(UBBMUserWidgetBase::StaticClass(), TEXT("WidgetC"), EBBMWidgetZOrder::FadeLoading);
+	FBBMWorldWidgetConfig ConfigA;
+	ConfigA.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	ConfigA.WidgetKey = TEXT("WidgetA");
+	ConfigA.bOverrideZOrder = true;
+	ConfigA.ZOrderLayer = EBBMWidgetZOrder::Base;
+	WidgetSS->CreateAndRegisterWidgetByConfig(ConfigA);
+
+	FBBMWorldWidgetConfig ConfigB;
+	ConfigB.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	ConfigB.WidgetKey = TEXT("WidgetB");
+	ConfigB.bOverrideZOrder = true;
+	ConfigB.ZOrderLayer = EBBMWidgetZOrder::Popup;
+	WidgetSS->CreateAndRegisterWidgetByConfig(ConfigB);
+
+	FBBMWorldWidgetConfig ConfigC;
+	ConfigC.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	ConfigC.WidgetKey = TEXT("WidgetC");
+	ConfigC.bOverrideZOrder = true;
+	ConfigC.ZOrderLayer = EBBMWidgetZOrder::FadeLoading;
+	WidgetSS->CreateAndRegisterWidgetByConfig(ConfigC);
 
 	TestEqual(TEXT("다중 등록 후 위젯 수는 3이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 3);
 

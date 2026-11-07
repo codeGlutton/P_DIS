@@ -48,11 +48,7 @@ void ABBMGameModeBase::CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase Phase)
 	{
 		if (Config.CreationPhase == Phase && Config.WidgetClass != nullptr && Config.WidgetKey != NAME_None)
 		{
-			WidgetSS->CreateAndRegisterWidget(
-				Config.WidgetClass,
-				Config.WidgetKey,
-				Config.ZOrderLayer
-			);
+			WidgetSS->CreateAndRegisterWidgetByConfig(Config);
 		}
 	}
 }

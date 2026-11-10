@@ -32,3 +32,8 @@ bool UBBMAbilitySystemGlobals::HasAttributeSetInitter() const
 	return GlobalAttributeSetInitter.IsValid();
 }
 
+bool UBBMAbilitySystemGlobals::HasAttributeDefaultTables() const
+{
+	return GlobalAttributeDefaultsTables.Num() > 0;
+}
+

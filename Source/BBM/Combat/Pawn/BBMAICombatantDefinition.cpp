@@ -1,4 +1,5 @@
 #include "Combat/Pawn/BBMAICombatantDefinition.h"
+#include "Item/BBMItemDefinition.h"
 #include "Math/RandomStream.h"
 
 #if WITH_EDITOR
@@ -96,6 +97,103 @@ const FBBMAIBeatSequence* UBBMAICombatantDefinition::SelectPattern(FRandomStream
 	}
 
 	return ValidCandidates.Last();
+}
+
+UBBMItemDefinition* UBBMAICombatantDefinition::PickRandomDropItem(const TMap<FGameplayTag, float>& InWeights, const FRandomStream& InRandomStream) const
+{
+	if (DropItemPool.IsEmpty() == true)
+	{
+		return nullptr;
+	}
+
+	// 1. 드랍 풀 내 아이템들을 로드하여 유효 희귀도별로 버킷팅
+	TMap<FGameplayTag, TArray<UBBMItemDefinition*>> ItemsByRarity;
+	for (const TSoftObjectPtr<UBBMItemDefinition>& SoftItem : DropItemPool)
+	{
+		if (UBBMItemDefinition* Item = SoftItem.LoadSynchronous())
+		{
+			float Weight = 1.0f;
+			if (InWeights.IsEmpty() == false)
+			{
+				const float* Found = InWeights.Find(Item->RarityTag);
+				Weight = (Found != nullptr) ? FMath::Max(0.0f, *Found) : 0.0f;
+			}
+
+			if (Weight > 0.0f)
+			{
+				ItemsByRarity.FindOrAdd(Item->RarityTag).Add(Item);
+			}
+		}
+	}
+
+	if (ItemsByRarity.IsEmpty() == true)
+	{
+		return nullptr;
+	}
+
+	// 2. 존재하는 희귀도 태그들의 가중치 합산
+	float TotalRarityWeight = 0.0f;
+	for (const auto& Pair : ItemsByRarity)
+	{
+		float Weight = 1.0f;
+		if (InWeights.IsEmpty() == false)
+		{
+			const float* Found = InWeights.Find(Pair.Key);
+			Weight = (Found != nullptr) ? FMath::Max(0.0f, *Found) : 0.0f;
+		}
+		TotalRarityWeight += Weight;
+	}
+
+	if (TotalRarityWeight <= 0.0f)
+	{
+		return nullptr;
+	}
+
+	// 3. 1단계: 희귀도 룰렛 추첨 (Rarity Roll)
+	const float Roll = InRandomStream.FRandRange(0.0f, TotalRarityWeight);
+	float Accumulated = 0.0f;
+	FGameplayTag SelectedRarityTag;
+
+	for (const auto& Pair : ItemsByRarity)
+	{
+		float Weight = 1.0f;
+		if (InWeights.IsEmpty() == false)
+		{
+			const float* Found = InWeights.Find(Pair.Key);
+			Weight = (Found != nullptr) ? FMath::Max(0.0f, *Found) : 0.0f;
+		}
+
+		Accumulated += Weight;
+		if (Roll <= Accumulated)
+		{
+			SelectedRarityTag = Pair.Key;
+			break;
+		}
+	}
+
+	if (SelectedRarityTag.IsValid() == false)
+	{
+		for (const auto& Pair : ItemsByRarity)
+		{
+			SelectedRarityTag = Pair.Key;
+			break;
+		}
+	}
+
+	// 4. 2단계: 당첨된 희귀도 아이템 목록에서 1/N 균일 무작위 추첨 (Uniform Item Roll)
+	const TArray<UBBMItemDefinition*>* FoundItems = ItemsByRarity.Find(SelectedRarityTag);
+	if (FoundItems != nullptr && FoundItems->IsEmpty() == false)
+	{
+		const int32 RandIdx = InRandomStream.RandRange(0, FoundItems->Num() - 1);
+		return (*FoundItems)[RandIdx];
+	}
+
+	return nullptr;
+}
+
+const TArray<TSoftObjectPtr<UBBMItemDefinition>>& UBBMAICombatantDefinition::GetDropItemPool() const
+{
+	return DropItemPool;
 }
 
 #if WITH_EDITOR

@@ -22,7 +22,7 @@ void FBBMEditorModule::StartupModule()
 		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FBBMBeatSequenceCustomization::MakeInstance)
 	);
 
-	// UBBMInventoryDefinition 클래스 디테일 커스터마이제이션 등록 (2D 인터랙티브 그리드 매트릭스)
+	// UBBMInventoryDefinition 클래스 디테일 커스터마이제이션 등록 (2D 인벤토리 시각화 프리뷰)
 	PropertyModule.RegisterCustomClassLayout(
 		"BBMInventoryDefinition",
 		FOnGetDetailCustomizationInstance::CreateStatic(&FBBMInventoryDefinitionCustomization::MakeInstance)

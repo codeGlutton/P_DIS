@@ -9,7 +9,7 @@
 UBBMItemDefinition::UBBMItemDefinition() :
 	Price(0),
 	BeatSequence(),
-	LinkedAnimLayers(),
+	LinkedAnimLayerTags(),
 	ItemGroupTags()
 {
 }
@@ -80,6 +80,11 @@ bool UBBMItemDefinition::HasItemGroup(const FGameplayTag& InGroupTag) const
 const FGameplayTagContainer& UBBMItemDefinition::GetItemGroupTags() const
 {
 	return ItemGroupTags;
+}
+
+const FGameplayTagContainer& UBBMItemDefinition::GetLinkedAnimLayerTags() const
+{
+	return LinkedAnimLayerTags;
 }
 
 #undef LOCTEXT_NAMESPACE

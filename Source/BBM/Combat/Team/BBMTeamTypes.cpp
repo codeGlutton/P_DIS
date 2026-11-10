@@ -19,10 +19,12 @@ int32 FBBMTeamRelation::FillMissingTeams(EBBMTeamType ContextTeam)
 			continue;
 		}
 
+#if WITH_EDITOR
 		if (TeamEnum->HasMetaData(TEXT("Hidden"), Index) == true)
 		{
 			continue;
 		}
+#endif
 
 		const int64 EnumValue = TeamEnum->GetValueByIndex(Index);
 		if (EnumValue < 0)

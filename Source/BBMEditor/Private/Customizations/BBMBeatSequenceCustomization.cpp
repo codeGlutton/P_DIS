@@ -106,7 +106,7 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildTimelineWidget()
 
 	TSharedRef<SVerticalBox> Container = SNew(SVerticalBox);
 
-	// 1. Track 1: EffectRanges 구간 표기 트랙
+	// 1. Track 1: EffectRanges 구간 표기 트랙 (채움 솔리드 바)
 	Container->AddSlot()
 	.AutoHeight()
 	.Padding(0.0f, 0.0f, 0.0f, 4.0f)
@@ -114,7 +114,15 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildTimelineWidget()
 		BuildEffectRangesTrack(Sequence)
 	];
 
-	// 2. 비트 번호 인디케이터 (1 ~ 8)
+	// 2. Track 2: AnimLayerRanges 구간 표기 트랙 (아웃라인 보더 바)
+	Container->AddSlot()
+	.AutoHeight()
+	.Padding(0.0f, 0.0f, 0.0f, 4.0f)
+	[
+		BuildAnimLayerRangesTrack(Sequence)
+	];
+
+	// 3. 비트 번호 인디케이터 (1 ~ 8)
 	TSharedRef<SHorizontalBox> BeatNumbersBox = SNew(SHorizontalBox);
 	for (int32 BeatIndex = 0; BeatIndex < 8; ++BeatIndex)
 	{
@@ -152,7 +160,7 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildTimelineWidget()
 		BeatNumbersBox
 	];
 
-	// 3. Track 2: 8비트 로직 Actions 가로 바
+	// 4. Track 3: 8비트 로직 Actions 가로 바
 	Container->AddSlot()
 	.AutoHeight()
 	.Padding(2.0f, 2.0f, 0.0f, 1.0f)
@@ -170,7 +178,7 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildTimelineWidget()
 		BuildActionsTrack(Sequence)
 	];
 
-	// 4. Track 3: 8비트 Animations 가로 바
+	// 5. Track 4: 8비트 Animations 가로 바
 	Container->AddSlot()
 	.AutoHeight()
 	.Padding(2.0f, 2.0f, 0.0f, 1.0f)
@@ -316,6 +324,124 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildEffectRangesTrack(const 
 	return RangesContainer;
 }
 
+TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildAnimLayerRangesTrack(const FBBMBeatSequence* Sequence)
+{
+	TSharedRef<SVerticalBox> RangesContainer = SNew(SVerticalBox);
+
+	// 타이틀 라벨
+	RangesContainer->AddSlot()
+	.AutoHeight()
+	.Padding(2.0f, 2.0f, 0.0f, 2.0f)
+	[
+		SNew(STextBlock)
+		.Font(IDetailLayoutBuilder::GetDetailFont())
+		.ColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f, 1.0f)))
+		.Text(LOCTEXT("AnimLayerRangesTrackTitle", "[ 애님 레이어 지속 구간 (Anim Layer Ranges) ]"))
+	];
+
+	if (Sequence == nullptr || Sequence->AnimLayerRanges.IsEmpty() == true)
+	{
+		RangesContainer->AddSlot()
+		.AutoHeight()
+		.Padding(FMargin(2.0f, 2.0f))
+		[
+			SNew(STextBlock)
+			.Font(IDetailLayoutBuilder::GetDetailFont())
+			.ColorAndOpacity(FSlateColor(FLinearColor(0.4f, 0.4f, 0.4f, 1.0f)))
+			.Text(LOCTEXT("NoAnimLayerRangesText", "(설정된 비트 구간 애님 레이어 없음)"))
+		];
+		return RangesContainer;
+	}
+
+	// AnimLayer Range 전용 쿨톤 팔레트 (EffectRange의 웜/원색 톤과 대비)
+	const FLinearColor LayerRangeColors[] = {
+		FLinearColor(0.12f, 0.85f, 0.70f, 1.0f), // 틸 / 민트
+		FLinearColor(0.85f, 0.35f, 0.85f, 1.0f), // 마젠타 / 오키드
+		FLinearColor(0.35f, 0.65f, 0.95f, 1.0f), // 세룰리안 블루
+		FLinearColor(0.95f, 0.55f, 0.20f, 1.0f)  // 앰버 오렌지
+	};
+
+	for (int32 RangeIndex = 0; RangeIndex < Sequence->AnimLayerRanges.Num(); ++RangeIndex)
+	{
+		const FBBMBeatAnimLayerRange& Range = Sequence->AnimLayerRanges[RangeIndex];
+		const int32 Start = FMath::Clamp(Range.StartBeat, 0, 8);
+		const int32 End = FMath::Clamp(Range.EndBeat, 0, 8);
+
+		TSharedRef<SHorizontalBox> RowBox = SNew(SHorizontalBox);
+
+		// Start 이전 공백
+		if (Start > 0)
+		{
+			RowBox->AddSlot()
+			.FillWidth(static_cast<float>(Start))
+			[
+				SNullWidget::NullWidget
+			];
+		}
+
+		// [Start, End) 활성 구간 아웃라인 바
+		if (End > Start)
+		{
+			const FLinearColor CurrentColor = LayerRangeColors[RangeIndex % UE_ARRAY_COUNT(LayerRangeColors)];
+
+			// 식별 태그 문자열
+			const FString TagName = Range.AnimLayerTag.IsValid() ? Range.AnimLayerTag.ToString() : TEXT("None");
+
+			// EffectRange(◀ ▶)와 구분되는 다이아몬드(◆ ◆) 기호 사용
+			const FString RangeLabel = FString::Printf(TEXT("◆ %s [%d ~ %d) ◆"), *TagName, Start + 1, End);
+
+			// 상세 툴팁 텍스트 구성
+			const FString ToolTipString = FString::Printf(TEXT("[애님 레이어 지속 구간] 비트: %d ~ %d (총 %d비트 유지)\n링크 AnimLayer 태그: %s"),
+				Start + 1, End, End - Start, *TagName);
+
+			// 외곽 테두리(Outlined Double Border) 스타일 적용: EffectRange(단색 면 채움)와 시각적으로 확연히 구분됨
+			RowBox->AddSlot()
+			.FillWidth(static_cast<float>(End - Start))
+			.Padding(FMargin(1.0f, 1.0f))
+			[
+				SNew(SBorder)
+				.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+				.BorderBackgroundColor(CurrentColor * 0.9f) // 밝고 뚜렷한 외곽 보더 라인
+				.Padding(FMargin(1.5f)) // 외곽선 두께
+				[
+					SNew(SBorder)
+					.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+					.BorderBackgroundColor(CurrentColor * 0.20f) // 어두운 내부 투명 배경
+					.HAlign(HAlign_Center)
+					.VAlign(VAlign_Center)
+					.ToolTipText(FText::FromString(ToolTipString))
+					.Padding(FMargin(4.0f, 2.0f))
+					[
+						SNew(STextBlock)
+						.Font(IDetailLayoutBuilder::GetDetailFontBold())
+						.ColorAndOpacity(FSlateColor(CurrentColor))
+						.Text(FText::FromString(RangeLabel))
+					]
+				]
+			];
+		}
+
+		// End 이후 공백
+		if (End < 8)
+		{
+			RowBox->AddSlot()
+			.FillWidth(static_cast<float>(8 - End))
+			[
+				SNullWidget::NullWidget
+			];
+		}
+
+		RangesContainer->AddSlot()
+		.AutoHeight()
+		.Padding(0.0f, 1.0f)
+		[
+			RowBox
+		];
+	}
+
+	return RangesContainer;
+}
+
 TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildActionsTrack(const FBBMBeatSequence* Sequence)
 {
 	TSharedRef<SHorizontalBox> ActionsBox = SNew(SHorizontalBox);
@@ -396,6 +522,12 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildActionsTrack(const FBBMB
 				else if (const FBBMMovementAction* MoveAction = static_cast<const FBBMMovementAction*>(Item.ActionPtr))
 				{
 					ToolTipString += FString::Printf(TEXT(" [이동: %d칸]"), MoveAction->StepCount);
+				}
+				else if (const FBBMArmorAction* ArmorAction = static_cast<const FBBMArmorAction*>(Item.ActionPtr))
+				{
+					ToolTipString += FString::Printf(TEXT(" [%s방어도: 계수 %.1f, 기본값: %.1f]"),
+						ArmorAction->bIsTurnArmor ? TEXT("턴") : TEXT("지속"),
+						ArmorAction->Coefficient, ArmorAction->BaseValue);
 				}
 
 				BeatSubActionsBox->AddSlot()
@@ -544,55 +676,87 @@ TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildAnimationsTrack(const FB
 
 TSharedRef<SWidget> FBBMBeatSequenceCustomization::BuildLegendWidget()
 {
-	return SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		.Padding(0.0f, 0.0f, 8.0f, 0.0f)
+	return SNew(SVerticalBox)
+		// 1행: 상단 범위(Range) 트랙 2종 범례 (Solid vs Outline)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 0.0f, 0.0f, 3.0f)
 		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFont())
-			.ColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.25f, 0.25f)))
-			.Text(LOCTEXT("LegendDamage", "■ Damage"))
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0.0f, 0.0f, 12.0f, 0.0f)
+			[
+				SNew(STextBlock)
+				.Font(IDetailLayoutBuilder::GetDetailFont())
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.9f, 0.7f, 0.2f)))
+				.Text(LOCTEXT("LegendEffectRange", "◀▶ Effect Range (Solid)"))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Font(IDetailLayoutBuilder::GetDetailFont())
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.12f, 0.85f, 0.70f)))
+				.Text(LOCTEXT("LegendAnimLayerRange", "◆◆ Anim Layer Range (Outline)"))
+			]
 		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		.Padding(0.0f, 0.0f, 8.0f, 0.0f)
+		// 2행: 비트별 로직 액션 및 4-Slot 애니메이션 연출 범례
+		+ SVerticalBox::Slot()
+		.AutoHeight()
 		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFont())
-			.ColorAndOpacity(FSlateColor(FLinearColor(0.25f, 0.5f, 0.9f)))
-			.Text(LOCTEXT("LegendDefense", "■ Defense"))
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		.Padding(0.0f, 0.0f, 8.0f, 0.0f)
-		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFont())
-			.ColorAndOpacity(FSlateColor(FLinearColor(0.2f, 0.75f, 0.35f)))
-			.Text(LOCTEXT("LegendMovement", "■ Movement"))
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		.Padding(0.0f, 0.0f, 8.0f, 0.0f)
-		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFont())
-			.ColorAndOpacity(FSlateColor(FLinearColor(0.9f, 0.65f, 0.15f)))
-			.Text(LOCTEXT("LegendBuff", "■ Buff/Debuff"))
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		[
-			SNew(STextBlock)
-			.Font(IDetailLayoutBuilder::GetDetailFont())
-			.ColorAndOpacity(FSlateColor(FLinearColor(0.15f, 0.7f, 0.85f)))
-			.Text(LOCTEXT("LegendAnimation", "■ Animation (4-Slot)"))
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0.0f, 0.0f, 8.0f, 0.0f)
+			[
+				SNew(STextBlock)
+				.Font(IDetailLayoutBuilder::GetDetailFont())
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.25f, 0.25f)))
+				.Text(LOCTEXT("LegendDamage", "■ Damage"))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0.0f, 0.0f, 8.0f, 0.0f)
+			[
+				SNew(STextBlock)
+				.Font(IDetailLayoutBuilder::GetDetailFont())
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.25f, 0.5f, 0.9f)))
+				.Text(LOCTEXT("LegendDefense", "■ Defense"))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0.0f, 0.0f, 8.0f, 0.0f)
+			[
+				SNew(STextBlock)
+				.Font(IDetailLayoutBuilder::GetDetailFont())
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.2f, 0.75f, 0.35f)))
+				.Text(LOCTEXT("LegendMovement", "■ Movement"))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0.0f, 0.0f, 8.0f, 0.0f)
+			[
+				SNew(STextBlock)
+				.Font(IDetailLayoutBuilder::GetDetailFont())
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.9f, 0.65f, 0.15f)))
+				.Text(LOCTEXT("LegendBuff", "■ Buff/Debuff"))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Font(IDetailLayoutBuilder::GetDetailFont())
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.15f, 0.7f, 0.85f)))
+				.Text(LOCTEXT("LegendAnimation", "■ Animation (4-Slot)"))
+			]
 		];
 }
 
@@ -624,6 +788,7 @@ FText FBBMBeatSequenceCustomization::GetSummaryText() const
 
 	const int32 BeatCount = Sequence->Beats.Num();
 	const int32 RangeCount = Sequence->EffectRanges.Num();
+	const int32 AnimLayerCount = Sequence->AnimLayerRanges.Num();
 	const bool bValid = Sequence->IsValid();
 
 	FText StatusText;
@@ -641,10 +806,11 @@ FText FBBMBeatSequenceCustomization::GetSummaryText() const
 	}
 
 	return FText::Format(
-		LOCTEXT("BeatSequenceSummaryFormat", "{0}개 비트 ({1}) | {2}개 EffectRange"),
+		LOCTEXT("BeatSequenceSummaryFormat", "{0}개 비트 ({1}) | {2}개 EffectRange | {3}개 AnimLayerRange"),
 		FText::AsNumber(BeatCount),
 		StatusText,
-		FText::AsNumber(RangeCount)
+		FText::AsNumber(RangeCount),
+		FText::AsNumber(AnimLayerCount)
 	);
 }
 

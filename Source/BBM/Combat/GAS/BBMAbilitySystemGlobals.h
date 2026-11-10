@@ -1,4 +1,4 @@
-﻿/*****************************************************************//**
+/*****************************************************************//**
  * @file   BBMAbilitySystemGlobals.h
  * @brief  BBM(비트 배낭 상인) 전역 GAS 싱글톤 클래스 정의
  * @details DLC 및 테스트 환경에서의 동적 CurveTable 주입을 지원하며 Initter 안전성을 보장함
@@ -39,5 +39,8 @@ public:
 
 	/* Initter 할당 여부 확인 */
 	bool HasAttributeSetInitter() const;
+
+	/* 기본 스탯 테이블 등록 여부 확인 */
+	bool HasAttributeDefaultTables() const;
 };
 

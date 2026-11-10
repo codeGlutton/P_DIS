@@ -12,6 +12,8 @@
 #include "AbilitySystemGlobals.h"
 #include "AbilitySystemComponent.h"
 #include "Combat/BBMCombatManagerSubsystem.h"
+#include "Combat/BBM1DTileMapActor.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Combat/BBMCombatTypes.h"
 #include "Combat/GAS/BBMAttributeSet.h"
 #include "Combat/GAS/BBMAbilitySystemGlobals.h"
@@ -1698,6 +1700,15 @@ bool FBBMCombatManagerCenterPointLayoutTest::RunTest(const FString& Parameters)
 	const bool bSetupSuccess = CombatMgr->SetupEncounter(&RuntimeData, CenterActor, nullptr);
 	TestTrue(TEXT("중앙점 기준 SetupEncounter 성공 검증"), bSetupSuccess);
 
+	// 3-1. 1D TileMap Actor 스폰 및 인스턴스 검증
+	ABBM1DTileMapActor* TileMap = CombatMgr->GetActiveTileMapActor();
+	TestNotNull(TEXT("SetupEncounter 시 1D TileMap Actor가 스폰되어야 함"), TileMap);
+	if (TileMap != nullptr)
+	{
+		TestEqual(TEXT("타일 맵 액터의 위치는 중앙점 위치와 일치해야 함"), TileMap->GetActorLocation(), CenterLoc);
+		TestEqual(TEXT("타일 ISM 컴포넌트의 인스턴스 수는 총 6개(아군 3 + 적군 3)여야 함"), TileMap->GetTileISMComponent()->GetInstanceCount(), 6);
+	}
+
 	// 4. 플레이어 상인(아군) 위치 및 회전 검증 (중앙점에서 -LineForward 방향으로 180cm, 적을 바라봄)
 	ABBMPlayerMerchantBase* Merchant = CombatMgr->GetActivePlayerMerchant();
 	TestNotNull(TEXT("스폰된 ActivePlayerMerchant 유효 검증"), Merchant);
@@ -1742,6 +1753,7 @@ bool FBBMCombatManagerCenterPointLayoutTest::RunTest(const FString& Parameters)
 
 	// 정리
 	CombatMgr->ClearCurrentEncounter();
+	TestNull(TEXT("ClearCurrentEncounter 호출 후 ActiveTileMapActor는 nullptr이어야 함"), CombatMgr->GetActiveTileMapActor());
 	if (Merchant != nullptr)
 	{
 		Merchant->Destroy();
@@ -1755,6 +1767,74 @@ bool FBBMCombatManagerCenterPointLayoutTest::RunTest(const FString& Parameters)
 		NewCenterActor->Destroy();
 	}
 
+	return true;
+}
+
+// 27. ABBM1DTileMapActor 타일 및 슬롯 트랜스폼 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBM1DTileMapActorTest,
+	"DIS.BBM.Combat.1DTileMapActor",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBM1DTileMapActorTest::RunTest(const FString& Parameters)
+{
+	FBBMScopedTestWorld TestWorld;
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	const FVector Origin(500.0f, 500.0f, 0.0f);
+	const FRotator Rotation(0.0f, 0.0f, 0.0f);
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	ABBM1DTileMapActor* TileMap = TestWorld.World->SpawnActor<ABBM1DTileMapActor>(
+		ABBM1DTileMapActor::StaticClass(),
+		FTransform(Rotation, Origin),
+		SpawnParams
+	);
+
+	TestNotNull(TEXT("1D TileMap Actor 스폰 성공 검증"), TileMap);
+	if (TileMap == nullptr)
+	{
+		return false;
+	}
+
+	// 1. 기본 설정 및 슬롯 수 검증
+	TestEqual(TEXT("아군 슬롯 수는 3이어야 함"), TileMap->GetSlotCount(EBBMCombatLane::AllyLane), 3);
+	TestEqual(TEXT("적군 슬롯 수는 3이어야 함"), TileMap->GetSlotCount(EBBMCombatLane::EnemyLane), 3);
+	TestNotNull(TEXT("TileISMComponent 유효 검증"), TileMap->GetTileISMComponent());
+	TestEqual(TEXT("기본 생성 시 총 6개의 타일 인스턴스가 생성되어야 함"), TileMap->GetTileISMComponent()->GetInstanceCount(), 6);
+
+	// 2. 슬롯 트랜스폼 대칭성 검증 (CenterOffset = 180, SlotSpacing = 120, TileSize.Z = 10 -> Z오프셋 = 5)
+	const FTransform AllySlot0 = TileMap->GetSlotTransform(EBBMCombatLane::AllyLane, 0);
+	const FTransform EnemySlot0 = TileMap->GetSlotTransform(EBBMCombatLane::EnemyLane, 0);
+
+	TestEqual(TEXT("아군 0번 슬롯 X는 500 - 180 이어야 함"), AllySlot0.GetLocation().X, 500.0 - 180.0);
+	TestEqual(TEXT("적군 0번 슬롯 X는 500 + 180 이어야 함"), EnemySlot0.GetLocation().X, 500.0 + 180.0);
+	TestEqual(TEXT("아군 0번 슬롯 Z는 0 + 5 이어야 함"), AllySlot0.GetLocation().Z, 5.0);
+	TestEqual(TEXT("적군 0번 슬롯 Z는 0 + 5 이어야 함"), EnemySlot0.GetLocation().Z, 5.0);
+	TestEqual(TEXT("아군 회전은 0도(적 방향)여야 함"), AllySlot0.GetRotation().Rotator().Yaw, 0.0);
+	TestEqual(TEXT("적군 회전은 180도(아군 방향)여야 함"), FMath::Abs(EnemySlot0.GetRotation().Rotator().Yaw), 180.0);
+
+	// 3. 후열 슬롯(Index 2) 위치 검증 (Offset 180 + 2 * 120 = 420)
+	const FTransform AllySlot2 = TileMap->GetSlotTransform(EBBMCombatLane::AllyLane, 2);
+	const FTransform EnemySlot2 = TileMap->GetSlotTransform(EBBMCombatLane::EnemyLane, 2);
+	TestEqual(TEXT("아군 2번 슬롯 X는 500 - 420 이어야 함"), AllySlot2.GetLocation().X, 500.0 - 420.0);
+	TestEqual(TEXT("적군 2번 슬롯 X는 500 + 420 이어야 함"), EnemySlot2.GetLocation().X, 500.0 + 420.0);
+
+	// 4. 타일 크기 변경 후 RebuildTiles 검증
+	TileMap->TileSize = FVector(200.0f, 200.0f, 20.0f);
+	TileMap->CenterOffset = 200.0f;
+	TileMap->RebuildTiles();
+
+	const FTransform NewAllySlot0 = TileMap->GetSlotTransform(EBBMCombatLane::AllyLane, 0);
+	TestEqual(TEXT("새 CenterOffset 반영 확인"), NewAllySlot0.GetLocation().X, 500.0 - 200.0);
+	TestEqual(TEXT("새 타일 높이(20)에 따른 Z오프셋(10) 반영 확인"), NewAllySlot0.GetLocation().Z, 10.0);
+
+	TileMap->Destroy();
 	return true;
 }
 

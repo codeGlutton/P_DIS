@@ -24,6 +24,7 @@ class ABBMPlayerMerchantBase;
 class ABBMAICombatantBase;
 class ABBMChestActorBase;
 class ABBMEventNpcBase;
+class ABBM1DTileMapActor;
 class UBBMAICombatantDefinition;
 class UBBMCombatEncounterDefinition;
 class UBBMPlayerCharacterDefinition;
@@ -75,12 +76,14 @@ public:
 	 * @param RuntimeData 다형성 만남 런타임 데이터 포인터
 	 * @param RoomStartPointActor 1D 배틀 타일 라인의 기준 중앙점 액터 (WorldSettings에서 제공)
 	 * @param PlayerDef 플레이어 상인 정적 정의 에셋 (스폰 필요 시 활용, 없으면 기존 상인 재활용)
+	 * @param InTileMapClass 1D 타일 맵 액터 클래스 (nullptr 시 ABBM1DTileMapActor 기본 클래스 사용)
 	 * @return 인카운터 초기화 성공 여부
 	 */
 	bool SetupEncounter(
 		const FBBMRuntimeEncounterData* RuntimeData,
 		AActor* RoomStartPointActor,
-		const UBBMPlayerCharacterDefinition* PlayerDef = nullptr
+		const UBBMPlayerCharacterDefinition* PlayerDef = nullptr,
+		TSubclassOf<ABBM1DTileMapActor> InTileMapClass = nullptr
 	);
 
 	/**
@@ -88,18 +91,24 @@ public:
 	 * @param InEncounterData 다형성 만남 인스턴스 구조체
 	 * @param RoomStartPointActor 1D 배틀 타일 라인의 기준 중앙점 액터
 	 * @param PlayerDef 플레이어 상인 정적 정의 에셋
+	 * @param InTileMapClass 1D 타일 맵 액터 클래스 (nullptr 시 ABBM1DTileMapActor 기본 클래스 사용)
 	 * @return 인카운터 초기화 성공 여부
 	 */
 	UFUNCTION(Category = "BBM|CombatManager", BlueprintCallable)
 	bool SetupEncounterFromInstancedStruct(
 		const TInstancedStruct<FBBMRuntimeEncounterData>& InEncounterData,
 		AActor* RoomStartPointActor,
-		const UBBMPlayerCharacterDefinition* PlayerDef = nullptr
+		const UBBMPlayerCharacterDefinition* PlayerDef = nullptr,
+		TSubclassOf<ABBM1DTileMapActor> InTileMapClass = nullptr
 	);
 
 	/* 현재 레벨에서 활성화된 플레이어 상인 전투원 반환 */
 	UFUNCTION(Category = "BBM|CombatManager", BlueprintCallable, BlueprintPure)
 	ABBMPlayerMerchantBase* GetActivePlayerMerchant() const { return ActivePlayerMerchant; }
+
+	/* 현재 인카운터에 생성된 1D 타일 맵 액터 반환 */
+	UFUNCTION(Category = "BBM|CombatManager", BlueprintCallable, BlueprintPure)
+	ABBM1DTileMapActor* GetActiveTileMapActor() const { return ActiveTileMapActor; }
 
 	/**
 	 * 현재 만남에서 스폰되었던 모든 월드 액터를 안전하게 파괴하고 레인 슬롯을 초기화
@@ -397,6 +406,10 @@ protected:
 	/* 현재 레벨에서 활성화된 플레이어 상인 (인카운터 전환 시 파괴되지 않고 유지됨) */
 	UPROPERTY(Transient)
 	TObjectPtr<ABBMPlayerMerchantBase> ActivePlayerMerchant;
+
+	/* 현재 인카운터에서 스폰된 1D 타일 맵 액터 */
+	UPROPERTY(Transient)
+	TObjectPtr<ABBM1DTileMapActor> ActiveTileMapActor;
 
 	/* 비트 진행 중 각 전투원에 부여된 Active Effect 핸들 관리 */
 	TMap<TWeakObjectPtr<ABBMCombatantBase>, TArray<FActiveGameplayEffectHandle>> ActiveBeatRangeHandles;

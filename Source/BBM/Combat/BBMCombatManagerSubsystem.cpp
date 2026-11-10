@@ -5,6 +5,7 @@
  *********************************************************************/
 
 #include "Combat/BBMCombatManagerSubsystem.h"
+#include "Combat/BBM1DTileMapActor.h"
 #include "Combat/Pawn/BBMCombatantBase.h"
 #include "Combat/Pawn/BBMPlayerMerchantBase.h"
 #include "Combat/Pawn/BBMAICombatantBase.h"
@@ -66,7 +67,8 @@ void UBBMCombatManagerSubsystem::Deinitialize()
 bool UBBMCombatManagerSubsystem::SetupEncounter(
 	const FBBMRuntimeEncounterData* RuntimeData,
 	AActor* RoomStartPointActor,
-	const UBBMPlayerCharacterDefinition* PlayerDef
+	const UBBMPlayerCharacterDefinition* PlayerDef,
+	TSubclassOf<ABBM1DTileMapActor> InTileMapClass
 )
 {
 	// 1단계: 이전 만남 액터 전량 정리
@@ -95,14 +97,30 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(
 	const FRotator CenterRotation = CenterTransform.GetRotation().Rotator();
 	const FVector LineForward = CenterTransform.GetRotation().GetForwardVector();
 
-	// 1D 배틀 라인 중앙점 기준 좌우 배치 간격 (Centimeters)
-	constexpr float BattleLineCenterOffset = 180.0f;  // 중앙점에서 최전방 전투원까지의 거리 (총 대치 간격 360cm)
-	constexpr float BattleLineSlotSpacing = 120.0f;   // 슬롯(2열, 3열...) 간격
+	// 1D 타일 맵 액터 스폰 (중앙점에 위치하여 아군 3칸, 적군 3칸의 타일 및 슬롯 트랜스폼 제공)
+	TSubclassOf<ABBM1DTileMapActor> TileClass = InTileMapClass;
+	if (TileClass == nullptr)
+	{
+		TileClass = ABBM1DTileMapActor::StaticClass();
+	}
+	FActorSpawnParameters TileSpawnParams;
+	TileSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ActiveTileMapActor = World->SpawnActor<ABBM1DTileMapActor>(TileClass, CenterTransform, TileSpawnParams);
+	if (ActiveTileMapActor != nullptr)
+	{
+		SpawnedEncounterActors.Add(ActiveTileMapActor);
+	}
 
-	// 2단계: 플레이어 상인 지연 스폰(SpawnActorDeferred) 또는 기존 상인 위치 텔레포트 (아군: 중앙점 왼쪽 -LineForward 방향)
-	const FVector PlayerLocation = CenterLocation - (LineForward * BattleLineCenterOffset);
-	const FRotator PlayerRotation = CenterRotation; // 오른쪽(적 방향)을 바라봄
-	const FTransform PlayerTransform(PlayerRotation, PlayerLocation);
+	// 1D 배틀 라인 중앙점 기준 좌우 배치 간격 (Centimeters, TileMap 미생성 시 폴백용)
+	constexpr float FallbackCenterOffset = 180.0f;
+	constexpr float FallbackSlotSpacing = 120.0f;
+
+	// 2단계: 플레이어 상인 배치 (ActiveTileMapActor의 아군 0번 슬롯 트랜스폼 활용)
+	const FTransform PlayerTransform = ActiveTileMapActor
+		? ActiveTileMapActor->GetSlotTransform(EBBMCombatLane::AllyLane, 0)
+		: FTransform(CenterRotation, CenterLocation - (LineForward * FallbackCenterOffset));
+	const FVector PlayerLocation = PlayerTransform.GetLocation();
+	const FRotator PlayerRotation = PlayerTransform.GetRotation().Rotator();
 
 	if (ActivePlayerMerchant == nullptr || !IsValid(ActivePlayerMerchant))
 	{
@@ -176,9 +194,10 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(
 				ChestClass = ABBMChestActorBase::StaticClass();
 			}
 
-			// 상자는 중앙선 약간 오른쪽 또는 중앙에 플레이어를 마주보게 배치
-			const FVector ChestLocation = CenterLocation + (LineForward * (BattleLineCenterOffset * 0.5f));
-			const FTransform ChestTransform(FacingPlayerRotation, ChestLocation);
+			// 상자는 적군 0번 슬롯에 플레이어를 마주보게 배치
+			const FTransform ChestTransform = ActiveTileMapActor
+				? ActiveTileMapActor->GetSlotTransform(EBBMCombatLane::EnemyLane, 0)
+				: FTransform(FacingPlayerRotation, CenterLocation + (LineForward * (FallbackCenterOffset * 0.5f)));
 
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -203,8 +222,9 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(
 				NpcClass = ABBMEventNpcBase::StaticClass();
 			}
 
-			const FVector NpcLocation = CenterLocation + (LineForward * (BattleLineCenterOffset + (i * BattleLineSlotSpacing)));
-			const FTransform NpcTransform(FacingPlayerRotation, NpcLocation);
+			const FTransform NpcTransform = ActiveTileMapActor
+				? ActiveTileMapActor->GetSlotTransform(EBBMCombatLane::EnemyLane, i)
+				: FTransform(FacingPlayerRotation, CenterLocation + (LineForward * (FallbackCenterOffset + (i * FallbackSlotSpacing))));
 
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -236,8 +256,9 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(
 						}
 					}
 
-					const FVector MonsterLocation = CenterLocation + (LineForward * (BattleLineCenterOffset + (MonsterIndex * BattleLineSlotSpacing)));
-					const FTransform MonsterTransform(FacingPlayerRotation, MonsterLocation);
+					const FTransform MonsterTransform = ActiveTileMapActor
+						? ActiveTileMapActor->GetSlotTransform(EBBMCombatLane::EnemyLane, MonsterIndex)
+						: FTransform(FacingPlayerRotation, CenterLocation + (LineForward * (FallbackCenterOffset + (MonsterIndex * FallbackSlotSpacing))));
 
 					ABBMAICombatantBase* MonsterActor = World->SpawnActorDeferred<ABBMAICombatantBase>(
 						AIClass,
@@ -272,7 +293,8 @@ bool UBBMCombatManagerSubsystem::SetupEncounter(
 bool UBBMCombatManagerSubsystem::SetupEncounterFromInstancedStruct(
 	const TInstancedStruct<FBBMRuntimeEncounterData>& InEncounterData,
 	AActor* RoomStartPointActor,
-	const UBBMPlayerCharacterDefinition* PlayerDef
+	const UBBMPlayerCharacterDefinition* PlayerDef,
+	TSubclassOf<ABBM1DTileMapActor> InTileMapClass
 )
 {
 	if (InEncounterData.IsValid() == false)
@@ -280,12 +302,13 @@ bool UBBMCombatManagerSubsystem::SetupEncounterFromInstancedStruct(
 		return false;
 	}
 
-	return SetupEncounter(InEncounterData.GetPtr<FBBMRuntimeEncounterData>(), RoomStartPointActor, PlayerDef);
+	return SetupEncounter(InEncounterData.GetPtr<FBBMRuntimeEncounterData>(), RoomStartPointActor, PlayerDef, InTileMapClass);
 }
 
 void UBBMCombatManagerSubsystem::ClearCurrentEncounter()
 {
 	ActiveCombatEncounterDef = nullptr;
+	ActiveTileMapActor = nullptr;
 	ActiveBeatRangeHandles.Empty();
 	PendingRewardItemIds.Empty();
 

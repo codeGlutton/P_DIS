@@ -75,6 +75,14 @@
 		{
 			"Name": "ModelViewViewModel",
 			"Enabled": true
+		},
+		{
+			"Name": "DataValidation",
+			"Enabled": true
+		},
+		{
+			"Name": "AssetLinter",
+			"Enabled": true
 		}
 	]
 }

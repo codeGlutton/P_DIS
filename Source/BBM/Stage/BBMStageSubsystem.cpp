@@ -18,6 +18,7 @@
 #include "Level/BBMWorldSettings.h"
 #include "Save/BBMGameDataSubsystem.h"
 #include "Combat/BBMCombatManagerSubsystem.h"
+#include "Combat/BBM1DTileMapActor.h"
 #include "Engine/GameInstance.h"
 #include "Engine/AssetManager.h"
 #include "DISAssetBundles.h"
@@ -278,13 +279,20 @@ bool UBBMStageSubsystem::ApplyCurrentEncounterToLevel(ABBMPlayerMerchantBase* Cu
 		}
 	}
 
-	// 2. WorldSubsystem에 인카운터(전투/보물/이벤트) 액터 및 플레이어 상인 스폰/배치 위임 (중앙점 기준)
+	// 2. WorldSubsystem에 인카운터(전투/보물/이벤트) 액터 및 플레이어 상인 스폰/배치 위임 (중앙점 기준, 지역별 타일 맵 클래스 연동)
 	if (UBBMCombatManagerSubsystem* CombatMgr = World->GetSubsystem<UBBMCombatManagerSubsystem>())
 	{
+		TSubclassOf<ABBM1DTileMapActor> RegionTileMapClass = nullptr;
+		if (CurrentRegion != nullptr)
+		{
+			RegionTileMapClass = CurrentRegion->GetTileMapActorClass().LoadSynchronous();
+		}
+
 		CombatMgr->SetupEncounter(
 			GetCurrentRuntimeEncounterData(),
 			StartPointActor,
-			ActivePlayerDefinition.Get()
+			ActivePlayerDefinition.Get(),
+			RegionTileMapClass
 		);
 	}
 

@@ -20,6 +20,7 @@ class UBBMEventEncounterDefinition;
 class UBBMTreasureEncounterDefinition;
 class UBBMItemDefinition;
 class UBBMGlobalLogic;
+class ABBM1DTileMapActor;
 
 /**
  * BBM 지역 에셋 식별자 네임스페이스
@@ -121,6 +122,9 @@ public:
 	/* 지역 레벨 소프트 레퍼런스 반환 */
 	const TSoftObjectPtr<UWorld>& GetLevelReference() const;
 
+	/* 해당 지역에서 사용할 1D 전투 타일 맵 액터 클래스 소프트 레퍼런스 반환 */
+	const TSoftClassPtr<ABBM1DTileMapActor>& GetTileMapActorClass() const { return TileMapActorClass; }
+
 	/* 등록된 일반 전투 만남 후보 풀 반환 */
 	const TArray<TSoftObjectPtr<UBBMCombatEncounterDefinition>>& GetCombatEncountersPool() const;
 
@@ -146,9 +150,13 @@ public:
 	UPROPERTY(Category = "Region", EditDefaultsOnly, BlueprintReadOnly)
 	FText RegionName;
 
-	/* 해당 지역에서 사용할 레벨(맵) 소프트 오브젝트 레퍼런스 */
-	UPROPERTY(Category = "Region", EditDefaultsOnly, BlueprintReadOnly)
+	/* 해당 지역에서 사용할 레벨(맵) 소프트 오브젝트 레퍼런스 (World 번들) */
+	UPROPERTY(Category = "Region", EditDefaultsOnly, BlueprintReadOnly, meta = (AssetBundles = "World"))
 	TSoftObjectPtr<UWorld> LevelReference;
+
+	/* 해당 지역에서 사용할 1D 전투 타일 맵 액터 클래스 소프트 레퍼런스 (World 번들, 미설정 시 기본 ABBM1DTileMapActor 사용) */
+	UPROPERTY(Category = "Region|Combat", EditDefaultsOnly, BlueprintReadOnly, meta = (AssetBundles = "World"))
+	TSoftClassPtr<ABBM1DTileMapActor> TileMapActorClass;
 
 	/* 일반 만남(1~4회차) 생성 시 인카운터 타입별 출현 가중치 (미설정 시 기본 Combat 60%, Event 20%, Treasure 20%) */
 	UPROPERTY(Category = "Region|Encounters", EditDefaultsOnly, BlueprintReadOnly)

@@ -33,7 +33,11 @@ public class BBMEditor : ModuleRules
 				"UnrealEd",
 				"ToolMenus",
 				"PropertyEditor",
-				"EditorStyle"
+				"EditorStyle",
+
+				/* 에셋 액션 및 스크립팅 모듈 */
+				"Blutility",
+				"AssetTools"
 			}
 		);
 	}

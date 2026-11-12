@@ -15,11 +15,11 @@ UBBMTitleViewModel::UBBMTitleViewModel()
 {
 }
 
-void UBBMTitleViewModel::NotifyWidgetOpened()
+void UBBMTitleViewModel::OnOpen()
 {
-	Super::NotifyWidgetOpened();
+	Super::OnOpen();
 
-	// 타이틀 위젯이 열리는 시점에 최신 세이브 런 상태 동기화
+	// 타이틀 뷰모델이 열리는 시점에 최신 세이브 런 상태 동기화
 	RefreshTitleState();
 }
 
@@ -33,37 +33,21 @@ void UBBMTitleViewModel::SetContinueVisibility(ESlateVisibility InVisibility)
 	UE_MVVM_SET_PROPERTY_VALUE(ContinueVisibility, InVisibility);
 }
 
-void UBBMTitleViewModel::SetActiveRunSummaryText(const FText& InSummaryText)
+void UBBMTitleViewModel::SetActiveRunEncounterIndex(int32 InEncounterIndex)
 {
-	UE_MVVM_SET_PROPERTY_VALUE(ActiveRunSummaryText, InSummaryText);
+	UE_MVVM_SET_PROPERTY_VALUE(ActiveRunEncounterIndex, InEncounterIndex);
 }
 
 void UBBMTitleViewModel::RefreshTitleState()
 {
 	UWorld* World = GetWorld();
-	if (World == nullptr)
-	{
-		SetCanContinue(false);
-		SetContinueVisibility(ESlateVisibility::Collapsed);
-		SetActiveRunSummaryText(FText::GetEmpty());
-		return;
-	}
-
-	UGameInstance* GI = World->GetGameInstance();
-	if (GI == nullptr)
-	{
-		SetCanContinue(false);
-		SetContinueVisibility(ESlateVisibility::Collapsed);
-		SetActiveRunSummaryText(FText::GetEmpty());
-		return;
-	}
-
-	UBBMGameDataSubsystem* GameDataSS = GI->GetSubsystem<UBBMGameDataSubsystem>();
+	UGameInstance* GI = World != nullptr ? World->GetGameInstance() : nullptr;
+	UBBMGameDataSubsystem* GameDataSS = GI != nullptr ? GI->GetSubsystem<UBBMGameDataSubsystem>() : nullptr;
 	if (GameDataSS == nullptr)
 	{
 		SetCanContinue(false);
 		SetContinueVisibility(ESlateVisibility::Collapsed);
-		SetActiveRunSummaryText(FText::GetEmpty());
+		SetActiveRunEncounterIndex(0);
 		return;
 	}
 
@@ -72,27 +56,10 @@ void UBBMTitleViewModel::RefreshTitleState()
 
 	const bool bHasRun = GameDataSS->HasActiveRun();
 	SetCanContinue(bHasRun);
-	SetContinueVisibility(bHasRun ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	SetContinueVisibility((bHasRun == true) ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 
-	if (bHasRun == true)
-	{
-		if (const UBBMRunSaveGame* RunData = GameDataSS->GetCurrentRunData())
-		{
-			const FText Summary = FText::Format(
-				NSLOCTEXT("BBMTitle", "RunSummaryFmt", "진행도: {0}번째 만남"),
-				FText::AsNumber(RunData->CurrentEncounterIndex)
-			);
-			SetActiveRunSummaryText(Summary);
-		}
-		else
-		{
-			SetActiveRunSummaryText(FText::GetEmpty());
-		}
-	}
-	else
-	{
-		SetActiveRunSummaryText(FText::GetEmpty());
-	}
+	const UBBMRunSaveGame* RunData = (bHasRun == true) ? GameDataSS->GetCurrentRunData() : nullptr;
+	SetActiveRunEncounterIndex(RunData != nullptr ? RunData->CurrentEncounterIndex : 0);
 }
 
 void UBBMTitleViewModel::StartNewGame()

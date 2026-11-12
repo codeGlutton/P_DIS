@@ -10,9 +10,9 @@
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "UI/BBMWorldWidgetTypes.h"
-#include "UI/BBMUserWidgetBase.h"
-#include "UI/BBMTitleWidget.h"
-#include "UI/BBMWorldWidgetSubsystem.h"
+#include "UI/Widget/BBMUserWidgetBase.h"
+#include "UI/Widget/BBMTitleWidget.h"
+#include "UI/BBMWorldUISubsystem.h"
 #include "UI/ViewModel/BBMViewModelBase.h"
 #include "UI/ViewModel/BBMTitleViewModel.h"
 #include "Save/BBMGameDataSubsystem.h"
@@ -38,6 +38,7 @@ struct FBBMMVVMScopedTestWorld
 
 			GameInstance = NewObject<UGameInstance>(GEngine);
 			GameInstance->Init();
+			WorldContext.OwningGameInstance = GameInstance;
 			World->SetGameInstance(GameInstance);
 
 			World->InitializeActorsForPlay(FURL());
@@ -61,7 +62,7 @@ struct FBBMMVVMScopedTestWorld
 	}
 };
 
-// 1. UBBMWorldWidgetSubsystem의 선택적 ViewModel 생성 및 위젯 Manual 주입 검증
+// 1. UBBMWorldUISubsystem의 독립 위젯/ViewModel 생성 및 위젯 수동 연결 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMWorldWidgetViewModelInjectionTest,
 	"DIS.BBM.UI.WorldWidgetViewModelInjection",
@@ -77,82 +78,94 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	UBBMWorldWidgetSubsystem* WidgetSS = TestWorld.World->GetSubsystem<UBBMWorldWidgetSubsystem>();
-	TestNotNull(TEXT("UBBMWorldWidgetSubsystem 획득 검증"), WidgetSS);
-	if (WidgetSS == nullptr)
+	UBBMWorldUISubsystem* UISS = TestWorld.World->GetSubsystem<UBBMWorldUISubsystem>();
+	TestNotNull(TEXT("UBBMWorldUISubsystem 획득 검증"), UISS);
+	if (UISS == nullptr)
 	{
 		return false;
 	}
 
-	// 1-1. ViewModelClass 미지정 시: 위젯만 생성되고 ViewModel은 null이어야 함 (위젯 필수, MVVM 선택적)
+	// 1-1. 순수 위젯만 등록 시 ViewModel은 생성/연결되지 않아야 함
 	const FName PlainWidgetKey(TEXT("PlainWidget"));
 	FBBMWorldWidgetConfig PlainConfig;
-	PlainConfig.WidgetKey = PlainWidgetKey;
 	PlainConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	UBBMUserWidgetBase* PlainWidget = WidgetSS->CreateAndRegisterWidgetByConfig(PlainConfig);
+	UBBMUserWidgetBase* PlainWidget = UISS->CreateAndRegisterWidgetByConfig(PlainWidgetKey, PlainConfig);
 	TestNotNull(TEXT("순수 위젯 등록 성공"), PlainWidget);
 	if (PlainWidget != nullptr)
 	{
-		TestNull(TEXT("서브시스템 GetViewModel도 nullptr"), WidgetSS->GetViewModel(PlainWidgetKey));
+		TestNull(TEXT("서브시스템 GetViewModel은 nullptr"), UISS->GetViewModel(PlainWidgetKey));
+		TestNull(TEXT("위젯 GetViewModel은 nullptr"), PlainWidget->GetViewModel());
 	}
 
-	// 1-2. ViewModelClass 지정 시: 위젯 생성과 동시에 ViewModel 생성 및 주입 완료 검증
+	// 1-2. 위젯과 ViewModel 별도 생성 후 수동 바인딩 주입 검증
 	const FName TitleWidgetKey(TEXT("TitleMenu"));
-	FBBMWorldWidgetConfig TitleConfig;
-	TitleConfig.WidgetKey = TitleWidgetKey;
-	TitleConfig.WidgetClass = UBBMTitleWidget::StaticClass();
-	TitleConfig.ViewModelClass = UBBMTitleViewModel::StaticClass();
-	UBBMUserWidgetBase* TitleUserWidget = WidgetSS->CreateAndRegisterWidgetByConfig(TitleConfig);
+	FBBMWorldWidgetConfig TitleWidgetConfig;
+	TitleWidgetConfig.WidgetClass = UBBMTitleWidget::StaticClass();
+	UBBMUserWidgetBase* TitleUserWidget = UISS->CreateAndRegisterWidgetByConfig(TitleWidgetKey, TitleWidgetConfig);
 	TestNotNull(TEXT("타이틀 위젯 등록 성공"), TitleUserWidget);
+
+	FBBMWorldViewModelConfig TitleVMConfig;
+	TitleVMConfig.ViewModelClass = UBBMTitleViewModel::StaticClass();
+	UBBMViewModelBase* RegisteredVM = UISS->CreateAndRegisterViewModelByConfig(TitleWidgetKey, TitleVMConfig);
+	TestNotNull(TEXT("서브시스템을 통한 ViewModel 독립 생성 및 등록 검증"), RegisteredVM);
 
 	UBBMTitleWidget* TitleWidget = Cast<UBBMTitleWidget>(TitleUserWidget);
 	TestNotNull(TEXT("UBBMTitleWidget 캐스팅 성공"), TitleWidget);
-
-	// 서브시스템을 통한 ViewModel 생성 및 보관 검증
-	UBBMViewModelBase* RegisteredVM = WidgetSS->GetViewModel(TitleWidgetKey);
-	TestNotNull(TEXT("서브시스템을 통한 ViewModel 생성 및 등록 검증"), RegisteredVM);
-	UBBMTitleViewModel* TitleVM = WidgetSS->GetViewModelAs<UBBMTitleViewModel>(TitleWidgetKey);
+	UBBMTitleViewModel* TitleVM = UISS->GetViewModelAs<UBBMTitleViewModel>(TitleWidgetKey);
 	TestNotNull(TEXT("서브시스템의 GetViewModelAs 템플릿 조회 성공"), TitleVM);
 
-	if (TitleWidget != nullptr)
+	if (TitleWidget != nullptr && TitleVM != nullptr)
 	{
-		// 순수 C++ 위젯 인스턴스는 블루프린트 UMVVMViewClass 확장이 없으므로 GetViewModelByClass/GetTitleViewModel은 안전하게 nullptr 반환
-		TestNull(TEXT("순수 C++ 인스턴스에서 MVVMView 미부착 시 GetViewModelByClass는 안전하게 nullptr 반환"), TitleWidget->GetViewModelByClass(UBBMTitleViewModel::StaticClass()));
-		TestNull(TEXT("TitleWidget->GetTitleViewModel 안전 조회 검증"), TitleWidget->GetTitleViewModel());
+		// 수동 연결 전에는 위젯 내부 단일 ViewModel이 비어 있어야 함
+		TestNull(TEXT("수동 연결 전 GetViewModel은 nullptr"), TitleWidget->GetViewModel());
+		TestNull(TEXT("수동 연결 전 TitleWidget->GetTitleViewModel은 nullptr"), TitleWidget->GetTitleViewModel());
+
+		// 수동 연결 이후 단일 ViewModel 및 템플릿 캐스팅 조회가 즉시 동작해야 함
+		TitleWidget->SetViewModelInstance(TitleVM);
+		TestEqual(TEXT("수동 연결 후 GetViewModel 일치"), TitleWidget->GetViewModel(), Cast<UBBMViewModelBase>(TitleVM));
+		TestEqual(TEXT("수동 연결 후 GetViewModelAs 일치"), TitleWidget->GetViewModelAs<UBBMTitleViewModel>(), TitleVM);
+		TestEqual(TEXT("수동 연결 후 TitleWidget->GetTitleViewModel 일치"), TitleWidget->GetTitleViewModel(), TitleVM);
 	}
 
-	// 1-3. 이미 열린 위젯(bIsOpen == true)에 ViewModel 지연 주입 시 NotifyWidgetOpened 즉시 호출 검증
+	// 1-3. 이미 열린 ViewModel(IsOpen == true)을 위젯에 지연 연결 시 View 프레젠테이션 동기화 검증
 	const FName OpenedWidgetKey(TEXT("OpenedWidget"));
-	FBBMWorldWidgetConfig OpenedConfig;
-	OpenedConfig.WidgetKey = OpenedWidgetKey;
-	OpenedConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	UBBMUserWidgetBase* OpenedWidget = WidgetSS->CreateAndRegisterWidgetByConfig(OpenedConfig);
-	TestNotNull(TEXT("오픈 위젯 등록 성공"), OpenedWidget);
-	if (OpenedWidget != nullptr)
+	FBBMWorldWidgetConfig OpenedWidgetConfig;
+	OpenedWidgetConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	UBBMUserWidgetBase* OpenedWidget = UISS->CreateAndRegisterWidgetByConfig(OpenedWidgetKey, OpenedWidgetConfig);
+	TestNotNull(TEXT("지연 연결용 위젯 등록 성공"), OpenedWidget);
+
+	FBBMWorldViewModelConfig DelayedVMConfig;
+	DelayedVMConfig.ViewModelClass = UBBMTitleViewModel::StaticClass();
+	UBBMTitleViewModel* DelayedTitleVM = Cast<UBBMTitleViewModel>(UISS->CreateAndRegisterViewModelByConfig(OpenedWidgetKey, DelayedVMConfig));
+	TestNotNull(TEXT("지연 연결용 ViewModel 등록 성공"), DelayedTitleVM);
+
+	if (OpenedWidget != nullptr && DelayedTitleVM != nullptr)
 	{
-		OpenedWidget->Open();
-		TestTrue(TEXT("위젯 IsOpen true 검증"), OpenedWidget->IsOpen());
+		// 위젯 연결 전 ViewModel->Open() 호출 시 논리 상태 및 OnOpen/OnFinishOpenAnim이 즉시 반영됨
+		OpenedWidget->SetVisibility(ESlateVisibility::Collapsed);
+		DelayedTitleVM->Open();
+		TestTrue(TEXT("ViewModel Open 후 IsOpen은 true"), DelayedTitleVM->IsOpen());
+		TestEqual(TEXT("헤드리스 Open 후 OpenState는 Open"), DelayedTitleVM->GetOpenState(), EBBMWidgetOpenState::Open);
+		TestEqual(TEXT("OnOpen 내 RefreshTitleState 호출로 ContinueVisibility 동기화 완료"), DelayedTitleVM->GetContinueVisibility(), ESlateVisibility::Collapsed);
+		TestEqual(TEXT("위젯 연결 전에는 아직 숨김 상태 유지"), OpenedWidget->GetVisibility(), ESlateVisibility::Collapsed);
 
-		UBBMTitleViewModel* DelayedTitleVM = NewObject<UBBMTitleViewModel>(TestWorld.World);
-		TestNotNull(TEXT("지연 주입용 뷰모델 생성"), DelayedTitleVM);
-		if (DelayedTitleVM != nullptr)
-		{
-			// 위젯이 이미 열린 상태에서 주입 시 SetViewModelInstance 내부에서 즉시 InViewModel->NotifyWidgetOpened()를 호출함
-			// 세이브가 없는 초기 상태이므로 RefreshTitleState()에 의해 ContinueVisibility가 Collapsed로 동기화됨
-			OpenedWidget->SetViewModelInstance(DelayedTitleVM);
-			TestEqual(TEXT("지연 주입 시 NotifyWidgetOpened 즉시 호출로 ContinueVisibility 동기화 완료"), DelayedTitleVM->GetContinueVisibility(), ESlateVisibility::Collapsed);
+		// 이미 열린 ViewModel에 위젯을 뒤늦게 연결하면 즉시 프레젠테이션 가시성이 동기화됨
+		OpenedWidget->SetViewModelInstance(DelayedTitleVM);
+		TestEqual(TEXT("지연 연결 후 위젯 가시성이 SelfHitTestInvisible로 전환되어야 함"), OpenedWidget->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
 
-			// 위젯 Close 호출 시 크래시 없이 닫힘 검증
-			OpenedWidget->Close();
-			TestFalse(TEXT("위젯 IsOpen false 검증"), OpenedWidget->IsOpen());
-		}
-		WidgetSS->RemoveWidget(OpenedWidgetKey);
+		// ViewModel->Close() 호출 시 논리 상태와 View 프레젠테이션이 모두 닫힘
+		DelayedTitleVM->Close();
+		TestFalse(TEXT("ViewModel Close 후 IsOpen은 false"), DelayedTitleVM->IsOpen());
+		TestEqual(TEXT("Close 후 OpenState는 Closed"), DelayedTitleVM->GetOpenState(), EBBMWidgetOpenState::Closed);
+		TestEqual(TEXT("Close 후 위젯 가시성이 Collapsed로 전환되어야 함"), OpenedWidget->GetVisibility(), ESlateVisibility::Collapsed);
+
+		UISS->RemoveUI(OpenedWidgetKey);
 	}
 
-	// 1-4. 위젯 제거 시 연관된 ViewModel도 함께 정리 검증
-	TestTrue(TEXT("TitleMenu 위젯 제거 성공"), WidgetSS->RemoveWidget(TitleWidgetKey));
-	TestNull(TEXT("제거 후 GetWidget은 nullptr"), WidgetSS->GetWidget(TitleWidgetKey));
-	TestNull(TEXT("제거 후 GetViewModel도 nullptr"), WidgetSS->GetViewModel(TitleWidgetKey));
+	// 1-4. RemoveUI 호출 시 위젯과 ViewModel 쌍이 모두 정리되는지 검증
+	TestTrue(TEXT("TitleMenu RemoveUI 호출 성공"), UISS->RemoveUI(TitleWidgetKey));
+	TestNull(TEXT("RemoveUI 후 GetWidget은 nullptr"), UISS->GetWidget(TitleWidgetKey));
+	TestNull(TEXT("RemoveUI 후 GetViewModel도 nullptr"), UISS->GetViewModel(TitleWidgetKey));
 
 	return true;
 }
@@ -199,7 +212,7 @@ bool FBBMTitleViewModelSaveContinueVisibilityTest::RunTest(const FString& Parame
 	TitleVM->RefreshTitleState();
 	TestFalse(TEXT("활성 런 없을 시 bCanContinue는 false"), TitleVM->GetCanContinue());
 	TestEqual(TEXT("활성 런 없을 시 ContinueVisibility는 Collapsed"), TitleVM->GetContinueVisibility(), ESlateVisibility::Collapsed);
-	TestTrue(TEXT("활성 런 없을 시 요약 텍스트는 Empty"), TitleVM->GetActiveRunSummaryText().IsEmpty());
+	TestEqual(TEXT("활성 런 없을 시 현재 조우 인덱스는 0"), TitleVM->GetActiveRunEncounterIndex(), 0);
 
 	// 2-2. 활성 런 세이브가 존재할 때 -> ContinueVisibility == Visible, bCanContinue == true
 	if (RunData != nullptr)
@@ -211,7 +224,7 @@ bool FBBMTitleViewModelSaveContinueVisibilityTest::RunTest(const FString& Parame
 	TitleVM->RefreshTitleState();
 	TestTrue(TEXT("활성 런 존재 시 bCanContinue는 true"), TitleVM->GetCanContinue());
 	TestEqual(TEXT("활성 런 존재 시 ContinueVisibility는 Visible"), TitleVM->GetContinueVisibility(), ESlateVisibility::Visible);
-	TestFalse(TEXT("활성 런 존재 시 요약 텍스트는 비어있지 않아야 함"), TitleVM->GetActiveRunSummaryText().IsEmpty());
+	TestEqual(TEXT("활성 런 존재 시 현재 조우 인덱스는 3"), TitleVM->GetActiveRunEncounterIndex(), 3);
 
 	// 2-3. 네비게이션 델리게이트 브로드캐스트 검증
 	bool bStartGameRequested = false;

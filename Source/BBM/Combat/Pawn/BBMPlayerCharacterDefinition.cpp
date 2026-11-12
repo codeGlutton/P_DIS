@@ -8,11 +8,13 @@
 #include "Inventory/BBMInventoryDefinition.h"
 #include "Stage/BBMRegionDefinition.h"
 
+#define LOCTEXT_NAMESPACE "UBBMPlayerCharacterDefinition"
+
 UBBMPlayerCharacterDefinition::UBBMPlayerCharacterDefinition() :
 	InventoryDefinition(nullptr),
 	StartRegionDefinition(nullptr)
 {
-	DisplayName = FText::FromString(TEXT("Player Merchant"));
+	DisplayName = LOCTEXT("DefaultDisplayName", "플레이어 상인");
 	TableKeyName = FName(TEXT("Player"));
 	DefaultTeam = EBBMTeamType::Player;
 }
@@ -39,3 +41,5 @@ const UBBMRegionDefinition* UBBMPlayerCharacterDefinition::GetStartRegionDefinit
 	}
 	return StartRegionDefinition.LoadSynchronous();
 }
+
+#undef LOCTEXT_NAMESPACE

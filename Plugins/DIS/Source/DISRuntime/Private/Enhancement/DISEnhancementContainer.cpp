@@ -2,10 +2,105 @@
 #include "Enhancement/DISEnhancement.h"
 #include "Enhancement/DISEnhancementEffect.h"
 #include "Enhancement/DISEnhanceableInterface.h"
+#include "Global/DISGlobalSettings.h"
 #include "Global/DISGlobalSubsystem.h"
 #include "Global/DISGlobalLogic.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
+
+#define LOCTEXT_NAMESPACE "UDISEnhancementContainer"
+
+namespace
+{
+	struct FAffixSortEntry
+	{
+		FText Text;
+		int32 Priority = 0;
+		int32 OrderIndex = 0;
+	};
+
+	// 전역 설정의 수식어 구분자를 조회하되 미설정 시 기본 구분자 반환
+	FText GetResolvedAffixDelimiter()
+	{
+		if (const UDISGlobalSettings* GlobalSettings = GetDefault<UDISGlobalSettings>())
+		{
+			const FText& ConfiguredDelimiter = GlobalSettings->GetAffixDelimiter();
+			if (ConfiguredDelimiter.IsEmpty() == false)
+			{
+				return ConfiguredDelimiter;
+			}
+		}
+
+		return LOCTEXT("DefaultAffixDelimiter", ", ");
+	}
+
+	// 수식어 구성에 맞는 전역 설정 이름 서식을 조회하되 비어있을 경우 기본 LOCTEXT 서식 반환
+	FText GetResolvedDisplayNameFormat(const bool bHasPrefix, const bool bHasSuffix)
+	{
+		const UDISGlobalSettings* GlobalSettings = GetDefault<UDISGlobalSettings>();
+
+		if (bHasPrefix == true && bHasSuffix == true)
+		{
+			if (GlobalSettings != nullptr && GlobalSettings->GetEnhancedDisplayNamePrefixAndSuffixFormat().IsEmpty() == false)
+			{
+				return GlobalSettings->GetEnhancedDisplayNamePrefixAndSuffixFormat();
+			}
+
+			return LOCTEXT("DefaultEnhancedDisplayNamePrefixAndSuffixFormat", "{Prefix} {BaseName} {Suffix}");
+		}
+
+		if (bHasPrefix == true)
+		{
+			if (GlobalSettings != nullptr && GlobalSettings->GetEnhancedDisplayNamePrefixOnlyFormat().IsEmpty() == false)
+			{
+				return GlobalSettings->GetEnhancedDisplayNamePrefixOnlyFormat();
+			}
+
+			return LOCTEXT("DefaultEnhancedDisplayNamePrefixOnlyFormat", "{Prefix} {BaseName}");
+		}
+
+		if (GlobalSettings != nullptr && GlobalSettings->GetEnhancedDisplayNameSuffixOnlyFormat().IsEmpty() == false)
+		{
+			return GlobalSettings->GetEnhancedDisplayNameSuffixOnlyFormat();
+		}
+
+		return LOCTEXT("DefaultEnhancedDisplayNameSuffixOnlyFormat", "{BaseName} {Suffix}");
+	}
+
+	// 우선순위 내림차순(동률 시 등록 순서 유지)으로 정렬한 뒤 다중 수식어를 전역 설정 구분자로 결합
+	FText BuildCombinedAffixText(TArray<FAffixSortEntry>& InOutEntries)
+	{
+		if (InOutEntries.IsEmpty() == true)
+		{
+			return FText::GetEmpty();
+		}
+
+		InOutEntries.Sort([](const FAffixSortEntry& Left, const FAffixSortEntry& Right)
+		{
+			if (Left.Priority != Right.Priority)
+			{
+				return Left.Priority > Right.Priority;
+			}
+			return Left.OrderIndex < Right.OrderIndex;
+		});
+
+		if (InOutEntries.Num() == 1)
+		{
+			return InOutEntries[0].Text;
+		}
+
+		TArray<FText> OrderedTexts;
+		OrderedTexts.Reserve(InOutEntries.Num());
+		for (const FAffixSortEntry& Entry : InOutEntries)
+		{
+			OrderedTexts.Add(Entry.Text);
+		}
+
+		return FText::Join(GetResolvedAffixDelimiter(), OrderedTexts);
+	}
+}
+
+#undef LOCTEXT_NAMESPACE
 
 /* FScopedEnhancementContainerLock */
 
@@ -470,17 +565,10 @@ void UDISEnhancementContainer::UpdateCachedAffixes() const
 		return;
 	}
 
-	CachedPrefix.Reset();
-	CachedSuffix.Reset();
+	CachedPrefix = FText::GetEmpty();
+	CachedSuffix = FText::GetEmpty();
 
 	// 1. 유효한 활성 강화의 접두사와 접미사를 수집
-	struct FAffixSortEntry
-	{
-		FText Text;
-		int32 Priority = 0;
-		int32 OrderIndex = 0;
-	};
-
 	TArray<FAffixSortEntry> ValidPrefixes;
 	TArray<FAffixSortEntry> ValidSuffixes;
 
@@ -519,43 +607,15 @@ void UDISEnhancementContainer::UpdateCachedAffixes() const
 	CollectAffixes(ActiveEnhancements);
 	CollectAffixes(PendingAddEnhancements);
 
-	// 2. 우선순위 정렬 람다 (우선순위 내림차순: 높은 값이 앞쪽, 동률 시 등록 순서 유지)
-	auto AffixSorter = [](const FAffixSortEntry& A, const FAffixSortEntry& B)
+	if (ValidPrefixes.IsEmpty() == true && ValidSuffixes.IsEmpty() == true)
 	{
-		if (A.Priority != B.Priority)
-		{
-			return A.Priority > B.Priority;
-		}
-		return A.OrderIndex < B.OrderIndex;
-	};
-
-	// 3. 접두사 정렬 및 결합 (우선순위 높은 것이 앞쪽)
-	if (ValidPrefixes.IsEmpty() == false)
-	{
-		ValidPrefixes.Sort(AffixSorter);
-		for (int32 Index = 0; Index < ValidPrefixes.Num(); ++Index)
-		{
-			if (Index > 0)
-			{
-				CachedPrefix.Append(TEXT(" "));
-			}
-			CachedPrefix.Append(ValidPrefixes[Index].Text.ToString());
-		}
+		bIsDisplayNameDirty = false;
+		return;
 	}
 
-	// 4. 접미사 정렬 및 결합 (우선순위 높은 것이 앞쪽)
-	if (ValidSuffixes.IsEmpty() == false)
-	{
-		ValidSuffixes.Sort(AffixSorter);
-		for (int32 Index = 0; Index < ValidSuffixes.Num(); ++Index)
-		{
-			if (Index > 0)
-			{
-				CachedSuffix.Append(TEXT(" "));
-			}
-			CachedSuffix.Append(ValidSuffixes[Index].Text.ToString());
-		}
-	}
+	// 2. 접두사 및 접미사 정렬 후 고정 구분자(", ")로 결합
+	CachedPrefix = BuildCombinedAffixText(ValidPrefixes);
+	CachedSuffix = BuildCombinedAffixText(ValidSuffixes);
 
 	bIsDisplayNameDirty = false;
 }
@@ -564,37 +624,57 @@ FText UDISEnhancementContainer::GetEnhancedDisplayName(const FText& BaseName) co
 {
 	UpdateCachedAffixes();
 
+	const bool bHasPrefix = CachedPrefix.IsEmpty() == false;
+	const bool bHasSuffix = CachedSuffix.IsEmpty() == false;
+
 	// 수식어가 모두 없는 경우 기본 이름 그대로 반환
-	if (CachedPrefix.IsEmpty() == true && CachedSuffix.IsEmpty() == true)
+	if (bHasPrefix == false && bHasSuffix == false)
 	{
 		return BaseName;
 	}
 
-	FString ResultString;
-	if (CachedPrefix.IsEmpty() == false)
+	// 기본 이름이 비어있는 경우 불필요한 공백 포맷을 피하고 수식어만 결합
+	if (BaseName.IsEmptyOrWhitespace() == true)
 	{
-		ResultString.Append(CachedPrefix);
-		ResultString.Append(TEXT(" "));
+		if (bHasPrefix == true && bHasSuffix == true)
+		{
+			return FText::Join(GetResolvedAffixDelimiter(), CachedPrefix, CachedSuffix);
+		}
+
+		if (bHasPrefix == true)
+		{
+			return CachedPrefix;
+		}
+
+		return CachedSuffix;
 	}
 
-	ResultString.Append(BaseName.ToString());
+	// 수식어 구성에 맞는 전역 설정 이름 포맷 적용
+	FFormatNamedArguments FormatArgs;
+	FormatArgs.Reserve(3);
+	FormatArgs.Add(TEXT("BaseName"), BaseName);
 
-	if (CachedSuffix.IsEmpty() == false)
+	if (bHasPrefix == true)
 	{
-		ResultString.Append(TEXT(" "));
-		ResultString.Append(CachedSuffix);
+		FormatArgs.Add(TEXT("Prefix"), CachedPrefix);
 	}
 
-	return FText::FromString(ResultString.TrimStartAndEnd());
+	if (bHasSuffix == true)
+	{
+		FormatArgs.Add(TEXT("Suffix"), CachedSuffix);
+	}
+
+	const FText DisplayNameFormat = GetResolvedDisplayNameFormat(bHasPrefix, bHasSuffix);
+	return FText::Format(DisplayNameFormat, FormatArgs);
 }
 
-FString UDISEnhancementContainer::GetCachedPrefix() const
+FText UDISEnhancementContainer::GetCachedPrefix() const
 {
 	UpdateCachedAffixes();
 	return CachedPrefix;
 }
 
-FString UDISEnhancementContainer::GetCachedSuffix() const
+FText UDISEnhancementContainer::GetCachedSuffix() const
 {
 	UpdateCachedAffixes();
 	return CachedSuffix;

@@ -2,8 +2,10 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "UI/BBMWorldWidgetTypes.h"
-#include "UI/BBMUserWidgetBase.h"
-#include "UI/BBMWorldWidgetSubsystem.h"
+#include "UI/Widget/BBMUserWidgetBase.h"
+#include "UI/BBMWorldUISubsystem.h"
+#include "UI/ViewModel/BBMViewModelBase.h"
+#include "UI/ViewModel/BBMTitleViewModel.h"
 #include "Level/BBMGameModeBase.h"
 #include "Level/BBMTitleGameMode.h"
 #include "Level/BBMStageGameMode.h"
@@ -56,10 +58,24 @@ bool FBBMWidgetZOrderEnumTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("FadeLoading 레이어 값은 50이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::FadeLoading), 50);
 	TestEqual(TEXT("System 레이어 값은 60이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::System), 60);
 
-	// FBBMWorldWidgetConfig 기본 설정 검증
-	FBBMWorldWidgetConfig DefaultConfig;
-	TestFalse(TEXT("기본 Config의 bOverrideZOrder는 false여야 함"), DefaultConfig.bOverrideZOrder);
-	TestEqual(TEXT("기본 Config의 ZOrderLayer는 Base(10)여야 함"), DefaultConfig.ZOrderLayer, EBBMWidgetZOrder::Base);
+	// FBBMWorldWidgetConfig / FBBMWorldViewModelConfig / FBBMWorldUIConfig 기본 설정 검증
+	FBBMWorldWidgetConfig DefaultWidgetConfig;
+	TestFalse(TEXT("기본 WidgetConfig의 bOverrideZOrder는 false여야 함"), DefaultWidgetConfig.bOverrideZOrder);
+	TestEqual(TEXT("기본 WidgetConfig의 ZOrderLayer는 Base(10)여야 함"), DefaultWidgetConfig.ZOrderLayer, EBBMWidgetZOrder::Base);
+	TestNull(TEXT("기본 WidgetConfig의 WidgetClass는 nullptr여야 함"), DefaultWidgetConfig.WidgetClass.Get());
+
+	FBBMWorldViewModelConfig DefaultViewModelConfig;
+	TestNull(TEXT("기본 ViewModelConfig의 ViewModelClass는 nullptr여야 함"), DefaultViewModelConfig.ViewModelClass.Get());
+
+	FBBMWorldUIConfig DefaultUIConfig;
+	TestEqual(TEXT("기본 UIConfig의 WidgetKey는 NAME_None이어야 함"), DefaultUIConfig.WidgetKey, NAME_None);
+	TestEqual(TEXT("기본 UIConfig의 CreationPhase는 BeforeEncounter여야 함"), DefaultUIConfig.CreationPhase, EBBMWidgetCreationPhase::BeforeEncounter);
+
+	// EBBMWidgetOpenState 열거형 값 검증
+	TestEqual(TEXT("Closed 열거형 값은 0이어야 함"), static_cast<uint8>(EBBMWidgetOpenState::Closed), 0);
+	TestEqual(TEXT("Opening 열거형 값은 1이어야 함"), static_cast<uint8>(EBBMWidgetOpenState::Opening), 1);
+	TestEqual(TEXT("Open 열거형 값은 2여야 함"), static_cast<uint8>(EBBMWidgetOpenState::Open), 2);
+	TestEqual(TEXT("Closing 열거형 값은 3이어야 함"), static_cast<uint8>(EBBMWidgetOpenState::Closing), 3);
 
 	// EBBMWidgetAnimPlayMode 5종 및 FBBMWidgetAnimConfig 기본 설정 검증
 	TestEqual(TEXT("Forward 열거형 값은 0이어야 함"), static_cast<uint8>(EBBMWidgetAnimPlayMode::Forward), 0);
@@ -75,7 +91,7 @@ bool FBBMWidgetZOrderEnumTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// 2. UBBMUserWidgetBase Open/Close 및 애니메이션 라이프사이클 검증
+// 2. UBBMViewModelBase 중심 Open/Close, 상태/FieldNotify 및 UBBMUserWidgetBase 프레젠테이션 연동 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMUserWidgetBaseLifecycleTest,
 	"DIS.BBM.WorldWidget.LifecyclePolicyAndOpenClose",
@@ -84,6 +100,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FBBMUserWidgetBaseLifecycleTest::RunTest(const FString& Parameters)
 {
+	// 0. 베이스 뷰모델 Abstract 유지 검증
+	TestTrue(TEXT("UBBMViewModelBase는 Abstract 클래스여야 함"), UBBMViewModelBase::StaticClass()->HasAnyClassFlags(CLASS_Abstract));
+
 	FBBMWidgetScopedTestWorld TestWorld;
 	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
 	if (TestWorld.World == nullptr)
@@ -93,51 +112,136 @@ bool FBBMUserWidgetBaseLifecycleTest::RunTest(const FString& Parameters)
 
 	UBBMUserWidgetBase* Widget = CreateWidget<UBBMUserWidgetBase>(TestWorld.World, UBBMUserWidgetBase::StaticClass());
 	TestNotNull(TEXT("위젯 생성 성공 검증"), Widget);
-	if (Widget == nullptr)
+	UBBMTitleViewModel* ViewModel = NewObject<UBBMTitleViewModel>(TestWorld.World);
+	TestNotNull(TEXT("구체 파생 ViewModel 생성 성공 검증"), ViewModel);
+	if (Widget == nullptr || ViewModel == nullptr)
 	{
 		return false;
 	}
 
-	// 1. 초기 상태 검증
-	TestFalse(TEXT("초기 상태에서 IsOpen은 false여야 함"), Widget->IsOpen());
+	// FieldNotify 통지 기록용 델리게이트 등록
+	int32 IsOpenNotifyCount = 0;
+	int32 IsShowingNotifyCount = 0;
+	TArray<EBBMWidgetOpenState> NotifiedOpenStates;
+	FDelegateHandle IsOpenDelegateHandle = ViewModel->AddFieldValueChangedDelegate(
+		UBBMViewModelBase::FFieldNotificationClassDescriptor::IsOpen,
+		UBBMViewModelBase::FFieldValueChangedDelegate::CreateLambda([ViewModel, &IsOpenNotifyCount](UObject* InObject, UE::FieldNotification::FFieldId InFieldId)
+		{
+			if (InObject == ViewModel)
+			{
+				++IsOpenNotifyCount;
+			}
+		})
+	);
+	FDelegateHandle IsShowingDelegateHandle = ViewModel->AddFieldValueChangedDelegate(
+		UBBMViewModelBase::FFieldNotificationClassDescriptor::IsShowing,
+		UBBMViewModelBase::FFieldValueChangedDelegate::CreateLambda([ViewModel, &IsShowingNotifyCount](UObject* InObject, UE::FieldNotification::FFieldId InFieldId)
+		{
+			if (InObject == ViewModel)
+			{
+				++IsShowingNotifyCount;
+			}
+		})
+	);
+	FDelegateHandle OpenStateDelegateHandle = ViewModel->AddFieldValueChangedDelegate(
+		UBBMViewModelBase::FFieldNotificationClassDescriptor::OpenState,
+		UBBMViewModelBase::FFieldValueChangedDelegate::CreateLambda([ViewModel, &NotifiedOpenStates](UObject* InObject, UE::FieldNotification::FFieldId InFieldId)
+		{
+			if (InObject == ViewModel)
+			{
+				NotifiedOpenStates.Add(ViewModel->GetOpenState());
+			}
+		})
+	);
+
+	// 1. 초기 상태 및 단일 ViewModel 연결 검증
+	TestFalse(TEXT("초기 상태에서 ViewModel IsOpen은 false여야 함"), ViewModel->IsOpen());
+	TestFalse(TEXT("초기 상태에서 ViewModel IsShowing은 false여야 함"), ViewModel->IsShowing());
+	TestEqual(TEXT("초기 상태에서 ViewModel OpenState는 Closed여야 함"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Closed);
 	TestEqual(TEXT("기본 ZOrder는 Base여야 함"), Widget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Base);
+	TestNull(TEXT("연결 전 위젯의 단일 ViewModel은 nullptr여야 함"), Widget->GetViewModel());
 
-	// 2. Open 및 Close 호출 검증
-	Widget->Open();
-	TestTrue(TEXT("Open() 호출 후 IsOpen은 true여야 함"), Widget->IsOpen());
+	Widget->SetViewModelInstance(ViewModel);
+	TestEqual(TEXT("연결 후 위젯의 단일 ViewModel 일치 검증"), Widget->GetViewModel(), Cast<UBBMViewModelBase>(ViewModel));
 
-	Widget->Close();
-	TestFalse(TEXT("Close() 호출 후 IsOpen은 false여야 함"), Widget->IsOpen());
+	// 2. ViewModel Open 및 Close 호출과 FieldNotify 즉시 반영 검증
+	ViewModel->Open();
+	TestTrue(TEXT("Open() 호출 후 IsOpen은 true여야 함"), ViewModel->IsOpen());
+	TestTrue(TEXT("Open() 호출 후 IsShowing은 true여야 함"), ViewModel->IsShowing());
+	TestEqual(TEXT("Open() 호출 후 OpenState는 Open이어야 함"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Open);
+	TestEqual(TEXT("Open() 호출 시 IsOpen FieldNotify 1회 발생"), IsOpenNotifyCount, 1);
+	TestEqual(TEXT("Open() 호출 시 IsShowing FieldNotify 1회 발생"), IsShowingNotifyCount, 1);
+	TestEqual(TEXT("Open() 호출 시 위젯 가시성이 SelfHitTestInvisible이어야 함"), Widget->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
+
+	ViewModel->Close();
+	TestFalse(TEXT("Close() 호출 후 IsOpen은 false여야 함"), ViewModel->IsOpen());
+	TestFalse(TEXT("Close() 호출 후 IsShowing은 false여야 함"), ViewModel->IsShowing());
+	TestEqual(TEXT("Close() 호출 후 OpenState는 Closed여야 함"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Closed);
+	TestEqual(TEXT("Close() 호출 시 IsOpen FieldNotify 2회 누적"), IsOpenNotifyCount, 2);
+	TestEqual(TEXT("Close() 호출 시 IsShowing FieldNotify 2회 누적"), IsShowingNotifyCount, 2);
+	TestEqual(TEXT("Close() 호출 시 위젯 가시성이 Collapsed여야 함"), Widget->GetVisibility(), ESlateVisibility::Collapsed);
+	TestTrue(TEXT("OpenState FieldNotify 전이 이력 존재 검증"), NotifiedOpenStates.Num() >= 4);
+	if (NotifiedOpenStates.Num() >= 4)
+	{
+		TestEqual(TEXT("전환 1단계는 Opening"), NotifiedOpenStates[0], EBBMWidgetOpenState::Opening);
+		TestEqual(TEXT("전환 2단계는 Open"), NotifiedOpenStates[1], EBBMWidgetOpenState::Open);
+		TestEqual(TEXT("전환 3단계는 Closing"), NotifiedOpenStates[2], EBBMWidgetOpenState::Closing);
+		TestEqual(TEXT("전환 4단계는 Closed"), NotifiedOpenStates[3], EBBMWidgetOpenState::Closed);
+	}
 
 	// 3. 애니메이션이 없는 상태에서 OpenWithAnim 즉시 완료 검증
 	bool bOpenCallbackFired = false;
-	Widget->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bOpenCallbackFired]()
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bOpenCallbackFired]()
 	{
 		bOpenCallbackFired = true;
 	}));
 	TestTrue(TEXT("OpenWithAnim 호출 시 애니메이션이 없으면 즉시 완료 대리자 호출됨"), bOpenCallbackFired);
-	TestTrue(TEXT("OpenWithAnim 호출 후 IsOpen은 true여야 함"), Widget->IsOpen());
+	TestTrue(TEXT("OpenWithAnim 호출 후 IsOpen은 true여야 함"), ViewModel->IsOpen());
+	TestEqual(TEXT("OpenWithAnim 완료 후 OpenState는 Open이어야 함"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Open);
 
 	// 4. 애니메이션이 없는 상태에서 CloseWithAnim 즉시 완료 검증
 	bool bCloseCallbackFired = false;
-	Widget->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bCloseCallbackFired]()
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bCloseCallbackFired]()
 	{
 		bCloseCallbackFired = true;
 	}));
 	TestTrue(TEXT("CloseWithAnim 호출 시 애니메이션이 없으면 즉시 완료 대리자 호출됨"), bCloseCallbackFired);
-	TestFalse(TEXT("CloseWithAnim 호출 후 IsOpen은 false여야 함"), Widget->IsOpen());
+	TestFalse(TEXT("CloseWithAnim 호출 후 IsOpen은 false여야 함"), ViewModel->IsOpen());
+	TestEqual(TEXT("CloseWithAnim 완료 후 OpenState는 Closed여야 함"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Closed);
+
+	// 5. View가 없는 헤드리스 상태에서도 OpenWithAnim/CloseWithAnim 즉시 완료 검증
+	Widget->SetViewModelInstance(nullptr);
+	bool bHeadlessOpenFired = false;
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bHeadlessOpenFired]()
+	{
+		bHeadlessOpenFired = true;
+	}));
+	TestTrue(TEXT("헤드리스 OpenWithAnim 즉시 완료 검증"), bHeadlessOpenFired);
+	TestTrue(TEXT("헤드리스 OpenWithAnim 후 IsOpen은 true"), ViewModel->IsOpen());
+
+	bool bHeadlessCloseFired = false;
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bHeadlessCloseFired]()
+	{
+		bHeadlessCloseFired = true;
+	}));
+	TestTrue(TEXT("헤드리스 CloseWithAnim 즉시 완료 검증"), bHeadlessCloseFired);
+	TestFalse(TEXT("헤드리스 CloseWithAnim 후 IsOpen은 false"), ViewModel->IsOpen());
+
+	ViewModel->RemoveFieldValueChangedDelegate(UBBMViewModelBase::FFieldNotificationClassDescriptor::IsOpen, IsOpenDelegateHandle);
+	ViewModel->RemoveFieldValueChangedDelegate(UBBMViewModelBase::FFieldNotificationClassDescriptor::IsShowing, IsShowingDelegateHandle);
+	ViewModel->RemoveFieldValueChangedDelegate(UBBMViewModelBase::FFieldNotificationClassDescriptor::OpenState, OpenStateDelegateHandle);
 
 	return true;
 }
 
-// 3. UBBMWorldWidgetSubsystem 위젯 등록, 조회, 교체, 제거 및 일괄 클리어 검증
+// 3. UBBMWorldUISubsystem 위젯/ViewModel 독립 등록, 조회, 교체, 분리 제거 및 일괄 클리어 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FBBMWorldWidgetSubsystemTest,
+	FBBMWorldUISubsystemTest,
 	"DIS.BBM.WorldWidget.SubsystemRegisterAndQuery",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
 )
 
-bool FBBMWorldWidgetSubsystemTest::RunTest(const FString& Parameters)
+bool FBBMWorldUISubsystemTest::RunTest(const FString& Parameters)
 {
 	FBBMWidgetScopedTestWorld TestWorld;
 	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
@@ -146,97 +250,143 @@ bool FBBMWorldWidgetSubsystemTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	UBBMWorldWidgetSubsystem* WidgetSS = TestWorld.World->GetSubsystem<UBBMWorldWidgetSubsystem>();
-	TestNotNull(TEXT("UBBMWorldWidgetSubsystem 획득 성공 검증"), WidgetSS);
-	if (WidgetSS == nullptr)
+	UBBMWorldUISubsystem* UISS = TestWorld.World->GetSubsystem<UBBMWorldUISubsystem>();
+	TestNotNull(TEXT("UBBMWorldUISubsystem 획득 성공 검증"), UISS);
+	if (UISS == nullptr)
 	{
 		return false;
 	}
 
-	TestEqual(TEXT("초기 등록 위젯 수는 0이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 0);
+	TestEqual(TEXT("초기 등록 위젯 수는 0이어야 함"), UISS->GetRegisteredWidgetCount(), 0);
+	TestEqual(TEXT("초기 등록 ViewModel 수는 0이어야 함"), UISS->GetRegisteredViewModelCount(), 0);
 
-	// 1. 유효하지 않은 인자 방어 검사
-	FBBMWorldWidgetConfig InvalidConfig1;
-	InvalidConfig1.WidgetKey = TEXT("Invalid");
-	TestNull(TEXT("nullptr 클래스 전달 시 nullptr 반환"), WidgetSS->CreateAndRegisterWidgetByConfig(InvalidConfig1));
+	// 1. 유효하지 않은 인자 방어 검사 (위젯/ViewModel 및 Abstract 클래스 방어)
+	FBBMWorldWidgetConfig InvalidWidgetConfig;
+	TestNull(TEXT("nullptr 위젯 클래스 전달 시 nullptr 반환"), UISS->CreateAndRegisterWidgetByConfig(TEXT("Invalid"), InvalidWidgetConfig));
 
-	FBBMWorldWidgetConfig InvalidConfig2;
-	InvalidConfig2.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	InvalidConfig2.WidgetKey = NAME_None;
-	TestNull(TEXT("NAME_None 키 전달 시 nullptr 반환"), WidgetSS->CreateAndRegisterWidgetByConfig(InvalidConfig2));
+	FBBMWorldWidgetConfig ValidWidgetConfig;
+	ValidWidgetConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	TestNull(TEXT("NAME_None 위젯 키 전달 시 nullptr 반환"), UISS->CreateAndRegisterWidgetByConfig(NAME_None, ValidWidgetConfig));
 
-	// 2. 기본값 등록 검증 (bOverrideZOrder false 시 클래스 자체의 DefaultZOrderLayer=Base 유지, AutoOpen 제거로 닫힌 채 등록)
+	FBBMWorldViewModelConfig InvalidVMConfig1;
+	TestNull(TEXT("nullptr ViewModel 클래스 전달 시 nullptr 반환"), UISS->CreateAndRegisterViewModelByConfig(TEXT("InvalidVM"), InvalidVMConfig1));
+
+	FBBMWorldViewModelConfig InvalidVMConfig2;
+	InvalidVMConfig2.ViewModelClass = UBBMViewModelBase::StaticClass();
+	TestNull(TEXT("Abstract ViewModel 베이스 클래스 전달 시 nullptr 반환"), UISS->CreateAndRegisterViewModelByConfig(TEXT("AbstractVM"), InvalidVMConfig2));
+
+	FBBMWorldViewModelConfig ValidVMConfig;
+	ValidVMConfig.ViewModelClass = UBBMTitleViewModel::StaticClass();
+	TestNull(TEXT("NAME_None ViewModel 키 전달 시 nullptr 반환"), UISS->CreateAndRegisterViewModelByConfig(NAME_None, ValidVMConfig));
+
+	// 2. 순수 위젯과 순수 ViewModel 독립 생성 및 수동 연결 검증
 	const FName HUDKey(TEXT("MainHUD"));
-	FBBMWorldWidgetConfig HUDConfig;
-	HUDConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	HUDConfig.WidgetKey = HUDKey;
-	UBBMUserWidgetBase* HUDWidget = WidgetSS->CreateAndRegisterWidgetByConfig(HUDConfig);
-	TestNotNull(TEXT("MainHUD 등록 성공"), HUDWidget);
-	if (HUDWidget != nullptr)
+	FBBMWorldWidgetConfig HUDWidgetConfig;
+	HUDWidgetConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	UBBMUserWidgetBase* HUDWidget = UISS->CreateAndRegisterWidgetByConfig(HUDKey, HUDWidgetConfig);
+	TestNotNull(TEXT("MainHUD 위젯 등록 성공"), HUDWidget);
+	TestEqual(TEXT("위젯 단독 생성 시 ViewModel 개수는 0이어야 함"), UISS->GetRegisteredViewModelCount(), 0);
+
+	FBBMWorldViewModelConfig HUDVMConfig;
+	HUDVMConfig.ViewModelClass = UBBMTitleViewModel::StaticClass();
+	UBBMViewModelBase* HUDViewModel = UISS->CreateAndRegisterViewModelByConfig(HUDKey, HUDVMConfig);
+	TestNotNull(TEXT("MainHUD ViewModel 등록 성공"), HUDViewModel);
+	TestEqual(TEXT("등록된 위젯 수는 1이어야 함"), UISS->GetRegisteredWidgetCount(), 1);
+	TestEqual(TEXT("등록된 ViewModel 수는 1이어야 함"), UISS->GetRegisteredViewModelCount(), 1);
+
+	if (HUDWidget != nullptr && HUDViewModel != nullptr)
 	{
-		TestFalse(TEXT("등록 직후에는 열려있지 않아야 함"), HUDWidget->IsOpen());
 		TestEqual(TEXT("ZOrder 미지정 시 클래스 기본값(Base) 유지"), HUDWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Base);
-		HUDWidget->Open();
-		TestTrue(TEXT("수동 Open() 후 열림 상태 확인"), HUDWidget->IsOpen());
+		TestNull(TEXT("수동 연결 전 위젯의 ViewModel은 nullptr"), HUDWidget->GetViewModel());
+
+		HUDWidget->SetViewModelInstance(HUDViewModel);
+		HUDViewModel->Open();
+		TestTrue(TEXT("ViewModel Open 후 열림 상태 확인"), HUDViewModel->IsOpen());
+		TestEqual(TEXT("ViewModel Open 후 위젯 가시성 확인"), HUDWidget->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
 	}
 
-	TestEqual(TEXT("등록된 위젯 수는 1이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 1);
-	TestEqual(TEXT("GetWidget으로 등록된 위젯 조회 일치"), WidgetSS->GetWidget(HUDKey), HUDWidget);
-	TestEqual(TEXT("GetWidgetAs 템플릿 조회 일치"), WidgetSS->GetWidgetAs<UBBMUserWidgetBase>(HUDKey), HUDWidget);
+	TestEqual(TEXT("GetWidget으로 등록된 위젯 조회 일치"), UISS->GetWidget(HUDKey), HUDWidget);
+	TestEqual(TEXT("GetWidgetAs 템플릿 조회 일치"), UISS->GetWidgetAs<UBBMUserWidgetBase>(HUDKey), HUDWidget);
+	TestEqual(TEXT("GetViewModel로 등록된 ViewModel 조회 일치"), UISS->GetViewModel(HUDKey), HUDViewModel);
+	TestEqual(TEXT("GetViewModelAs 템플릿 조회 일치"), UISS->GetViewModelAs<UBBMTitleViewModel>(HUDKey), Cast<UBBMTitleViewModel>(HUDViewModel));
 
-	// 3. 동일 키 중복 등록 시 기존 위젯 교체 및 명시적 ZOrder 적용 검증
+	// 3. 동일 키 위젯 중복 등록 시 기존 위젯만 교체되며 ViewModel은 유지됨 검증
 	FBBMWorldWidgetConfig NewHUDConfig;
 	NewHUDConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	NewHUDConfig.WidgetKey = HUDKey;
 	NewHUDConfig.bOverrideZOrder = true;
 	NewHUDConfig.ZOrderLayer = EBBMWidgetZOrder::Notification;
-	UBBMUserWidgetBase* NewHUDWidget = WidgetSS->CreateAndRegisterWidgetByConfig(NewHUDConfig);
+	UBBMUserWidgetBase* NewHUDWidget = UISS->CreateAndRegisterWidgetByConfig(HUDKey, NewHUDConfig);
 	TestNotNull(TEXT("새 위젯 교체 등록 성공"), NewHUDWidget);
 	if (NewHUDWidget != nullptr && HUDWidget != nullptr)
 	{
 		TestNotEqual(TEXT("기존 위젯과 다른 새 인스턴스여야 함"), HUDWidget, NewHUDWidget);
-		TestFalse(TEXT("등록 직후에는 열려있지 않아야 함"), NewHUDWidget->IsOpen());
+		TestFalse(TEXT("교체된 이전 위젯은 뷰포트에서 분리되었어야 함"), HUDWidget->IsInViewport());
+		TestNull(TEXT("교체된 이전 위젯의 ViewModel 참조는 해제되었어야 함"), HUDWidget->GetViewModel());
 		TestEqual(TEXT("명시적으로 지정된 ZOrderLayer(Notification)가 적용되어야 함"), NewHUDWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Notification);
-		TestEqual(TEXT("동일 키 교체 후에도 총 등록 위젯 수는 1이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 1);
-		TestEqual(TEXT("조회 시 새로 등록된 위젯이 반환되어야 함"), WidgetSS->GetWidget(HUDKey), NewHUDWidget);
-		TestFalse(TEXT("교체된 이전 위젯은 Close되었어야 함"), HUDWidget->IsOpen());
+		TestEqual(TEXT("동일 키 교체 후에도 총 등록 위젯 수는 1이어야 함"), UISS->GetRegisteredWidgetCount(), 1);
+		TestEqual(TEXT("위젯만 교체 시 기존 ViewModel 수는 1로 유지되어야 함"), UISS->GetRegisteredViewModelCount(), 1);
+		TestEqual(TEXT("조회 시 새로 등록된 위젯이 반환되어야 함"), UISS->GetWidget(HUDKey), NewHUDWidget);
 	}
 
-	// 4. 단일 위젯 제거 검증
-	TestTrue(TEXT("RemoveWidget 성공"), WidgetSS->RemoveWidget(HUDKey));
-	TestNull(TEXT("제거 후 GetWidget은 nullptr"), WidgetSS->GetWidget(HUDKey));
-	TestEqual(TEXT("제거 후 등록 위젯 수는 0이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 0);
-	TestFalse(TEXT("이미 제거된 키를 다시 제거하면 false 반환"), WidgetSS->RemoveWidget(HUDKey));
+	// 4. RemoveWidget / RemoveViewModel / RemoveUI 분리 제거 검증
+	TestTrue(TEXT("RemoveWidget 단독 제거 성공"), UISS->RemoveWidget(HUDKey));
+	TestNull(TEXT("RemoveWidget 후 GetWidget은 nullptr"), UISS->GetWidget(HUDKey));
+	TestEqual(TEXT("RemoveWidget 후 등록 위젯 수는 0이어야 함"), UISS->GetRegisteredWidgetCount(), 0);
+	TestNotNull(TEXT("RemoveWidget 이후에도 동일 키의 ViewModel은 유지되어야 함"), UISS->GetViewModel(HUDKey));
+	TestFalse(TEXT("이미 제거된 위젯 키를 다시 제거하면 false 반환"), UISS->RemoveWidget(HUDKey));
 
-	// 5. 다중 위젯 등록 및 ClearAllWidgets 검증
+	TestTrue(TEXT("RemoveViewModel 단독 제거 성공"), UISS->RemoveViewModel(HUDKey));
+	TestNull(TEXT("RemoveViewModel 후 GetViewModel은 nullptr"), UISS->GetViewModel(HUDKey));
+	TestEqual(TEXT("RemoveViewModel 후 등록 ViewModel 수는 0이어야 함"), UISS->GetRegisteredViewModelCount(), 0);
+	TestFalse(TEXT("이미 제거된 ViewModel 키를 다시 제거하면 false 반환"), UISS->RemoveViewModel(HUDKey));
+
+	const FName PairKey(TEXT("PairUI"));
+	UBBMUserWidgetBase* PairWidget = UISS->CreateAndRegisterWidgetByConfig(PairKey, ValidWidgetConfig);
+	UBBMViewModelBase* PairVM = UISS->CreateAndRegisterViewModelByConfig(PairKey, ValidVMConfig);
+	if (PairWidget != nullptr && PairVM != nullptr)
+	{
+		PairWidget->SetViewModelInstance(PairVM);
+		PairVM->Open();
+	}
+	TestTrue(TEXT("RemoveUI 쌍 제거 성공"), UISS->RemoveUI(PairKey));
+	TestNull(TEXT("RemoveUI 후 위젯 조회 불가"), UISS->GetWidget(PairKey));
+	TestNull(TEXT("RemoveUI 후 ViewModel 조회 불가"), UISS->GetViewModel(PairKey));
+	TestFalse(TEXT("RemoveUI 후 PairVM 논리 상태도 닫혀야 함"), PairVM != nullptr ? PairVM->IsOpen() : true);
+
+	// 5. 다중 등록 및 ClearAllWidgets / ClearAllViewModels 분리 정리 검증
 	FBBMWorldWidgetConfig ConfigA;
 	ConfigA.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	ConfigA.WidgetKey = TEXT("WidgetA");
 	ConfigA.bOverrideZOrder = true;
 	ConfigA.ZOrderLayer = EBBMWidgetZOrder::Base;
-	WidgetSS->CreateAndRegisterWidgetByConfig(ConfigA);
+	UISS->CreateAndRegisterWidgetByConfig(TEXT("WidgetA"), ConfigA);
+	UISS->CreateAndRegisterViewModelByConfig(TEXT("WidgetA"), ValidVMConfig);
 
 	FBBMWorldWidgetConfig ConfigB;
 	ConfigB.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	ConfigB.WidgetKey = TEXT("WidgetB");
 	ConfigB.bOverrideZOrder = true;
 	ConfigB.ZOrderLayer = EBBMWidgetZOrder::Popup;
-	WidgetSS->CreateAndRegisterWidgetByConfig(ConfigB);
+	UISS->CreateAndRegisterWidgetByConfig(TEXT("WidgetB"), ConfigB);
+	UISS->CreateAndRegisterViewModelByConfig(TEXT("WidgetB"), ValidVMConfig);
 
 	FBBMWorldWidgetConfig ConfigC;
 	ConfigC.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	ConfigC.WidgetKey = TEXT("WidgetC");
 	ConfigC.bOverrideZOrder = true;
 	ConfigC.ZOrderLayer = EBBMWidgetZOrder::FadeLoading;
-	WidgetSS->CreateAndRegisterWidgetByConfig(ConfigC);
+	UISS->CreateAndRegisterWidgetByConfig(TEXT("WidgetC"), ConfigC);
 
-	TestEqual(TEXT("다중 등록 후 위젯 수는 3이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 3);
+	TestEqual(TEXT("다중 등록 후 위젯 수는 3이어야 함"), UISS->GetRegisteredWidgetCount(), 3);
+	TestEqual(TEXT("다중 등록 후 ViewModel 수는 2여야 함"), UISS->GetRegisteredViewModelCount(), 2);
 
-	WidgetSS->ClearAllWidgets();
-	TestEqual(TEXT("ClearAllWidgets 호출 후 위젯 수는 0이어야 함"), WidgetSS->GetRegisteredWidgetCount(), 0);
-	TestNull(TEXT("Clear 후 WidgetA 조회 불가"), WidgetSS->GetWidget(TEXT("WidgetA")));
-	TestNull(TEXT("Clear 후 WidgetB 조회 불가"), WidgetSS->GetWidget(TEXT("WidgetB")));
-	TestNull(TEXT("Clear 후 WidgetC 조회 불가"), WidgetSS->GetWidget(TEXT("WidgetC")));
+	UISS->ClearAllWidgets();
+	TestEqual(TEXT("ClearAllWidgets 호출 후 위젯 수는 0이어야 함"), UISS->GetRegisteredWidgetCount(), 0);
+	TestEqual(TEXT("ClearAllWidgets 호출 후에도 ViewModel 수는 2로 유지되어야 함"), UISS->GetRegisteredViewModelCount(), 2);
+	TestNull(TEXT("Clear 후 WidgetA 위젯 조회 불가"), UISS->GetWidget(TEXT("WidgetA")));
+	TestNotNull(TEXT("ClearAllWidgets 후 WidgetA ViewModel은 조회 가능"), UISS->GetViewModel(TEXT("WidgetA")));
+
+	UISS->ClearAllViewModels();
+	TestEqual(TEXT("ClearAllViewModels 호출 후 ViewModel 수는 0이어야 함"), UISS->GetRegisteredViewModelCount(), 0);
+	TestNull(TEXT("ClearAllViewModels 후 WidgetA ViewModel 조회 불가"), UISS->GetViewModel(TEXT("WidgetA")));
+	TestNull(TEXT("ClearAllViewModels 후 WidgetB ViewModel 조회 불가"), UISS->GetViewModel(TEXT("WidgetB")));
 
 	return true;
 }
@@ -296,6 +446,204 @@ bool FBBMGameModeHierarchyTest::RunTest(const FString& Parameters)
 			ABBMCameraActorBase::StaticClass()
 		);
 	}
+
+	return true;
+}
+
+// 5. OpenState 파생 IsOpen/IsShowing FieldNotify 및 Opening/Closing/Open/Closed 콜백 누적/즉시실행/스냅 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMViewModelTransitionCallbackQueueTest,
+	"DIS.BBM.WorldWidget.ViewModelTransitionCallbackQueue",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters)
+{
+	FBBMWidgetScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	UBBMTitleViewModel* ViewModel = NewObject<UBBMTitleViewModel>(TestWorld.World);
+	TestNotNull(TEXT("테스트용 ViewModel 생성 성공"), ViewModel);
+	if (ViewModel == nullptr)
+	{
+		return false;
+	}
+
+	int32 IsOpenNotifyCount = 0;
+	int32 IsShowingNotifyCount = 0;
+	FDelegateHandle IsOpenHandle = ViewModel->AddFieldValueChangedDelegate(
+		UBBMViewModelBase::FFieldNotificationClassDescriptor::IsOpen,
+		UBBMViewModelBase::FFieldValueChangedDelegate::CreateLambda([ViewModel, &IsOpenNotifyCount](UObject* InObject, UE::FieldNotification::FFieldId InFieldId)
+		{
+			if (InObject == ViewModel)
+			{
+				++IsOpenNotifyCount;
+			}
+		})
+	);
+	FDelegateHandle IsShowingHandle = ViewModel->AddFieldValueChangedDelegate(
+		UBBMViewModelBase::FFieldNotificationClassDescriptor::IsShowing,
+		UBBMViewModelBase::FFieldValueChangedDelegate::CreateLambda([ViewModel, &IsShowingNotifyCount](UObject* InObject, UE::FieldNotification::FFieldId InFieldId)
+		{
+			if (InObject == ViewModel)
+			{
+				++IsShowingNotifyCount;
+			}
+		})
+	);
+
+	// 비동기 애니메이션 재생을 모사하는 프레젠테이션 핸들러 바인딩
+	int32 OpenHandlerCallCount = 0;
+	int32 CloseHandlerCallCount = 0;
+	ViewModel->BindPresentationHandlers(
+		TestWorld.World,
+		FBBMOnPresentationTransitionRequestedSignature::CreateLambda([ViewModel, &OpenHandlerCallCount](bool bWithAnim)
+		{
+			++OpenHandlerCallCount;
+			if (bWithAnim == false)
+			{
+				ViewModel->NotifyOpenTransitionFinished();
+			}
+		}),
+		FBBMOnPresentationTransitionRequestedSignature::CreateLambda([ViewModel, &CloseHandlerCallCount](bool bWithAnim)
+		{
+			++CloseHandlerCallCount;
+			if (bWithAnim == false)
+			{
+				ViewModel->NotifyCloseTransitionFinished();
+			}
+		})
+	);
+
+	// 1. Closed 상태에서 CloseWithAnim 요청 시 CloseHandler 재실행 없이 콜백만 즉시 처리
+	bool bClosedImmediateCallbackFired = false;
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bClosedImmediateCallbackFired]()
+	{
+		bClosedImmediateCallbackFired = true;
+	}));
+	TestTrue(TEXT("Closed 상태에서 CloseWithAnim 콜백은 즉시 실행되어야 함"), bClosedImmediateCallbackFired);
+	TestEqual(TEXT("Closed 상태에서 CloseWithAnim 호출 시 CloseHandler가 호출되면 안 됨"), CloseHandlerCallCount, 0);
+	TestFalse(TEXT("Closed 상태에서 IsOpen은 false여야 함"), ViewModel->IsOpen());
+	TestFalse(TEXT("Closed 상태에서 IsShowing은 false여야 함"), ViewModel->IsShowing());
+
+	// 2. Opening 진입 및 Opening 중 OpenWithAnim 다중 호출 시 콜백만 누적 검증
+	TArray<int32> OpenCallbackOrder;
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&OpenCallbackOrder]()
+	{
+		OpenCallbackOrder.Add(1);
+	}));
+	TestEqual(TEXT("첫 OpenWithAnim 후 OpenState는 Opening이어야 함"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Opening);
+	TestTrue(TEXT("Opening 상태에서 IsOpen은 true여야 함"), ViewModel->IsOpen());
+	TestTrue(TEXT("Opening 상태에서 IsShowing은 true여야 함"), ViewModel->IsShowing());
+	TestEqual(TEXT("Closed->Opening 전이 시 IsOpen FieldNotify 1회"), IsOpenNotifyCount, 1);
+	TestEqual(TEXT("Closed->Opening 전이 시 IsShowing FieldNotify 1회"), IsShowingNotifyCount, 1);
+	TestEqual(TEXT("OpenHandler는 1회 호출되어야 함"), OpenHandlerCallCount, 1);
+	TestEqual(TEXT("애니메이션 완료 전까지 Open 콜백은 아직 실행되면 안 됨"), OpenCallbackOrder.Num(), 0);
+
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&OpenCallbackOrder]()
+	{
+		OpenCallbackOrder.Add(2);
+	}));
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&OpenCallbackOrder]()
+	{
+		OpenCallbackOrder.Add(3);
+	}));
+	TestEqual(TEXT("Opening 중 추가 OpenWithAnim 호출 시 OpenHandler는 재호출되지 않아야 함"), OpenHandlerCallCount, 1);
+	TestEqual(TEXT("추가 요청 시점에도 애니메이션 완료 전까지 콜백 미실행"), OpenCallbackOrder.Num(), 0);
+
+	// 3. Open 완료 통지 시 누적 콜백 일괄 순차 실행 및 파생 FieldNotify 중복 미발생 검증
+	ViewModel->NotifyOpenTransitionFinished();
+	TestEqual(TEXT("완료 후 OpenState는 Open이어야 함"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Open);
+	TestEqual(TEXT("Opening->Open 전이 시 IsOpen FieldNotify 추가 발생 없음"), IsOpenNotifyCount, 1);
+	TestEqual(TEXT("Opening->Open 전이 시 IsShowing FieldNotify 추가 발생 없음"), IsShowingNotifyCount, 1);
+	TestEqual(TEXT("누적된 Open 콜백 3개가 모두 실행되어야 함"), OpenCallbackOrder.Num(), 3);
+	if (OpenCallbackOrder.Num() == 3)
+	{
+		TestEqual(TEXT("콜백 1 순서 일치"), OpenCallbackOrder[0], 1);
+		TestEqual(TEXT("콜백 2 순서 일치"), OpenCallbackOrder[1], 2);
+		TestEqual(TEXT("콜백 3 순서 일치"), OpenCallbackOrder[2], 3);
+	}
+
+	// 4. Open 상태에서 OpenWithAnim 요청 시 재실행 없이 즉시 콜백 처리 검증
+	bool bOpenImmediateCallbackFired = false;
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bOpenImmediateCallbackFired]()
+	{
+		bOpenImmediateCallbackFired = true;
+	}));
+	TestTrue(TEXT("Open 상태에서 OpenWithAnim 콜백은 즉시 실행되어야 함"), bOpenImmediateCallbackFired);
+	TestEqual(TEXT("Open 상태에서 OpenWithAnim 호출 시 OpenHandler가 재호출되면 안 됨"), OpenHandlerCallCount, 1);
+
+	// 5. Closing 진입 시 IsOpen == false, IsShowing == true 및 Closing 중 CloseWithAnim 콜백 누적 검증
+	TArray<int32> CloseCallbackOrder;
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CloseCallbackOrder]()
+	{
+		CloseCallbackOrder.Add(1);
+	}));
+	TestEqual(TEXT("첫 CloseWithAnim 후 OpenState는 Closing이어야 함"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Closing);
+	TestFalse(TEXT("Closing 상태에서 IsOpen은 false여야 함"), ViewModel->IsOpen());
+	TestTrue(TEXT("Closing 상태에서 IsShowing은 여전히 true여야 함"), ViewModel->IsShowing());
+	TestEqual(TEXT("Open->Closing 전이 시 IsOpen FieldNotify 2회 누적"), IsOpenNotifyCount, 2);
+	TestEqual(TEXT("Open->Closing 전이 시 IsShowing FieldNotify는 1회 유지"), IsShowingNotifyCount, 1);
+	TestEqual(TEXT("CloseHandler는 1회 호출되어야 함"), CloseHandlerCallCount, 1);
+
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CloseCallbackOrder]()
+	{
+		CloseCallbackOrder.Add(2);
+	}));
+	TestEqual(TEXT("Closing 중 추가 CloseWithAnim 호출 시 CloseHandler는 재호출되지 않아야 함"), CloseHandlerCallCount, 1);
+	TestEqual(TEXT("완료 전 Close 콜백 미실행"), CloseCallbackOrder.Num(), 0);
+
+	// 6. Close 완료 통지 시 IsShowing == false, IsShowing FieldNotify 발송 및 누적 콜백 순차 실행 검증
+	ViewModel->NotifyCloseTransitionFinished();
+	TestEqual(TEXT("완료 후 OpenState는 Closed여야 함"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Closed);
+	TestFalse(TEXT("Closed 상태에서 IsOpen은 false여야 함"), ViewModel->IsOpen());
+	TestFalse(TEXT("Closed 상태에서 IsShowing은 false여야 함"), ViewModel->IsShowing());
+	TestEqual(TEXT("Closing->Closed 전이 시 IsOpen FieldNotify는 2회 유지"), IsOpenNotifyCount, 2);
+	TestEqual(TEXT("Closing->Closed 전이 시 IsShowing FieldNotify 2회 누적"), IsShowingNotifyCount, 2);
+	TestEqual(TEXT("누적된 Close 콜백 2개가 모두 실행되어야 함"), CloseCallbackOrder.Num(), 2);
+	if (CloseCallbackOrder.Num() == 2)
+	{
+		TestEqual(TEXT("Close 콜백 1 순서 일치"), CloseCallbackOrder[0], 1);
+		TestEqual(TEXT("Close 콜백 2 순서 일치"), CloseCallbackOrder[1], 2);
+	}
+
+	// 7. Opening 중 무애님 Open() 호출(옵션 B) 시 즉시 스냅 및 누적 콜백 일괄 호출 검증
+	int32 SnapOpenCount = 0;
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapOpenCount]()
+	{
+		++SnapOpenCount;
+	}));
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapOpenCount]()
+	{
+		++SnapOpenCount;
+	}));
+	TestEqual(TEXT("Opening 스냅 전 콜백 수 0"), SnapOpenCount, 0);
+	ViewModel->Open();
+	TestEqual(TEXT("Opening 중 무애님 Open() 호출 시 즉시 Open 상태 확정"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Open);
+	TestEqual(TEXT("Opening 중 무애님 Open() 호출 시 누적 콜백 2개 모두 호출"), SnapOpenCount, 2);
+
+	// 8. Closing 중 무애님 Close() 호출(옵션 B) 시 즉시 스냅 및 누적 콜백 일괄 호출 검증
+	int32 SnapCloseCount = 0;
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCloseCount]()
+	{
+		++SnapCloseCount;
+	}));
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCloseCount]()
+	{
+		++SnapCloseCount;
+	}));
+	TestEqual(TEXT("Closing 스냅 전 콜백 수 0"), SnapCloseCount, 0);
+	ViewModel->Close();
+	TestEqual(TEXT("Closing 중 무애님 Close() 호출 시 즉시 Closed 상태 확정"), ViewModel->GetOpenState(), EBBMWidgetOpenState::Closed);
+	TestEqual(TEXT("Closing 중 무애님 Close() 호출 시 누적 콜백 2개 모두 호출"), SnapCloseCount, 2);
+
+	ViewModel->ClearPresentationHandlers(TestWorld.World);
+	ViewModel->RemoveFieldValueChangedDelegate(UBBMViewModelBase::FFieldNotificationClassDescriptor::IsOpen, IsOpenHandle);
+	ViewModel->RemoveFieldValueChangedDelegate(UBBMViewModelBase::FFieldNotificationClassDescriptor::IsShowing, IsShowingHandle);
 
 	return true;
 }

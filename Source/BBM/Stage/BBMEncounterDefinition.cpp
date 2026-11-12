@@ -9,11 +9,13 @@
 #include "Stage/BBMChestActorBase.h"
 #include "Stage/BBMEventNpcBase.h"
 
+#define LOCTEXT_NAMESPACE "UBBMEncounterDefinition"
+
 /* UBBMEncounterDefinition 베이스 클래스 구현 */
 UBBMEncounterDefinition::UBBMEncounterDefinition() :
 	EncounterType(EBBMEncounterType::Combat),
 	SpawnSettingKey(NAME_None),
-	DisplayName(FText::FromString(TEXT("Default Encounter")))
+	DisplayName(LOCTEXT("DefaultDisplayName", "기본 만남"))
 {
 }
 
@@ -41,7 +43,7 @@ const FText& UBBMEncounterDefinition::GetDisplayName() const
 UBBMCombatEncounterDefinition::UBBMCombatEncounterDefinition()
 {
 	EncounterType = EBBMEncounterType::Combat;
-	DisplayName = FText::FromString(TEXT("Combat Encounter"));
+	DisplayName = LOCTEXT("CombatDisplayName", "전투 만남");
 }
 
 const TArray<TSoftObjectPtr<UBBMAICombatantDefinition>>& UBBMCombatEncounterDefinition::GetMonsterList() const
@@ -54,7 +56,7 @@ UBBMTreasureEncounterDefinition::UBBMTreasureEncounterDefinition() :
 	ChestClass(nullptr)
 {
 	EncounterType = EBBMEncounterType::Treasure;
-	DisplayName = FText::FromString(TEXT("Treasure Encounter"));
+	DisplayName = LOCTEXT("TreasureDisplayName", "보물 만남");
 }
 
 const TSoftClassPtr<ABBMChestActorBase>& UBBMTreasureEncounterDefinition::GetChestClass() const
@@ -66,10 +68,12 @@ const TSoftClassPtr<ABBMChestActorBase>& UBBMTreasureEncounterDefinition::GetChe
 UBBMEventEncounterDefinition::UBBMEventEncounterDefinition()
 {
 	EncounterType = EBBMEncounterType::Event;
-	DisplayName = FText::FromString(TEXT("Event Encounter"));
+	DisplayName = LOCTEXT("EventDisplayName", "이벤트 만남");
 }
 
 const TArray<TSoftClassPtr<ABBMEventNpcBase>>& UBBMEventEncounterDefinition::GetNpcClasses() const
 {
 	return NpcClasses;
 }
+
+#undef LOCTEXT_NAMESPACE

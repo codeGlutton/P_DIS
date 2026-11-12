@@ -1,0 +1,372 @@
+﻿# BBMGameFeatureCore English translation.
+# Fill out your copyright notice in the Description page of Project Settings.
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: BBMGameFeatureCore\n"
+"POT-Creation-Date: 2026-11-11 13:22\n"
+"PO-Revision-Date: 2026-11-11 13:22\n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. Key:	791CAD7842CEB9EF83DB149C1A99708E
+#. SourceLocation:	/BBMGameFeatureCore/Combat/Monster/DA_Monster_CaveBat.DA_Monster_CaveBat.DisplayName
+#: /BBMGameFeatureCore/Combat/Monster/DA_Monster_CaveBat.DA_Monster_CaveBat.DisplayName
+msgctxt ",791CAD7842CEB9EF83DB149C1A99708E"
+msgid "동굴 박쥐"
+msgstr ""
+
+#. Key:	885DC0944ADC7B6BE741509C992AF61D
+#. SourceLocation:	/BBMGameFeatureCore/Combat/Monster/DA_Monster_ForestBoss.DA_Monster_ForestBoss.DisplayName
+#: /BBMGameFeatureCore/Combat/Monster/DA_Monster_ForestBoss.DA_Monster_ForestBoss.DisplayName
+msgctxt ",885DC0944ADC7B6BE741509C992AF61D"
+msgid "숲의 군주 (보스)"
+msgstr ""
+
+#. Key:	1F5029F34121C8DDD7F688A878AACC31
+#. SourceLocation:	/BBMGameFeatureCore/Combat/Monster/DA_Monster_ForestSlime.DA_Monster_ForestSlime.DisplayName
+#: /BBMGameFeatureCore/Combat/Monster/DA_Monster_ForestSlime.DA_Monster_ForestSlime.DisplayName
+msgctxt ",1F5029F34121C8DDD7F688A878AACC31"
+msgid "숲 슬라임"
+msgstr ""
+
+#. Key:	8A7A11E440CDD30D3F5D49AF45764062
+#. SourceLocation:	/BBMGameFeatureCore/Combat/Monster/DA_Monster_ForestWolf.DA_Monster_ForestWolf.DisplayName
+#: /BBMGameFeatureCore/Combat/Monster/DA_Monster_ForestWolf.DA_Monster_ForestWolf.DisplayName
+msgctxt ",8A7A11E440CDD30D3F5D49AF45764062"
+msgid "숲 늑대"
+msgstr ""
+
+#. Key:	4EA6F8064734DC0B834A8CB16FA02529
+#. SourceLocation:	/BBMGameFeatureCore/Combat/Player/DA_Player_DefaultMerchant.DA_Player_DefaultMerchant.DisplayName
+#: /BBMGameFeatureCore/Combat/Player/DA_Player_DefaultMerchant.DA_Player_DefaultMerchant.DisplayName
+msgctxt ",4EA6F8064734DC0B834A8CB16FA02529"
+msgid "비트 배낭 상인"
+msgstr ""
+
+#. Key:	ItemType_Consumable
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Consumable"
+msgid "소모품"
+msgstr ""
+
+#. Key:	ItemType_Consumable_Potion
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Consumable_Potion"
+msgid "물약"
+msgstr ""
+
+#. Key:	ItemType_Consumable_Scroll
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Consumable_Scroll"
+msgid "일회성 주문서"
+msgstr ""
+
+#. Key:	ItemType_Consumable_Throwable
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Consumable_Throwable"
+msgid "투척물"
+msgstr ""
+
+#. Key:	ItemType_Equipment
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Equipment"
+msgid "장비"
+msgstr ""
+
+#. Key:	ItemType_Equipment_Clothes
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Equipment_Clothes"
+msgid "옷"
+msgstr ""
+
+#. Key:	ItemType_Equipment_Gloves
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Equipment_Gloves"
+msgid "장갑"
+msgstr ""
+
+#. Key:	ItemType_Equipment_Pants
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Equipment_Pants"
+msgid "바지"
+msgstr ""
+
+#. Key:	ItemType_Equipment_Shoes
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Equipment_Shoes"
+msgid "신발"
+msgstr ""
+
+#. Key:	ItemType_Weapon
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Weapon"
+msgid "무기"
+msgstr ""
+
+#. Key:	ItemType_Weapon_Bow
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Weapon_Bow"
+msgid "활"
+msgstr ""
+
+#. Key:	ItemType_Weapon_Dagger
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Weapon_Dagger"
+msgid "단검"
+msgstr ""
+
+#. Key:	ItemType_Weapon_OneHandSword
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Weapon_OneHandSword"
+msgid "한손검"
+msgstr ""
+
+#. Key:	ItemType_Weapon_Shield
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Weapon_Shield"
+msgid "방패"
+msgstr ""
+
+#. Key:	ItemType_Weapon_Spear
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Weapon_Spear"
+msgid "창"
+msgstr ""
+
+#. Key:	ItemType_Weapon_Staff
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,ItemType_Weapon_Staff"
+msgid "지팡이"
+msgstr ""
+
+#. Key:	Rarity_Common
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,Rarity_Common"
+msgid "일반"
+msgstr ""
+
+#. Key:	Rarity_Epic
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,Rarity_Epic"
+msgid "영웅"
+msgstr ""
+
+#. Key:	Rarity_Legendary
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,Rarity_Legendary"
+msgid "전설"
+msgstr ""
+
+#. Key:	Rarity_Rare
+#. SourceLocation:	/BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+#: /BBMGameFeatureCore/Globals/ST_BBMGameFeatureCore_Global.ST_BBMGameFeatureCore_Global
+msgctxt "ST_BBMGameFeatureCore_Global,Rarity_Rare"
+msgid "희귀"
+msgstr ""
+
+#. Key:	Item_Armor_Name
+#. SourceLocation:	/BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+#: /BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+msgctxt "ST_BBMGameFeatureCore_Item,Item_Armor_Name"
+msgid "갑옷 상의"
+msgstr ""
+
+#. Key:	Item_Boots_Name
+#. SourceLocation:	/BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+#: /BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+msgctxt "ST_BBMGameFeatureCore_Item,Item_Boots_Name"
+msgid "신발"
+msgstr ""
+
+#. Key:	Item_Bow_Name
+#. SourceLocation:	/BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+#: /BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+msgctxt "ST_BBMGameFeatureCore_Item,Item_Bow_Name"
+msgid "활"
+msgstr ""
+
+#. Key:	Item_Dagger_Name
+#. SourceLocation:	/BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+#: /BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+msgctxt "ST_BBMGameFeatureCore_Item,Item_Dagger_Name"
+msgid "단검"
+msgstr ""
+
+#. Key:	Item_Shield_Name
+#. SourceLocation:	/BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+#: /BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+msgctxt "ST_BBMGameFeatureCore_Item,Item_Shield_Name"
+msgid "방패"
+msgstr ""
+
+#. Key:	Item_Sword_Name
+#. SourceLocation:	/BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+#: /BBMGameFeatureCore/Item/ST_BBMGameFeatureCore_Item.ST_BBMGameFeatureCore_Item
+msgctxt "ST_BBMGameFeatureCore_Item,Item_Sword_Name"
+msgid "검"
+msgstr ""
+
+#. Key:	9A08AAAB48D8ADB2EBCFAE9668CFD08B
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Encounter/DA_Combat_Forest_01.DA_Combat_Forest_01.DisplayName
+#: /BBMGameFeatureCore/Stage/Encounter/DA_Combat_Forest_01.DA_Combat_Forest_01.DisplayName
+msgctxt ",9A08AAAB48D8ADB2EBCFAE9668CFD08B"
+msgid "숲의 슬라임 조우"
+msgstr ""
+
+#. Key:	F5D7254A4E2D2755C1A668A08D051EAF
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Encounter/DA_Combat_Forest_02.DA_Combat_Forest_02.DisplayName
+#: /BBMGameFeatureCore/Stage/Encounter/DA_Combat_Forest_02.DA_Combat_Forest_02.DisplayName
+msgctxt ",F5D7254A4E2D2755C1A668A08D051EAF"
+msgid "숲의 늑대 무리"
+msgstr ""
+
+#. Key:	839FCE3F45490B33EABF398A1B018198
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Encounter/DA_Combat_Forest_Boss.DA_Combat_Forest_Boss.DisplayName
+#: /BBMGameFeatureCore/Stage/Encounter/DA_Combat_Forest_Boss.DA_Combat_Forest_Boss.DisplayName
+msgctxt ",839FCE3F45490B33EABF398A1B018198"
+msgid "숲의 군주 보스전"
+msgstr ""
+
+#. Key:	6AADBED74710B53035F72E8AC2698F5E
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Encounter/DA_Event_ForestCamp.DA_Event_ForestCamp.DisplayName
+#: /BBMGameFeatureCore/Stage/Encounter/DA_Event_ForestCamp.DA_Event_ForestCamp.DisplayName
+msgctxt ",6AADBED74710B53035F72E8AC2698F5E"
+msgid "숲의 모험가 야영지"
+msgstr ""
+
+#. Key:	0B836C844654DC8263302C8EC9871BA3
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Encounter/DA_Treasure_Forest.DA_Treasure_Forest.DisplayName
+#: /BBMGameFeatureCore/Stage/Encounter/DA_Treasure_Forest.DA_Treasure_Forest.DisplayName
+msgctxt ",0B836C844654DC8263302C8EC9871BA3"
+msgid "숲속의 보물 상자"
+msgstr ""
+
+#. Key:	4F50F71C489F80D7438587988E7CC56E
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Region/DA_Region_Cave.DA_Region_Cave.RegionName
+#: /BBMGameFeatureCore/Stage/Region/DA_Region_Cave.DA_Region_Cave.RegionName
+msgctxt ",4F50F71C489F80D7438587988E7CC56E"
+msgid "동굴"
+msgstr ""
+
+#. Key:	CBE91B044FC7C95ABAE4BB89C1323BBB
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Region/DA_Region_DeepForest.DA_Region_DeepForest.RegionName
+#: /BBMGameFeatureCore/Stage/Region/DA_Region_DeepForest.DA_Region_DeepForest.RegionName
+msgctxt ",CBE91B044FC7C95ABAE4BB89C1323BBB"
+msgid "깊은 숲"
+msgstr ""
+
+#. Key:	5C5B32734C185D096437C697B3247C3F
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Region/DA_Region_Forest.DA_Region_Forest.RegionName
+#: /BBMGameFeatureCore/Stage/Region/DA_Region_Forest.DA_Region_Forest.RegionName
+msgctxt ",5C5B32734C185D096437C697B3247C3F"
+msgid "숲"
+msgstr ""
+
+#. Key:	4FD34C77465BB8B44C20D88557F5B1A5
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Region/DA_Region_Highland.DA_Region_Highland.RegionName
+#: /BBMGameFeatureCore/Stage/Region/DA_Region_Highland.DA_Region_Highland.RegionName
+msgctxt ",4FD34C77465BB8B44C20D88557F5B1A5"
+msgid "고산지"
+msgstr ""
+
+#. Key:	A60E385C41CBE3E3D2E2CF8A20E283AF
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Region/DA_Region_MushroomForest.DA_Region_MushroomForest.RegionName
+#: /BBMGameFeatureCore/Stage/Region/DA_Region_MushroomForest.DA_Region_MushroomForest.RegionName
+msgctxt ",A60E385C41CBE3E3D2E2CF8A20E283AF"
+msgid "버섯숲"
+msgstr ""
+
+#. Key:	4EE4B9E7481FFF33ED33BBAE7E110240
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Region/DA_Region_Plains.DA_Region_Plains.RegionName
+#: /BBMGameFeatureCore/Stage/Region/DA_Region_Plains.DA_Region_Plains.RegionName
+msgctxt ",4EE4B9E7481FFF33ED33BBAE7E110240"
+msgid "평지"
+msgstr ""
+
+#. Key:	31BDE34A481CB8FDF6248ABDB5EC6AD4
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Region/DA_Region_RockyMountain.DA_Region_RockyMountain.RegionName
+#: /BBMGameFeatureCore/Stage/Region/DA_Region_RockyMountain.DA_Region_RockyMountain.RegionName
+msgctxt ",31BDE34A481CB8FDF6248ABDB5EC6AD4"
+msgid "바위산"
+msgstr ""
+
+#. Key:	2C9A09684AC718E934CD9281F1E6976F
+#. SourceLocation:	/BBMGameFeatureCore/Stage/Region/DA_Region_SnowMountain.DA_Region_SnowMountain.RegionName
+#: /BBMGameFeatureCore/Stage/Region/DA_Region_SnowMountain.DA_Region_SnowMountain.RegionName
+msgctxt ",2C9A09684AC718E934CD9281F1E6976F"
+msgid "설산"
+msgstr ""
+
+#. Key:	Title_Menu_Continue
+#. SourceLocation:	/BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+#: /BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+msgctxt "ST_BBMGameFeatureCore_UI,Title_Menu_Continue"
+msgid "이어하기"
+msgstr ""
+
+#. Key:	Title_Menu_Credits
+#. SourceLocation:	/BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+#: /BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+msgctxt "ST_BBMGameFeatureCore_UI,Title_Menu_Credits"
+msgid "크레딧"
+msgstr ""
+
+#. Key:	Title_Menu_NewGame
+#. SourceLocation:	/BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+#: /BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+msgctxt "ST_BBMGameFeatureCore_UI,Title_Menu_NewGame"
+msgid "처음 시작"
+msgstr ""
+
+#. Key:	Title_Menu_Quit
+#. SourceLocation:	/BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+#: /BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+msgctxt "ST_BBMGameFeatureCore_UI,Title_Menu_Quit"
+msgid "게임 종료"
+msgstr ""
+
+#. Key:	Title_Menu_Settings
+#. SourceLocation:	/BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+#: /BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI
+msgctxt "ST_BBMGameFeatureCore_UI,Title_Menu_Settings"
+msgid "환경설정"
+msgstr ""
+
+#. Key:	D461F7A74A36467E41C94F8C9B2B3BB7
+#. SourceLocation:	/BBMGameFeatureCore/UI/WBP_Title.WBP_Title_C:WidgetTree.Txt_Copyright.Text
+#: /BBMGameFeatureCore/UI/WBP_Title.WBP_Title_C:WidgetTree.Txt_Copyright.Text
+msgctxt ",D461F7A74A36467E41C94F8C9B2B3BB7"
+msgid "© 2026 BBM Project. All Rights Reserved."
+msgstr ""
+
+#. Key:	5ED59396410352996384769CF470D356
+#. SourceLocation:	/BBMGameFeatureCore/UI/WBP_Title.WBP_Title_C:WidgetTree.Txt_Version.Text
+#: /BBMGameFeatureCore/UI/WBP_Title.WBP_Title_C:WidgetTree.Txt_Version.Text
+msgctxt ",5ED59396410352996384769CF470D356"
+msgid "v0.1.0-alpha | DEMO BUILD"
+msgstr ""
+

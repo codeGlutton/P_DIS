@@ -1,0 +1,176 @@
+﻿# AssetLinter Korean (South Korea) translation.
+# Fill out your copyright notice in the Description page of Project Settings.
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: AssetLinter\n"
+"POT-Creation-Date: 2026-11-11 11:27\n"
+"PO-Revision-Date: 2026-11-11 11:27\n"
+"Language-Team: \n"
+"Language: ko-KR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. Key:	ValidationSuccessToast
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(123)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(123)
+msgctxt "AssetLinterActionUtility,ValidationSuccessToast"
+msgid "선택한 {0}개 에셋이 모두 린트 규격을 준수하고 있습니다."
+msgstr "선택한 {0}개 에셋이 모두 린트 규격을 준수하고 있습니다."
+
+#. Key:	ValidationFailToast
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(131)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(131)
+msgctxt "AssetLinterActionUtility,ValidationFailToast"
+msgid "선택한 {0}개 에셋 중 {1}개에서 린트 규칙 위반이 발견되었습니다."
+msgstr "선택한 {0}개 에셋 중 {1}개에서 린트 규칙 위반이 발견되었습니다."
+
+#. Key:	AtomicFailureDialogTitle
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(161)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(161)
+msgctxt "AssetLinterActionUtility,AtomicFailureDialogTitle"
+msgid "Asset Linter - 일괄 수정 실패 (원자적 중단)"
+msgstr "Asset Linter - 일괄 수정 실패 (원자적 중단)"
+
+#. Key:	NoFixNeededToast
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(169)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(169)
+msgctxt "AssetLinterActionUtility,NoFixNeededToast"
+msgid "선택한 에셋 중 수정이 필요한 린트 위반 항목이 없습니다."
+msgstr "선택한 에셋 중 수정이 필요한 린트 위반 항목이 없습니다."
+
+#. Key:	AtomicFailureAllowedDirsMissing
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(258)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(258)
+msgctxt "AssetLinterActionUtility,AtomicFailureAllowedDirsMissing"
+msgid "일괄 수정 실패 (원자적 중단): 에셋 '{0}'의 위치 규칙(대상 클래스: {1})에 허용 디렉터리(AllowedDirectories)가 등록되어 있지 않아 이동할 대상을 특정할 수 없습니다.\nProject Settings에서 위치 규칙의 허용 디렉터리를 먼저 설정하십시오."
+msgstr "일괄 수정 실패 (원자적 중단): 에셋 '{0}'의 위치 규칙(대상 클래스: {1})에 허용 디렉터리(AllowedDirectories)가 등록되어 있지 않아 이동할 대상을 특정할 수 없습니다.\nProject Settings에서 위치 규칙의 허용 디렉터리를 먼저 설정하십시오."
+
+#. Key:	NoItemSelectedToast
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(322)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(322)
+msgctxt "AssetLinterActionUtility,NoItemSelectedToast"
+msgid "선택된 수정 항목이 없습니다."
+msgstr "선택된 수정 항목이 없습니다."
+
+#. Key:	BatchFixSuccessToast
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(340)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(340)
+msgctxt "AssetLinterActionUtility,BatchFixSuccessToast"
+msgid "총 {0}개 에셋의 린트 일괄 보정(리네임 및 폴더 이동)이 성공적으로 완료되었습니다."
+msgstr "총 {0}개 에셋의 린트 일괄 보정(리네임 및 폴더 이동)이 성공적으로 완료되었습니다."
+
+#. Key:	BatchFixFailToast
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(347)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(347)
+msgctxt "AssetLinterActionUtility,BatchFixFailToast"
+msgid "일부 에셋의 일괄 보정 중 오류가 발생했습니다. 로그를 확인하십시오."
+msgstr "일부 에셋의 일괄 보정 중 오류가 발생했습니다. 로그를 확인하십시오."
+
+#. Key:	PrefixFailLog
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(69)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(69)
+msgctxt "AssetLinterActionUtility,PrefixFailLog"
+msgid "[AssetLinter] 에셋 '{0}'이 필수 접두사 '{1}'(으)로 시작하지 않습니다. (요구 클래스: {2})"
+msgstr "[AssetLinter] 에셋 '{0}'이 필수 접두사 '{1}'(으)로 시작하지 않습니다. (요구 클래스: {2})"
+
+#. Key:	SuffixFailLog
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(81)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(81)
+msgctxt "AssetLinterActionUtility,SuffixFailLog"
+msgid "[AssetLinter] 에셋 '{0}'이 필수 접미사 '{1}'(으)로 끝나지 않습니다. (요구 클래스: {2})"
+msgstr "[AssetLinter] 에셋 '{0}'이 필수 접미사 '{1}'(으)로 끝나지 않습니다. (요구 클래스: {2})"
+
+#. Key:	LocationFailLog
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(98)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetActions/AssetLinterActionUtility.cpp(98)
+msgctxt "AssetLinterActionUtility,LocationFailLog"
+msgid "[AssetLinter] 에셋 '{0}'의 위치 '{1}'이 허용된 디렉터리 하위에 존재하지 않습니다. (요구 클래스: {2})"
+msgstr "[AssetLinter] 에셋 '{0}'의 위치 '{1}'이 허용된 디렉터리 하위에 존재하지 않습니다. (요구 클래스: {2})"
+
+#. Key:	AssetLinterSettingsSectionText
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterSettings.cpp(31)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterSettings.cpp(31)
+msgctxt "AssetLinterSettings,AssetLinterSettingsSectionText"
+msgid "Asset Linter"
+msgstr "Asset Linter"
+
+#. Key:	AssetLinterSettingsSectionDescription
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterSettings.cpp(36)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterSettings.cpp(36)
+msgctxt "AssetLinterSettings,AssetLinterSettingsSectionDescription"
+msgid "에셋 명명 규칙 및 디렉터리 보관 위치 규칙을 검사하는 Asset Linter 설정입니다."
+msgstr "에셋 명명 규칙 및 디렉터리 보관 위치 규칙을 검사하는 Asset Linter 설정입니다."
+
+#. Key:	PrefixViolation
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterValidator.cpp(112)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterValidator.cpp(112)
+msgctxt "AssetLinterValidator,PrefixViolation"
+msgid "에셋 명칭 '{0}'이 필수 접두사 '{1}'(으)로 시작하지 않습니다. (요구 클래스: {2})"
+msgstr "에셋 명칭 '{0}'이 필수 접두사 '{1}'(으)로 시작하지 않습니다. (요구 클래스: {2})"
+
+#. Key:	SuffixViolation
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterValidator.cpp(136)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterValidator.cpp(136)
+msgctxt "AssetLinterValidator,SuffixViolation"
+msgid "에셋 명칭 '{0}'이 필수 접미사 '{1}'(으)로 끝나지 않습니다. (요구 클래스: {2})"
+msgstr "에셋 명칭 '{0}'이 필수 접미사 '{1}'(으)로 끝나지 않습니다. (요구 클래스: {2})"
+
+#. Key:	LocationViolation
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterValidator.cpp(172)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/AssetLinterValidator.cpp(172)
+msgctxt "AssetLinterValidator,LocationViolation"
+msgid "에셋 위치 '{0}'이 허용된 디렉터리 [{1}] 하위에 존재하지 않습니다. (요구 클래스: {2})"
+msgstr "에셋 위치 '{0}'이 허용된 디렉터리 [{1}] 하위에 존재하지 않습니다. (요구 클래스: {2})"
+
+#. Key:	HeaderSummary
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(202)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(202)
+msgctxt "SAssetLinterBatchFixDialog,HeaderSummary"
+msgid "선택한 에셋 중 총 {0}개의 에셋이 린트 규칙(네이밍 또는 위치)을 위반하여 보정이 필요합니다.\n적용할 항목을 선택한 후 [일괄 수정 적용]을 누르십시오."
+msgstr "선택한 에셋 중 총 {0}개의 에셋이 린트 규칙(네이밍 또는 위치)을 위반하여 보정이 필요합니다.\n적용할 항목을 선택한 후 [일괄 수정 적용]을 누르십시오."
+
+#. Key:	Col_Name
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(239)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(239)
+msgctxt "SAssetLinterBatchFixDialog,Col_Name"
+msgid "에셋 명칭 (현재 ➔ 변경 제안)"
+msgstr "에셋 명칭 (현재 ➔ 변경 제안)"
+
+#. Key:	Col_Path
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(244)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(244)
+msgctxt "SAssetLinterBatchFixDialog,Col_Path"
+msgid "패키지 경로 (현재 ➔ 이동 제안)"
+msgstr "패키지 경로 (현재 ➔ 이동 제안)"
+
+#. Key:	Col_Reason
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(249)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(249)
+msgctxt "SAssetLinterBatchFixDialog,Col_Reason"
+msgid "위반 사유"
+msgstr "위반 사유"
+
+#. Key:	ApplyBtn
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(278)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(278)
+msgctxt "SAssetLinterBatchFixDialog,ApplyBtn"
+msgid "일괄 수정 적용"
+msgstr "일괄 수정 적용"
+
+#. Key:	CancelBtn
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(293)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(293)
+msgctxt "SAssetLinterBatchFixDialog,CancelBtn"
+msgid "취소"
+msgstr "취소"
+
+#. Key:	DialogTitle
+#. SourceLocation:	Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(304)
+#: Plugins/AssetLinter/Source/AssetLinter/Private/UI/SAssetLinterBatchFixDialog.cpp(304)
+msgctxt "SAssetLinterBatchFixDialog,DialogTitle"
+msgid "Asset Linter - 일괄 수정 확인"
+msgstr "Asset Linter - 일괄 수정 확인"
+

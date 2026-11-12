@@ -12,6 +12,10 @@
 #include "Animation/WidgetAnimation.h"
 #include "BBMWorldWidgetTypes.generated.h"
 
+/* 애니메이션 전환 완료 대리자 선언 */
+DECLARE_DYNAMIC_DELEGATE(FBBMOnWidgetAnimFinishedDynamicSignature);
+DECLARE_DELEGATE(FBBMOnWidgetAnimFinishedSignature);
+
 /* 독립 전방 선언 */
 class UBBMUserWidgetBase;
 class UBBMViewModelBase;
@@ -102,7 +106,26 @@ struct BBM_API FBBMWidgetAnimConfig
 };
 
 /**
- * 인카운터 초기화 전/후 위젯 생성 타이밍 열거형
+ * BBM UI 열림 및 애니메이션 전환 상태 열거형
+ */
+UENUM(BlueprintType)
+enum class EBBMWidgetOpenState : uint8
+{
+	/* 완전히 닫혀 있는 상태 */
+	Closed  UMETA(DisplayName = "Closed"),
+
+	/* 열림 요청 후 오픈 애니메이션 재생 중인 상태 */
+	Opening UMETA(DisplayName = "Opening"),
+
+	/* 완전히 열려 있는 상태 */
+	Open    UMETA(DisplayName = "Open"),
+
+	/* 닫힘 요청 후 클로즈 애니메이션 재생 중인 상태 */
+	Closing UMETA(DisplayName = "Closing")
+};
+
+/**
+ * 인카운터 초기화 전/후 UI 생성 타이밍 열거형
  */
 UENUM(BlueprintType)
 enum class EBBMWidgetCreationPhase : uint8
@@ -115,35 +138,64 @@ enum class EBBMWidgetCreationPhase : uint8
 };
 
 /**
- * 게임모드 자동 등록 및 생성용 월드 위젯 설정 구조체
+ * 순수 월드 위젯 생성 설정 구조체
  */
 USTRUCT(BlueprintType)
 struct BBM_API FBBMWorldWidgetConfig
 {
 	GENERATED_BODY()
 
-	/* 위젯 식별 키 (예: "LoadingScreen", "MainHUD") */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
-	FName WidgetKey = NAME_None;
-
+public:
 	/* 생성할 위젯 클래스 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
+	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
 	TSubclassOf<UBBMUserWidgetBase> WidgetClass = nullptr;
 
-	/* 위젯 생성 타이밍 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
-	EBBMWidgetCreationPhase CreationPhase = EBBMWidgetCreationPhase::BeforeEncounter;
-
 	/* 뷰포트 ZOrder 레이어 오버라이드 여부 (false일 경우 위젯 클래스 자체의 DefaultZOrderLayer 유지) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
+	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
 	bool bOverrideZOrder = false;
 
 	/* 오버라이드할 뷰포트 ZOrder 레이어 (bOverrideZOrder가 true일 때만 수정 및 적용) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI", meta = (EditCondition = "bOverrideZOrder"))
+	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly, meta = (EditCondition = "bOverrideZOrder"))
 	EBBMWidgetZOrder ZOrderLayer = EBBMWidgetZOrder::Base;
+};
 
-	/* 연결할 MVVM ViewModel 클래스 (선택 사항: 지정 시 ViewModel 인스턴스를 자동 생성하여 위젯과 연동) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "BBM|UI")
+/**
+ * 순수 월드 ViewModel 생성 설정 구조체
+ */
+USTRUCT(BlueprintType)
+struct BBM_API FBBMWorldViewModelConfig
+{
+	GENERATED_BODY()
+
+public:
+	/* 생성할 MVVM ViewModel 클래스 */
+	UPROPERTY(Category = "BBM|UI|MVVM", EditDefaultsOnly, BlueprintReadOnly)
 	TSubclassOf<UBBMViewModelBase> ViewModelClass = nullptr;
+};
+
+/**
+ * 게임모드 자동 등록 및 생성용 통합 UI(위젯 + ViewModel + 타이밍) 설정 구조체
+ */
+USTRUCT(BlueprintType)
+struct BBM_API FBBMWorldUIConfig
+{
+	GENERATED_BODY()
+
+public:
+	/* 위젯 및 ViewModel 공용 식별 키 (예: "LoadingScreen", "MainHUD", "TitleMenu") */
+	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
+	FName WidgetKey = NAME_None;
+
+	/* UI 생성 타이밍 */
+	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
+	EBBMWidgetCreationPhase CreationPhase = EBBMWidgetCreationPhase::BeforeEncounter;
+
+	/* 순수 위젯 생성 설정 */
+	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
+	FBBMWorldWidgetConfig WidgetConfig;
+
+	/* 순수 ViewModel 생성 설정 */
+	UPROPERTY(Category = "BBM|UI|MVVM", EditDefaultsOnly, BlueprintReadOnly)
+	FBBMWorldViewModelConfig ViewModelConfig;
 };
 

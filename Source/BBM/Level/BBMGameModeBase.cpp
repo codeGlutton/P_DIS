@@ -5,8 +5,9 @@
  *********************************************************************/
 
 #include "Level/BBMGameModeBase.h"
-#include "UI/BBMWorldWidgetSubsystem.h"
-#include "UI/BBMUserWidgetBase.h"
+#include "UI/BBMWorldUISubsystem.h"
+#include "UI/Widget/BBMUserWidgetBase.h"
+#include "UI/ViewModel/BBMViewModelBase.h"
 #include "Engine/World.h"
 
 ABBMGameModeBase::ABBMGameModeBase()
@@ -20,17 +21,17 @@ void ABBMGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 1단계: 인카운터 초기화 전 위젯 생성 (예: FadeLoading 위젯 등)
-	CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase::BeforeEncounter);
+	// 1단계: 인카운터 초기화 전 UI 생성 (예: FadeLoading 위젯 등)
+	CreateWorldUIsByPhase(EBBMWidgetCreationPhase::BeforeEncounter);
 
 	// 2단계: 레벨 특화 게임모드 초기화 실행 (스테이지 게임모드에서 인카운터 배치 실행)
 	InitializeLevelSpecificGameMode();
 
-	// 3단계: 인카운터 초기화 후 위젯 생성 (예: 인게임 전투 HUD 등)
-	CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase::AfterEncounter);
+	// 3단계: 인카운터 초기화 후 UI 생성 (예: 인게임 전투 HUD 등)
+	CreateWorldUIsByPhase(EBBMWidgetCreationPhase::AfterEncounter);
 }
 
-void ABBMGameModeBase::CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase Phase)
+void ABBMGameModeBase::CreateWorldUIsByPhase(EBBMWidgetCreationPhase Phase)
 {
 	UWorld* World = GetWorld();
 	if (World == nullptr)
@@ -38,17 +39,35 @@ void ABBMGameModeBase::CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase Phase)
 		return;
 	}
 
-	UBBMWorldWidgetSubsystem* WidgetSS = World->GetSubsystem<UBBMWorldWidgetSubsystem>();
-	if (WidgetSS == nullptr)
+	UBBMWorldUISubsystem* UISS = World->GetSubsystem<UBBMWorldUISubsystem>();
+	if (UISS == nullptr)
 	{
 		return;
 	}
 
-	for (const FBBMWorldWidgetConfig& Config : AutoCreateWidgets)
+	for (const FBBMWorldUIConfig& Config : AutoCreateUIs)
 	{
-		if (Config.CreationPhase == Phase && Config.WidgetClass != nullptr && Config.WidgetKey != NAME_None)
+		if (Config.CreationPhase != Phase || Config.WidgetKey == NAME_None)
 		{
-			WidgetSS->CreateAndRegisterWidgetByConfig(Config);
+			continue;
+		}
+
+		UBBMUserWidgetBase* CreatedWidget = nullptr;
+		if (Config.WidgetConfig.WidgetClass != nullptr)
+		{
+			CreatedWidget = UISS->CreateAndRegisterWidgetByConfig(Config.WidgetKey, Config.WidgetConfig);
+		}
+
+		UBBMViewModelBase* CreatedViewModel = nullptr;
+		if (Config.ViewModelConfig.ViewModelClass != nullptr)
+		{
+			CreatedViewModel = UISS->CreateAndRegisterViewModelByConfig(Config.WidgetKey, Config.ViewModelConfig);
+		}
+
+		// 위젯과 ViewModel이 모두 생성된 경우에만 수동 바인딩 연결
+		if (CreatedWidget != nullptr && CreatedViewModel != nullptr)
+		{
+			CreatedWidget->SetViewModelInstance(CreatedViewModel);
 		}
 	}
 }

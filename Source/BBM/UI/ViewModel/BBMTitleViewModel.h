@@ -29,7 +29,8 @@ class BBM_API UBBMTitleViewModel : public UBBMViewModelBase
 public:
 	UBBMTitleViewModel();
 
-	virtual void NotifyWidgetOpened() override;
+protected:
+	virtual void OnOpen() override;
 
 	/* 필드 노티파이 프로퍼티 (Getter / Setter) */
 public:
@@ -49,13 +50,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
 	void SetContinueVisibility(ESlateVisibility InVisibility);
 
-	/* 현재 진행 중인 런 요약 텍스트 반환 */
+	/* 현재 진행 중인 런의 조우 인덱스 반환 (활성 런 미존재 시 0) */
 	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
-	FText GetActiveRunSummaryText() const { return ActiveRunSummaryText; }
+	int32 GetActiveRunEncounterIndex() const { return ActiveRunEncounterIndex; }
 
-	/* 현재 진행 중인 런 요약 텍스트 설정 */
+	/* 현재 진행 중인 런의 조우 인덱스 설정 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
-	void SetActiveRunSummaryText(const FText& InSummaryText);
+	void SetActiveRunEncounterIndex(int32 InEncounterIndex);
 
 	/* 비즈니스 로직 및 메뉴 액션 인터페이스 */
 public:
@@ -135,8 +136,8 @@ private:
 	UPROPERTY(BlueprintReadWrite, FieldNotify, Setter = SetContinueVisibility, Getter = GetContinueVisibility, meta = (AllowPrivateAccess = "true"))
 	ESlateVisibility ContinueVisibility = ESlateVisibility::Collapsed;
 
-	/* 진행 중인 런 요약 텍스트 (예: "지역 1 - 초원 (3/5 조우)") */
-	UPROPERTY(BlueprintReadWrite, FieldNotify, Setter = SetActiveRunSummaryText, Getter = GetActiveRunSummaryText, meta = (AllowPrivateAccess = "true"))
-	FText ActiveRunSummaryText = FText::GetEmpty();
+	/* 진행 중인 런의 현재 조우 인덱스 (활성 런 미존재 시 0, UI 텍스트 포맷 바인딩용) */
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetActiveRunEncounterIndex, Getter = GetActiveRunEncounterIndex, meta = (AllowPrivateAccess = "true"))
+	int32 ActiveRunEncounterIndex = 0;
 };
 

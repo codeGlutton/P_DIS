@@ -1,7 +1,9 @@
 #include "Combat/Pawn/BBMCharacterDefinition.h"
 
+#define LOCTEXT_NAMESPACE "UBBMCharacterDefinition"
+
 UBBMCharacterDefinition::UBBMCharacterDefinition() :
-	DisplayName(FText::FromString(TEXT("기본 캐릭터"))),
+	DisplayName(LOCTEXT("DefaultDisplayName", "기본 캐릭터")),
 	TableKeyName(TEXT("Player")),
 	DefaultTeam(EBBMTeamType::Player),
 	PawnClass(nullptr)
@@ -32,3 +34,5 @@ TSoftClassPtr<ABBMCombatantBase> UBBMCharacterDefinition::GetPawnClass() const
 {
 	return PawnClass;
 }
+
+#undef LOCTEXT_NAMESPACE

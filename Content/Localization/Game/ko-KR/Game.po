@@ -1,0 +1,78 @@
+﻿# Game Korean (South Korea) translation.
+# Fill out your copyright notice in the Description page of Project Settings.
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: Game\n"
+"POT-Creation-Date: 2026-11-11 11:36\n"
+"PO-Revision-Date: 2026-11-11 11:36\n"
+"Language-Team: \n"
+"Language: ko-KR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. Key:	C4A6FFB5423EE361CED3559C1AE0CFDE
+#. SourceLocation:	Config/DefaultGame.ini(34)
+#: Config/DefaultGame.ini(34)
+msgctxt ",C4A6FFB5423EE361CED3559C1AE0CFDE"
+msgid "기타"
+msgstr "기타"
+
+#. Key:	DefaultDisplayName
+#. SourceLocation:	Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(26)
+#: Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(26)
+msgctxt "UBBMAICombatantDefinition,DefaultDisplayName"
+msgid "기본 AI 전투원"
+msgstr "기본 AI 전투원"
+
+#. Key:	DefaultDisplayName
+#. SourceLocation:	Source/BBM/Combat/Pawn/BBMCharacterDefinition.cpp(6)
+#: Source/BBM/Combat/Pawn/BBMCharacterDefinition.cpp(6)
+msgctxt "UBBMCharacterDefinition,DefaultDisplayName"
+msgid "기본 캐릭터"
+msgstr "기본 캐릭터"
+
+#. Key:	DefaultDisplayName
+#. SourceLocation:	Source/BBM/Combat/Pawn/BBMPlayerCharacterDefinition.cpp(17)
+#: Source/BBM/Combat/Pawn/BBMPlayerCharacterDefinition.cpp(17)
+msgctxt "UBBMPlayerCharacterDefinition,DefaultDisplayName"
+msgid "플레이어 상인"
+msgstr "플레이어 상인"
+
+#. Key:	DefaultDisplayName
+#. SourceLocation:	Source/BBM/Stage/BBMEncounterDefinition.cpp(18)
+#: Source/BBM/Stage/BBMEncounterDefinition.cpp(18)
+msgctxt "UBBMEncounterDefinition,DefaultDisplayName"
+msgid "기본 만남"
+msgstr "기본 만남"
+
+#. Key:	CombatDisplayName
+#. SourceLocation:	Source/BBM/Stage/BBMEncounterDefinition.cpp(46)
+#: Source/BBM/Stage/BBMEncounterDefinition.cpp(46)
+msgctxt "UBBMEncounterDefinition,CombatDisplayName"
+msgid "전투 만남"
+msgstr "전투 만남"
+
+#. Key:	TreasureDisplayName
+#. SourceLocation:	Source/BBM/Stage/BBMEncounterDefinition.cpp(59)
+#: Source/BBM/Stage/BBMEncounterDefinition.cpp(59)
+msgctxt "UBBMEncounterDefinition,TreasureDisplayName"
+msgid "보물 만남"
+msgstr "보물 만남"
+
+#. Key:	EventDisplayName
+#. SourceLocation:	Source/BBM/Stage/BBMEncounterDefinition.cpp(71)
+#: Source/BBM/Stage/BBMEncounterDefinition.cpp(71)
+msgctxt "UBBMEncounterDefinition,EventDisplayName"
+msgid "이벤트 만남"
+msgstr "이벤트 만남"
+
+#. Key:	DefaultRegionName
+#. SourceLocation:	Source/BBM/Stage/BBMRegionDefinition.cpp(15)
+#: Source/BBM/Stage/BBMRegionDefinition.cpp(15)
+msgctxt "UBBMRegionDefinition,DefaultRegionName"
+msgid "새 지역"
+msgstr "새 지역"
+

@@ -1,7 +1,7 @@
 /*****************************************************************//**
  * @file   BBMTitleViewModelTests.cpp
  * @brief  BBM(비트 배낭 상인) 타이틀 MVVM 뷰모델 및 월드 위젯 서브시스템 연동 단위 테스트
- * @details ViewModel 수명 주기, 세이브 유무에 따른 이어하기 버튼 Collapsed 가시성 제어 및 네비게이션 액션 검증
+ * @details ViewModel 수명 주기, 세이브 유무에 따른 이어하기 버튼 Hidden 가시성 제어 및 네비게이션 액션 검증
  * @date   2026-11-07
  *********************************************************************/
 
@@ -145,8 +145,8 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 		OpenedWidget->SetVisibility(ESlateVisibility::Collapsed);
 		DelayedTitleVM->Open();
 		TestTrue(TEXT("ViewModel Open 후 IsOpen은 true"), DelayedTitleVM->IsOpen());
-		TestEqual(TEXT("헤드리스 Open 후 OpenState는 Open"), DelayedTitleVM->GetOpenState(), EBBMWidgetOpenState::Open);
-		TestEqual(TEXT("OnOpen 내 RefreshTitleState 호출로 ContinueVisibility 동기화 완료"), DelayedTitleVM->GetContinueVisibility(), ESlateVisibility::Collapsed);
+		TestEqual(TEXT("헤드리스 Open 후 OpenState는 Started"), DelayedTitleVM->GetOpenState(), EBBMDualAnimState::Started);
+		TestEqual(TEXT("OnOpen 내 RefreshTitleState 호출로 ContinueVisibility 동기화 완료"), DelayedTitleVM->GetContinueVisibility(), ESlateVisibility::Hidden);
 		TestEqual(TEXT("위젯 연결 전에는 아직 숨김 상태 유지"), OpenedWidget->GetVisibility(), ESlateVisibility::Collapsed);
 
 		// 이미 열린 ViewModel에 위젯을 뒤늦게 연결하면 즉시 프레젠테이션 가시성이 동기화됨
@@ -156,7 +156,7 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 		// ViewModel->Close() 호출 시 논리 상태와 View 프레젠테이션이 모두 닫힘
 		DelayedTitleVM->Close();
 		TestFalse(TEXT("ViewModel Close 후 IsOpen은 false"), DelayedTitleVM->IsOpen());
-		TestEqual(TEXT("Close 후 OpenState는 Closed"), DelayedTitleVM->GetOpenState(), EBBMWidgetOpenState::Closed);
+		TestEqual(TEXT("Close 후 OpenState는 Ended"), DelayedTitleVM->GetOpenState(), EBBMDualAnimState::Ended);
 		TestEqual(TEXT("Close 후 위젯 가시성이 Collapsed로 전환되어야 함"), OpenedWidget->GetVisibility(), ESlateVisibility::Collapsed);
 
 		UISS->RemoveUI(OpenedWidgetKey);
@@ -170,7 +170,7 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// 2. UBBMTitleViewModel의 세이브 상태 조회 및 이어하기 가시성(Collapsed/Visible) 제어 검증
+// 2. UBBMTitleViewModel의 세이브 상태 조회 및 이어하기 가시성(Hidden/Visible) 제어 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMTitleViewModelSaveContinueVisibilityTest,
 	"DIS.BBM.UI.TitleViewModelContinueVisibility",
@@ -201,7 +201,7 @@ bool FBBMTitleViewModelSaveContinueVisibilityTest::RunTest(const FString& Parame
 		return false;
 	}
 
-	// 2-1. 초기 상태: 활성 런 세이브가 없을 때 -> ContinueVisibility == Collapsed, bCanContinue == false
+	// 2-1. 초기 상태: 활성 런 세이브가 없을 때 -> ContinueVisibility == Hidden, bCanContinue == false
 	GameDataSS->EnsureSaveDataLoaded();
 	UBBMRunSaveGame* RunData = GameDataSS->GetCurrentRunData();
 	if (RunData != nullptr)
@@ -211,7 +211,7 @@ bool FBBMTitleViewModelSaveContinueVisibilityTest::RunTest(const FString& Parame
 
 	TitleVM->RefreshTitleState();
 	TestFalse(TEXT("활성 런 없을 시 bCanContinue는 false"), TitleVM->GetCanContinue());
-	TestEqual(TEXT("활성 런 없을 시 ContinueVisibility는 Collapsed"), TitleVM->GetContinueVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("활성 런 없을 시 ContinueVisibility는 Hidden"), TitleVM->GetContinueVisibility(), ESlateVisibility::Hidden);
 	TestEqual(TEXT("활성 런 없을 시 현재 조우 인덱스는 0"), TitleVM->GetActiveRunEncounterIndex(), 0);
 
 	// 2-2. 활성 런 세이브가 존재할 때 -> ContinueVisibility == Visible, bCanContinue == true
@@ -225,29 +225,6 @@ bool FBBMTitleViewModelSaveContinueVisibilityTest::RunTest(const FString& Parame
 	TestTrue(TEXT("활성 런 존재 시 bCanContinue는 true"), TitleVM->GetCanContinue());
 	TestEqual(TEXT("활성 런 존재 시 ContinueVisibility는 Visible"), TitleVM->GetContinueVisibility(), ESlateVisibility::Visible);
 	TestEqual(TEXT("활성 런 존재 시 현재 조우 인덱스는 3"), TitleVM->GetActiveRunEncounterIndex(), 3);
-
-	// 2-3. 네비게이션 델리게이트 브로드캐스트 검증
-	bool bStartGameRequested = false;
-	bool bContinueGameRequested = false;
-	bool bSettingsRequested = false;
-	bool bCreditsRequested = false;
-
-	TitleVM->OnStartNewGameRequestedNative.AddLambda([&bStartGameRequested]() { bStartGameRequested = true; });
-	TitleVM->OnContinueGameRequestedNative.AddLambda([&bContinueGameRequested]() { bContinueGameRequested = true; });
-	TitleVM->OnOpenSettingsRequestedNative.AddLambda([&bSettingsRequested]() { bSettingsRequested = true; });
-	TitleVM->OnOpenCreditsRequestedNative.AddLambda([&bCreditsRequested]() { bCreditsRequested = true; });
-
-	TitleVM->StartNewGame();
-	TestTrue(TEXT("StartNewGame 호출 시 OnStartNewGameRequested 브로드캐스트 검증"), bStartGameRequested);
-
-	TitleVM->ContinueGame();
-	TestTrue(TEXT("ContinueGame 호출 시 OnContinueGameRequested 브로드캐스트 검증"), bContinueGameRequested);
-
-	TitleVM->OpenSettings();
-	TestTrue(TEXT("OpenSettings 호출 시 OnOpenSettingsRequested 브로드캐스트 검증"), bSettingsRequested);
-
-	TitleVM->OpenCredits();
-	TestTrue(TEXT("OpenCredits 호출 시 OnOpenCreditsRequested 브로드캐스트 검증"), bCreditsRequested);
 
 	return true;
 }

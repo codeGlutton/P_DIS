@@ -1,106 +1,123 @@
-/*****************************************************************//**
- * @file   BBMViewModelBase.cpp
- * @brief  BBM(비트 배낭 상인) 공용 MVVM 뷰모델 베이스 클래스 구현
- * @date   2026-11-07
- *********************************************************************/
-
 #include "UI/ViewModel/BBMViewModelBase.h"
+#include "UI/ViewModel/BBMDualAnimTransition.h"
 
 UBBMViewModelBase::UBBMViewModelBase()
 {
+	OpenCloseTransition = CreateDefaultSubobject<UBBMDualAnimTransition>(TEXT("OpenCloseTransition"));
+}
+
+void UBBMViewModelBase::PostInitProperties()
+{
+	Super::PostInitProperties();
+
+	if (HasAnyFlags(RF_ClassDefaultObject) == false)
+	{
+		if (OpenCloseTransition != nullptr)
+		{
+			OpenCloseTransition->OnStartingNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionOpenStarted);
+			OpenCloseTransition->OnEndingNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionCloseStarted);
+			OpenCloseTransition->OnStartedNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionOpenFinished);
+			OpenCloseTransition->OnEndedNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionCloseFinished);
+
+			OpenCloseTransition->AddFieldValueChangedDelegate(
+				UBBMDualAnimTransition::FFieldNotificationClassDescriptor::State,
+				FFieldValueChangedDelegate::CreateUObject(this, &UBBMViewModelBase::HandleTransitionStateChanged)
+			);
+			OpenCloseTransition->AddFieldValueChangedDelegate(
+				UBBMDualAnimTransition::FFieldNotificationClassDescriptor::IsStarted,
+				FFieldValueChangedDelegate::CreateUObject(this, &UBBMViewModelBase::HandleTransitionStartedChanged)
+			);
+			OpenCloseTransition->AddFieldValueChangedDelegate(
+				UBBMDualAnimTransition::FFieldNotificationClassDescriptor::IsActive,
+				FFieldValueChangedDelegate::CreateUObject(this, &UBBMViewModelBase::HandleTransitionActiveChanged)
+			);
+		}
+
+		// CDO가 아닌 실제 뷰모델 인스턴스의 프로퍼티 초기화 및 전환 모듈 바인딩 완료 후 파생 훅 호출
+		BeginViewModel();
+		BP_BeginViewModel();
+	}
+}
+
+void UBBMViewModelBase::BeginDestroy()
+{
+	if (OpenCloseTransition != nullptr)
+	{
+		OpenCloseTransition->OnStartingNative.RemoveAll(this);
+		OpenCloseTransition->OnEndingNative.RemoveAll(this);
+		OpenCloseTransition->OnStartedNative.RemoveAll(this);
+		OpenCloseTransition->OnEndedNative.RemoveAll(this);
+		OpenCloseTransition->RemoveAllFieldValueChangedDelegates(this);
+	}
+
+	Super::BeginDestroy();
 }
 
 void UBBMViewModelBase::Open()
 {
-	ExecuteOpen(false, FBBMOnWidgetAnimFinishedSignature(), FBBMOnWidgetAnimFinishedDynamicSignature());
+	if (OpenCloseTransition != nullptr)
+	{
+		OpenCloseTransition->Start();
+	}
 }
 
 void UBBMViewModelBase::Close()
 {
-	ExecuteClose(false, FBBMOnWidgetAnimFinishedSignature(), FBBMOnWidgetAnimFinishedDynamicSignature());
+	if (OpenCloseTransition != nullptr)
+	{
+		OpenCloseTransition->End();
+	}
 }
 
 void UBBMViewModelBase::OpenWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete)
 {
-	ExecuteOpen(true, FBBMOnWidgetAnimFinishedSignature(), OnComplete);
+	if (OpenCloseTransition != nullptr)
+	{
+		OpenCloseTransition->StartWithAnimDynamic(OnComplete);
+	}
 }
 
 void UBBMViewModelBase::OpenWithAnim(FBBMOnWidgetAnimFinishedSignature OnComplete)
 {
-	ExecuteOpen(true, MoveTemp(OnComplete), FBBMOnWidgetAnimFinishedDynamicSignature());
+	if (OpenCloseTransition != nullptr)
+	{
+		OpenCloseTransition->StartWithAnim(MoveTemp(OnComplete));
+	}
 }
 
 void UBBMViewModelBase::CloseWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete)
 {
-	ExecuteClose(true, FBBMOnWidgetAnimFinishedSignature(), OnComplete);
+	if (OpenCloseTransition != nullptr)
+	{
+		OpenCloseTransition->EndWithAnimDynamic(OnComplete);
+	}
 }
 
 void UBBMViewModelBase::CloseWithAnim(FBBMOnWidgetAnimFinishedSignature OnComplete)
 {
-	ExecuteClose(true, MoveTemp(OnComplete), FBBMOnWidgetAnimFinishedDynamicSignature());
-}
-
-void UBBMViewModelBase::BindPresentationHandlers(
-	const UObject* InOwner,
-	FBBMOnPresentationTransitionRequestedSignature InOpenHandler,
-	FBBMOnPresentationTransitionRequestedSignature InCloseHandler
-)
-{
-	if (InOwner == nullptr)
+	if (OpenCloseTransition != nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMViewModelBase::BindPresentationHandlers] InOwner is nullptr."));
-		return;
-	}
-
-	BoundPresentationOwner = InOwner;
-	OpenPresentationHandler = MoveTemp(InOpenHandler);
-	ClosePresentationHandler = MoveTemp(InCloseHandler);
-}
-
-void UBBMViewModelBase::ClearPresentationHandlers(const UObject* InOwner)
-{
-	if (InOwner == nullptr)
-	{
-		return;
-	}
-
-	// 현재 등록된 소유 위젯과 일치할 때만 해제하여 새 위젯의 핸들러 덮어쓰기 방지
-	if (BoundPresentationOwner.IsValid() == false || BoundPresentationOwner.Get() == InOwner)
-	{
-		BoundPresentationOwner.Reset();
-		OpenPresentationHandler.Unbind();
-		ClosePresentationHandler.Unbind();
+		OpenCloseTransition->EndWithAnim(MoveTemp(OnComplete));
 	}
 }
 
-void UBBMViewModelBase::NotifyOpenTransitionFinished()
+bool UBBMViewModelBase::IsOpen() const
 {
-	if (OpenState != EBBMWidgetOpenState::Opening)
-	{
-		return;
-	}
-
-	SetOpenState(EBBMWidgetOpenState::Open);
-
-	OnFinishOpenAnim();
-	BP_OnFinishOpenAnim();
-
-	ExecutePendingCallbacks(PendingOpenAnimDynamicCallbacks, PendingOpenAnimCallbacks);
+	return (OpenCloseTransition != nullptr) ? OpenCloseTransition->IsStarted() : false;
 }
 
-void UBBMViewModelBase::NotifyCloseTransitionFinished()
+bool UBBMViewModelBase::IsShowing() const
 {
-	if (OpenState != EBBMWidgetOpenState::Closing)
-	{
-		return;
-	}
+	return (OpenCloseTransition != nullptr) ? OpenCloseTransition->IsActive() : false;
+}
 
-	SetOpenState(EBBMWidgetOpenState::Closed);
+EBBMDualAnimState UBBMViewModelBase::GetOpenState() const
+{
+	return (OpenCloseTransition != nullptr) ? OpenCloseTransition->GetState() : EBBMDualAnimState::Ended;
+}
 
-	OnFinishCloseAnim();
-	BP_OnFinishCloseAnim();
-
-	ExecutePendingCallbacks(PendingCloseAnimDynamicCallbacks, PendingCloseAnimCallbacks);
+void UBBMViewModelBase::BeginViewModel()
+{
 }
 
 void UBBMViewModelBase::OnOpen()
@@ -119,245 +136,49 @@ void UBBMViewModelBase::OnFinishCloseAnim()
 {
 }
 
-void UBBMViewModelBase::ExecuteOpen(
-	bool bWithAnim,
-	FBBMOnWidgetAnimFinishedSignature InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
-)
+void UBBMViewModelBase::HandleTransitionOpenStarted()
 {
-	// 반대 방향(클로즈) 대기 콜백 정리
-	ClearPendingCallbacks(PendingCloseAnimDynamicCallbacks, PendingCloseAnimCallbacks);
-
-	// 이미 완전히 열린 상태면 재실행 없이 전달된 콜백만 즉시 처리
-	if (OpenState == EBBMWidgetOpenState::Open)
-	{
-		InvokeTransitionCallbackImmediate(MoveTemp(InNativeComplete), InDynamicComplete);
-		return;
-	}
-
-	// 이미 열기 전환 진행 중일 때의 처리
-	if (OpenState == EBBMWidgetOpenState::Opening)
-	{
-		EnqueuePendingCallbacks(
-			PendingOpenAnimDynamicCallbacks,
-			PendingOpenAnimCallbacks,
-			MoveTemp(InNativeComplete),
-			InDynamicComplete
-		);
-
-		// 무애님 Open() 요청 시 진행 중 애니메이션을 즉시 스냅 완료하고 누적 콜백까지 일괄 호출
-		if (bWithAnim == false)
-		{
-			if (OpenPresentationHandler.IsBound() == true)
-			{
-				OpenPresentationHandler.Execute(false);
-			}
-			else
-			{
-				NotifyOpenTransitionFinished();
-			}
-		}
-		return;
-	}
-
-	ClearPendingCallbacks(PendingOpenAnimDynamicCallbacks, PendingOpenAnimCallbacks);
-
-	if (bWithAnim == true)
-	{
-		EnqueuePendingCallbacks(
-			PendingOpenAnimDynamicCallbacks,
-			PendingOpenAnimCallbacks,
-			MoveTemp(InNativeComplete),
-			InDynamicComplete
-		);
-	}
-
-	// 애니메이션 진행 여부와 무관하게 세부 상태 전이 및 Open 이벤트는 즉시 반영/호출
-	SetOpenState(EBBMWidgetOpenState::Opening);
-
 	OnOpen();
 	BP_OnOpen();
-
-	// 훅 실행 중 상태가 다른 전이로 변경된 경우 후속 프레젠테이션 요청 중단
-	if (OpenState != EBBMWidgetOpenState::Opening)
-	{
-		return;
-	}
-
-	// 연결된 View가 있으면 프레젠테이션 요청을 전달하고, 없으면 즉시 완료 처리
-	if (OpenPresentationHandler.IsBound() == true)
-	{
-		OpenPresentationHandler.Execute(bWithAnim);
-	}
-	else
-	{
-		NotifyOpenTransitionFinished();
-	}
 }
 
-void UBBMViewModelBase::ExecuteClose(
-	bool bWithAnim,
-	FBBMOnWidgetAnimFinishedSignature InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
-)
+void UBBMViewModelBase::HandleTransitionCloseStarted()
 {
-	// 반대 방향(오픈) 대기 콜백 정리
-	ClearPendingCallbacks(PendingOpenAnimDynamicCallbacks, PendingOpenAnimCallbacks);
-
-	// 이미 완전히 닫힌 상태면 재실행 없이 전달된 콜백만 즉시 처리
-	if (OpenState == EBBMWidgetOpenState::Closed)
-	{
-		InvokeTransitionCallbackImmediate(MoveTemp(InNativeComplete), InDynamicComplete);
-		return;
-	}
-
-	// 이미 닫기 전환 진행 중일 때의 처리
-	if (OpenState == EBBMWidgetOpenState::Closing)
-	{
-		EnqueuePendingCallbacks(
-			PendingCloseAnimDynamicCallbacks,
-			PendingCloseAnimCallbacks,
-			MoveTemp(InNativeComplete),
-			InDynamicComplete
-		);
-
-		// 무애님 Close() 요청 시 진행 중 애니메이션을 즉시 스냅 완료하고 누적 콜백까지 일괄 호출
-		if (bWithAnim == false)
-		{
-			if (ClosePresentationHandler.IsBound() == true)
-			{
-				ClosePresentationHandler.Execute(false);
-			}
-			else
-			{
-				NotifyCloseTransitionFinished();
-			}
-		}
-		return;
-	}
-
-	ClearPendingCallbacks(PendingCloseAnimDynamicCallbacks, PendingCloseAnimCallbacks);
-
-	if (bWithAnim == true)
-	{
-		EnqueuePendingCallbacks(
-			PendingCloseAnimDynamicCallbacks,
-			PendingCloseAnimCallbacks,
-			MoveTemp(InNativeComplete),
-			InDynamicComplete
-		);
-	}
-
-	// 애니메이션 진행 여부와 무관하게 세부 상태 전이 및 Closed 이벤트는 즉시 반영/호출
-	SetOpenState(EBBMWidgetOpenState::Closing);
-
 	OnClosed();
 	BP_OnClosed();
+}
 
-	// 훅 실행 중 상태가 다른 전이로 변경된 경우 후속 프레젠테이션 요청 중단
-	if (OpenState != EBBMWidgetOpenState::Closing)
-	{
-		return;
-	}
+void UBBMViewModelBase::HandleTransitionOpenFinished()
+{
+	OnFinishOpenAnim();
+	BP_OnFinishOpenAnim();
+}
 
-	// 연결된 View가 있으면 프레젠테이션 요청을 전달하고, 없으면 즉시 완료 처리
-	if (ClosePresentationHandler.IsBound() == true)
+void UBBMViewModelBase::HandleTransitionCloseFinished()
+{
+	OnFinishCloseAnim();
+	BP_OnFinishCloseAnim();
+}
+
+void UBBMViewModelBase::HandleTransitionStateChanged(UObject* InObject, UE::FieldNotification::FFieldId InFieldId)
+{
+	if (InObject == OpenCloseTransition)
 	{
-		ClosePresentationHandler.Execute(bWithAnim);
-	}
-	else
-	{
-		NotifyCloseTransitionFinished();
+		UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetOpenState);
 	}
 }
 
-void UBBMViewModelBase::InvokeTransitionCallbackImmediate(
-	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
-)
+void UBBMViewModelBase::HandleTransitionStartedChanged(UObject* InObject, UE::FieldNotification::FFieldId InFieldId)
 {
-	if (InDynamicComplete.IsBound() == true)
-	{
-		InDynamicComplete.Execute();
-	}
-
-	if (InNativeComplete.IsBound() == true)
-	{
-		InNativeComplete.Execute();
-	}
-}
-
-void UBBMViewModelBase::EnqueuePendingCallbacks(
-	TArray<FBBMOnWidgetAnimFinishedDynamicSignature>& TargetDynamicCallbacks,
-	TArray<FBBMOnWidgetAnimFinishedSignature>& TargetNativeCallbacks,
-	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
-)
-{
-	if (InDynamicComplete.IsBound() == true)
-	{
-		TargetDynamicCallbacks.Add(InDynamicComplete);
-	}
-
-	if (InNativeComplete.IsBound() == true)
-	{
-		TargetNativeCallbacks.Add(MoveTemp(InNativeComplete));
-	}
-}
-
-void UBBMViewModelBase::ClearPendingCallbacks(
-	TArray<FBBMOnWidgetAnimFinishedDynamicSignature>& TargetDynamicCallbacks,
-	TArray<FBBMOnWidgetAnimFinishedSignature>& TargetNativeCallbacks
-)
-{
-	TargetDynamicCallbacks.Reset();
-	TargetNativeCallbacks.Reset();
-}
-
-void UBBMViewModelBase::ExecutePendingCallbacks(
-	TArray<FBBMOnWidgetAnimFinishedDynamicSignature>& TargetDynamicCallbacks,
-	TArray<FBBMOnWidgetAnimFinishedSignature>& TargetNativeCallbacks
-)
-{
-	// 콜백 재진입 시 안전을 위해 로컬 배열로 이동 후 순차 실행
-	TArray<FBBMOnWidgetAnimFinishedDynamicSignature> DynamicCallbacks = MoveTemp(TargetDynamicCallbacks);
-	TArray<FBBMOnWidgetAnimFinishedSignature> NativeCallbacks = MoveTemp(TargetNativeCallbacks);
-	TargetDynamicCallbacks.Reset();
-	TargetNativeCallbacks.Reset();
-
-	for (const FBBMOnWidgetAnimFinishedDynamicSignature& DynamicCallback : DynamicCallbacks)
-	{
-		if (DynamicCallback.IsBound() == true)
-		{
-			DynamicCallback.Execute();
-		}
-	}
-
-	for (const FBBMOnWidgetAnimFinishedSignature& NativeCallback : NativeCallbacks)
-	{
-		if (NativeCallback.IsBound() == true)
-		{
-			NativeCallback.Execute();
-		}
-	}
-}
-
-void UBBMViewModelBase::SetOpenState(EBBMWidgetOpenState InOpenState)
-{
-	const bool bWasOpen = IsOpen();
-	const bool bWasShowing = IsShowing();
-
-	if (UE_MVVM_SET_PROPERTY_VALUE(OpenState, InOpenState) == false)
-	{
-		return;
-	}
-
-	if (bWasOpen != IsOpen())
+	if (InObject == OpenCloseTransition)
 	{
 		UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(IsOpen);
 	}
+}
 
-	if (bWasShowing != IsShowing())
+void UBBMViewModelBase::HandleTransitionActiveChanged(UObject* InObject, UE::FieldNotification::FFieldId InFieldId)
+{
+	if (InObject == OpenCloseTransition)
 	{
 		UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(IsShowing);
 	}

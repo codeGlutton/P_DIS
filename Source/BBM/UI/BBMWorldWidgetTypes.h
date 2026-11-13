@@ -12,13 +12,19 @@
 #include "Animation/WidgetAnimation.h"
 #include "BBMWorldWidgetTypes.generated.h"
 
-/* 애니메이션 전환 완료 대리자 선언 */
+/* 애니메이션 전환 요청 및 완료 대리자 선언 */
+DECLARE_DELEGATE_OneParam(FBBMOnPresentationTransitionRequestedSignature, bool /*bWithAnim*/);
 DECLARE_DYNAMIC_DELEGATE(FBBMOnWidgetAnimFinishedDynamicSignature);
 DECLARE_DELEGATE(FBBMOnWidgetAnimFinishedSignature);
+
+/* 애니메이션 전환 라이프사이클 브로드캐스트 동적 대리자 */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBBMOnSingleAnimTransitionStartedDynamicSignature, bool, bWithAnim);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FBBMOnTransitionEventDynamicSignature);
 
 /* 독립 전방 선언 */
 class UBBMUserWidgetBase;
 class UBBMViewModelBase;
+class UWidgetAnimation;
 
 /**
  * BBM UI 위젯 ZOrder 레이어 구분 열거형 (10 간격)
@@ -92,7 +98,8 @@ struct BBM_API FBBMWidgetAnimConfig
 {
 	GENERATED_BODY()
 
-	/* 재생할 위젯 애니메이션 에셋 포인터 */
+public:
+	/* 재생할 위젯 애니메이션 이름 (UMG 에디터 상의 애니메이션 이름 또는 FProperty 이름) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BBM|UI|Animation")
 	TObjectPtr<UWidgetAnimation> Animation = nullptr;
 
@@ -106,22 +113,35 @@ struct BBM_API FBBMWidgetAnimConfig
 };
 
 /**
- * BBM UI 열림 및 애니메이션 전환 상태 열거형
+ * 단일 UI 애니메이션 전환 상태 열거형
  */
 UENUM(BlueprintType)
-enum class EBBMWidgetOpenState : uint8
+enum class EBBMSingleAnimState : uint8
 {
-	/* 완전히 닫혀 있는 상태 */
-	Closed  UMETA(DisplayName = "Closed"),
+	/* 대기 및 완료(비재생) 상태 */
+	Idle    UMETA(DisplayName = "Idle"),
 
-	/* 열림 요청 후 오픈 애니메이션 재생 중인 상태 */
-	Opening UMETA(DisplayName = "Opening"),
+	/* 애니메이션 전환이 진행 중인 상태 */
+	Playing UMETA(DisplayName = "Playing")
+};
 
-	/* 완전히 열려 있는 상태 */
-	Open    UMETA(DisplayName = "Open"),
+/**
+ * 양방향(Start/End) UI 애니메이션 전환 상태 열거형
+ */
+UENUM(BlueprintType)
+enum class EBBMDualAnimState : uint8
+{
+	/* 완전히 종료된 초기·대기 상태 */
+	Ended    UMETA(DisplayName = "Ended"),
 
-	/* 닫힘 요청 후 클로즈 애니메이션 재생 중인 상태 */
-	Closing UMETA(DisplayName = "Closing")
+	/* 시작 요청 후 시작 애니메이션 재생 중인 상태 */
+	Starting UMETA(DisplayName = "Starting"),
+
+	/* 시작 완료(활성) 상태 */
+	Started  UMETA(DisplayName = "Started"),
+
+	/* 종료 요청 후 종료 애니메이션 재생 중인 상태 */
+	Ending   UMETA(DisplayName = "Ending")
 };
 
 /**

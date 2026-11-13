@@ -1,7 +1,7 @@
 /*****************************************************************//**
  * @file   BBMUserWidgetBase.h
  * @brief  BBM(비트 배낭 상인) 공용 사용자 위젯 베이스 클래스 정의
- * @details 단일 ViewModel 기반 Open/Close 프레젠테이션 수신, 애니메이션 재생 설정 및 뷰포트 수명 주기 최적화 제공
+ * @details 단일 ViewModel 기반 Open/Close 프레젠테이션 수신, 범용 애니메이션 전환 헬퍼 및 뷰포트 수명 주기 최적화 제공
  * @date   2026-11-06
  *********************************************************************/
 
@@ -14,6 +14,9 @@
 
 /* 독립 전방 선언 */
 class UBBMViewModelBase;
+class UBBMSingleAnimTransition;
+class UBBMDualAnimTransition;
+struct FWidgetAnimationState;
 
 /**
  * BBM 공용 사용자 위젯 베이스 클래스
@@ -58,7 +61,7 @@ public:
 	 * 현재 위젯에 연결된 단일 뷰모델 인스턴스를 반환합니다
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|MVVM")
-	UBBMViewModelBase* GetViewModel() const { return ViewModel; }
+	UBBMViewModelBase* GetViewModel() const { return ViewModel.Get(); }
 
 	/**
 	 * 연결된 단일 ViewModel 변수를 지정 타입으로 캐스팅하여 반환하는 C++ 템플릿 헬퍼
@@ -93,34 +96,91 @@ protected:
 	virtual void OnOpened();
 	virtual void OnClosed();
 
-	/* 내부 프레젠테이션 요청 및 애니메이션 콜백 핸들러 */
+	/* 뷰모델 프레젠테이션 바인딩 확장 가상 함수 */
+protected:
+	/**
+	 * 뷰모델 인스턴스 주입 시 프레젠테이션 및 애니메이션 전환 핸들러를 일괄 등록하는 확장 가상 함수
+	 * @param InViewModel 새로 연결되는 뷰모델 인스턴스 (non-null 보장)
+	 */
+	virtual void BindViewModelPresentationHandlers(UBBMViewModelBase* InViewModel);
+
+	/**
+	 * 뷰모델 인스턴스 해제 시 프레젠테이션 및 애니메이션 전환 핸들러를 일괄 해제하는 확장 가상 함수
+	 * @param InViewModel 연결 해제 대상 뷰모델 인스턴스 (non-null 보장)
+	 */
+	virtual void ClearViewModelPresentationHandlers(UBBMViewModelBase* InViewModel);
+
+	/* 범용 애니메이션 재생 및 전환 헬퍼 */
+protected:
+	/**
+	 * 단일 애니메이션 전환 모듈(UBBMSingleAnimTransition) 연동 전용 범용 요청 핸들러
+	 * @param InTransition 완료 통지를 수신할 단일 전환 모듈
+	 * @param InConfig 애니메이션 설정
+	 * @param bWithAnim 애니메이션 재생 여부
+	 */
+	void HandleSingleTransitionRequested(
+		UBBMSingleAnimTransition* InTransition,
+		const FBBMWidgetAnimConfig& InConfig,
+		bool bWithAnim
+	);
+
+	/**
+	 * 이중 애니메이션 전환 모듈(UBBMDualAnimTransition)의 Start(열기/시작) 전용 범용 요청 핸들러
+	 * @param InDualTransition 완료 통지를 수신할 이중 전환 모듈
+	 * @param InStartConfig 시작 애니메이션 설정
+	 * @param InEndConfig 종료 애니메이션 설정
+	 * @param bWithAnim 애니메이션 재생 여부
+	 */
+	void HandleDualTransitionStartRequested(
+		UBBMDualAnimTransition* InDualTransition,
+		const FBBMWidgetAnimConfig& InStartConfig,
+		const FBBMWidgetAnimConfig& InEndConfig,
+		bool bWithAnim
+	);
+
+	/**
+	 * 이중 애니메이션 전환 모듈(UBBMDualAnimTransition)의 End(닫기/종료) 전용 범용 요청 핸들러
+	 * @param InDualTransition 완료 통지를 수신할 이중 전환 모듈
+	 * @param InStartConfig 시작 애니메이션 설정
+	 * @param InEndConfig 종료 애니메이션 설정
+	 * @param bWithAnim 애니메이션 재생 여부
+	 */
+	void HandleDualTransitionEndRequested(
+		UBBMDualAnimTransition* InDualTransition,
+		const FBBMWidgetAnimConfig& InStartConfig,
+		const FBBMWidgetAnimConfig& InEndConfig,
+		bool bWithAnim
+	);
+
+	/* 오픈/클로즈 프레젠테이션 요청 핸들러 및 완료 훅 */
 private:
-	/* ViewModel의 오픈 요청 수신 핸들러 */
+	/* ViewModel의 오픈 요청 수신 핸들러 (기본: 가시성 켜기 + HandleDualTransitionStartRequested) */
 	void HandleOpenPresentationRequested(bool bWithAnim);
 
-	/* ViewModel의 클로즈 요청 수신 핸들러 */
+	/* ViewModel의 클로즈 요청 수신 핸들러 (기본: HandleDualTransitionEndRequested + 가시성 끄기) */
 	void HandleClosePresentationRequested(bool bWithAnim);
+
+	/* 오픈 애니메이션 종료 직후(완료 통지 직전) 호출 */
+	UFUNCTION()
+	void HandleOpenAnimationFinished();
+
+	/* 클로즈 애니메이션 종료 직후(가시성 숨김 직후, 완료 통지 직전) 호출 */
+	UFUNCTION()
+	void HandleCloseAnimationFinished();
+
+	/* 내부 헬퍼 */
+private:
+	/* 게임 뷰포트가 유효한 경우에만 AddToViewport를 수행하는 안전 헬퍼 */
+	void TryAddToGameViewport();
 
 	/* 수명 주기 정책에 따른 뷰포트 등록 및 가시성 표시 적용 */
 	void ApplyOpenViewportPresentation();
 
-	/* 게임 뷰포트가 유효한 경우에만 AddToViewport를 수행하는 안전 헬퍼 */
-	void TryAddToGameViewport();
-
 	/* 수명 주기 정책에 따른 뷰포트 탈착 또는 가시성 숨김 적용 */
 	void ApplyCloseViewportPresentation();
 
-	UFUNCTION()
-	void HandleOpenAnimationFinished();
-
-	UFUNCTION()
-	void HandleCloseAnimationFinished();
-
-	/* 현재 등록된 위젯 애니메이션 완료 대리자 바인딩 해제 및 필요 시 재생 중단 */
-	void ClearAnimationFinishedBindings(bool bStopRunningAnimations);
-
 	/* 애니메이션 설정(EBBMWidgetAnimPlayMode, 속도)에 따른 UMG 분기 재생 헬퍼 */
-	void PlayAnimationByConfig(UWidgetAnimation* InAnim, const FBBMWidgetAnimConfig& InConfig);
+	void PlayAnimationByConfig(const FBBMWidgetAnimConfig& InConfig);
 
 	/* 설정 및 연결 멤버 변수 */
 protected:
@@ -132,16 +192,16 @@ protected:
 	UPROPERTY(Category = "BBM|UI|Optimization", EditDefaultsOnly, BlueprintReadOnly)
 	EBBMWidgetZOrder DefaultZOrderLayer;
 
-	/* 오픈 전용 애니메이션 설정 [에셋 포인터, 재생 방향, 속도] */
+	/* 오픈 전용 애니메이션 설정 [애니메이션 이름, 재생 방향, 속도] */
 	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
 	FBBMWidgetAnimConfig OpenAnimConfig;
 
-	/* 클로즈 전용 애니메이션 설정 [에셋 포인터, 재생 방향, 속도] */
+	/* 클로즈 전용 애니메이션 설정 [애니메이션 이름, 재생 방향, 속도] */
 	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
 	FBBMWidgetAnimConfig CloseAnimConfig;
 
 private:
-	/* 현재 위젯에 바인딩된 단일 ViewModel 인스턴스 */
+	/* 현재 위젯에 바인딩된 단일 ViewModel 인스턴스 (비소유 약참조) */
 	UPROPERTY(Category = "BBM|UI|MVVM", Transient, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UBBMViewModelBase> ViewModel;
+	TWeakObjectPtr<UBBMViewModelBase> ViewModel;
 };

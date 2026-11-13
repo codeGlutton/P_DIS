@@ -12,9 +12,9 @@
 #include "Components/SlateWrapperTypes.h"
 #include "BBMTitleViewModel.generated.h"
 
-/* 네비게이션 및 메뉴 요청 델리게이트 선언 */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FBBMOnTitleNavigationSignature);
-DECLARE_MULTICAST_DELEGATE(FBBMOnTitleNavigationNativeSignature);
+class UBBMSettingsViewModel;
+class UBBMCharacterSelectViewModel;
+class UBBMCreditsViewModel;
 
 /**
  * BBM 타이틀 화면 전용 MVVM 뷰모델
@@ -42,13 +42,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
 	void SetCanContinue(bool bInCanContinue);
 
-	/* 이어하기 버튼 가시성 반환 (세이브 없으면 Collapsed) */
-	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
-	ESlateVisibility GetContinueVisibility() const { return ContinueVisibility; }
-
-	/* 이어하기 버튼 가시성 설정 */
-	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
-	void SetContinueVisibility(ESlateVisibility InVisibility);
+	/* 이어하기 버튼 가시성 반환 (세이브 없으면 Hidden) */
+	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title", FieldNotify)
+	ESlateVisibility GetContinueVisibility() const;
 
 	/* 현재 진행 중인 런의 조우 인덱스 반환 (활성 런 미존재 시 0) */
 	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
@@ -58,6 +54,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
 	void SetActiveRunEncounterIndex(int32 InEncounterIndex);
 
+	/* 서브 ViewModel 접근자 */
+public:
+	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
+	UBBMSettingsViewModel* GetSettingsViewModel() const { return SettingsViewModel; }
+
+	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
+	UBBMCharacterSelectViewModel* GetCharacterSelectViewModel() const { return CharacterSelectViewModel; }
+
+	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
+	UBBMCreditsViewModel* GetCreditsViewModel() const { return CreditsViewModel; }
+
 	/* 비즈니스 로직 및 메뉴 액션 인터페이스 */
 public:
 	/**
@@ -65,12 +72,6 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
 	void RefreshTitleState();
-
-	/**
-	 * 게임 시작 버튼 클릭 액션 처리
-	 */
-	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
-	void StartNewGame();
 
 	/**
 	 * 이어하기 버튼 클릭 액션 처리
@@ -91,50 +92,32 @@ public:
 	void OpenCredits();
 
 	/**
+	 * 캐릭터 선택 창 열기 액션 처리
+	 */
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
+	void OpenCharacterSelections();
+
+	/**
 	 * 게임 종료 액션 처리
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
 	void QuitGame();
 
-	/* 델리게이트 이벤트 */
-public:
-	/* 새 게임 시작 요청 이벤트 (블루프린트용) */
-	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|Title|Event")
-	FBBMOnTitleNavigationSignature OnStartNewGameRequested;
-
-	/* 새 게임 시작 요청 이벤트 (C++ 네이티브용) */
-	FBBMOnTitleNavigationNativeSignature OnStartNewGameRequestedNative;
-
-	/* 이어하기 요청 이벤트 (블루프린트용) */
-	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|Title|Event")
-	FBBMOnTitleNavigationSignature OnContinueGameRequested;
-
-	/* 이어하기 요청 이벤트 (C++ 네이티브용) */
-	FBBMOnTitleNavigationNativeSignature OnContinueGameRequestedNative;
-
-	/* 환경 설정 열기 요청 이벤트 (블루프린트용) */
-	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|Title|Event")
-	FBBMOnTitleNavigationSignature OnOpenSettingsRequested;
-
-	/* 환경 설정 열기 요청 이벤트 (C++ 네이티브용) */
-	FBBMOnTitleNavigationNativeSignature OnOpenSettingsRequestedNative;
-
-	/* 크레딧 열기 요청 이벤트 (블루프린트용) */
-	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|Title|Event")
-	FBBMOnTitleNavigationSignature OnOpenCreditsRequested;
-
-	/* 크레딧 열기 요청 이벤트 (C++ 네이티브용) */
-	FBBMOnTitleNavigationNativeSignature OnOpenCreditsRequestedNative;
-
 	/* 내부 프로퍼티 */
 private:
-	/* 이어하기 가능 여부 */
-	UPROPERTY(BlueprintReadWrite, FieldNotify, Setter = SetCanContinue, Getter = GetCanContinue, meta = (AllowPrivateAccess = "true"))
-	bool bCanContinue = false;
+	/* 서브 ViewModel 컴포지션 */
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetSettingsViewModel, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UBBMSettingsViewModel> SettingsViewModel;
 
-	/* 이어하기 버튼 가시성 (기본값: Collapsed) */
-	UPROPERTY(BlueprintReadWrite, FieldNotify, Setter = SetContinueVisibility, Getter = GetContinueVisibility, meta = (AllowPrivateAccess = "true"))
-	ESlateVisibility ContinueVisibility = ESlateVisibility::Collapsed;
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetCharacterSelectViewModel, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UBBMCharacterSelectViewModel> CharacterSelectViewModel;
+
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetCreditsViewModel, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UBBMCreditsViewModel> CreditsViewModel;
+
+	/* 이어하기 가능 여부 */
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetCanContinue, Getter = GetCanContinue, meta = (AllowPrivateAccess = "true"))
+	bool bCanContinue = false;
 
 	/* 진행 중인 런의 현재 조우 인덱스 (활성 런 미존재 시 0, UI 텍스트 포맷 바인딩용) */
 	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetActiveRunEncounterIndex, Getter = GetActiveRunEncounterIndex, meta = (AllowPrivateAccess = "true"))

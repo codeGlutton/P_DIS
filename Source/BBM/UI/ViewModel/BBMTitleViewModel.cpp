@@ -11,8 +11,15 @@
 #include "Engine/GameInstance.h"
 #include "Kismet/KismetSystemLibrary.h"
 
+#include "UI/ViewModel/BBMSettingsViewModel.h"
+#include "UI/ViewModel/BBMCharacterSelectViewModel.h"
+#include "UI/ViewModel/BBMCreditsViewModel.h"
+
 UBBMTitleViewModel::UBBMTitleViewModel()
 {
+	SettingsViewModel = CreateDefaultSubobject<UBBMSettingsViewModel>(TEXT("SettingsViewModel"));
+	CharacterSelectViewModel = CreateDefaultSubobject<UBBMCharacterSelectViewModel>(TEXT("CharacterSelectViewModel"));
+	CreditsViewModel = CreateDefaultSubobject<UBBMCreditsViewModel>(TEXT("CreditsViewModel"));
 }
 
 void UBBMTitleViewModel::OnOpen()
@@ -23,14 +30,19 @@ void UBBMTitleViewModel::OnOpen()
 	RefreshTitleState();
 }
 
-void UBBMTitleViewModel::SetCanContinue(bool bInCanContinue)
+ESlateVisibility UBBMTitleViewModel::GetContinueVisibility() const
 {
-	UE_MVVM_SET_PROPERTY_VALUE(bCanContinue, bInCanContinue);
+	return bCanContinue == true ? ESlateVisibility::Visible : ESlateVisibility::Hidden;
 }
 
-void UBBMTitleViewModel::SetContinueVisibility(ESlateVisibility InVisibility)
+void UBBMTitleViewModel::SetCanContinue(bool bInCanContinue)
 {
-	UE_MVVM_SET_PROPERTY_VALUE(ContinueVisibility, InVisibility);
+	if (UE_MVVM_SET_PROPERTY_VALUE(bCanContinue, bInCanContinue) == false)
+	{
+		return;
+	}
+
+	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetContinueVisibility);
 }
 
 void UBBMTitleViewModel::SetActiveRunEncounterIndex(int32 InEncounterIndex)
@@ -46,7 +58,6 @@ void UBBMTitleViewModel::RefreshTitleState()
 	if (GameDataSS == nullptr)
 	{
 		SetCanContinue(false);
-		SetContinueVisibility(ESlateVisibility::Collapsed);
 		SetActiveRunEncounterIndex(0);
 		return;
 	}
@@ -56,37 +67,40 @@ void UBBMTitleViewModel::RefreshTitleState()
 
 	const bool bHasRun = GameDataSS->HasActiveRun();
 	SetCanContinue(bHasRun);
-	SetContinueVisibility((bHasRun == true) ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 
 	const UBBMRunSaveGame* RunData = (bHasRun == true) ? GameDataSS->GetCurrentRunData() : nullptr;
 	SetActiveRunEncounterIndex(RunData != nullptr ? RunData->CurrentEncounterIndex : 0);
-}
-
-void UBBMTitleViewModel::StartNewGame()
-{
-	OnStartNewGameRequested.Broadcast();
-	OnStartNewGameRequestedNative.Broadcast();
 }
 
 void UBBMTitleViewModel::ContinueGame()
 {
 	if (bCanContinue == true)
 	{
-		OnContinueGameRequested.Broadcast();
-		OnContinueGameRequestedNative.Broadcast();
 	}
 }
 
 void UBBMTitleViewModel::OpenSettings()
 {
-	OnOpenSettingsRequested.Broadcast();
-	OnOpenSettingsRequestedNative.Broadcast();
+	if (SettingsViewModel != nullptr)
+	{
+		SettingsViewModel->OpenWithAnim();
+	}
 }
 
 void UBBMTitleViewModel::OpenCredits()
 {
-	OnOpenCreditsRequested.Broadcast();
-	OnOpenCreditsRequestedNative.Broadcast();
+	if (CreditsViewModel != nullptr)
+	{
+		CreditsViewModel->OpenWithAnim();
+	}
+}
+
+void UBBMTitleViewModel::OpenCharacterSelections()
+{
+	if (CharacterSelectViewModel != nullptr)
+	{
+		CharacterSelectViewModel->OpenWithAnim();
+	}
 }
 
 void UBBMTitleViewModel::QuitGame()

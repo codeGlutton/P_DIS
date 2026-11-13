@@ -17,12 +17,6 @@ UBBMTitleWidget::UBBMTitleWidget(const FObjectInitializer& ObjectInitializer) :
 void UBBMTitleWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-
-	// 이미 뷰모델이 주입되어 있는 경우 타이틀 상태(이어하기 가시성 등) 갱신
-	if (UBBMTitleViewModel* TitleVM = GetTitleViewModel())
-	{
-		TitleVM->RefreshTitleState();
-	}
 }
 
 UBBMTitleViewModel* UBBMTitleWidget::GetTitleViewModel() const

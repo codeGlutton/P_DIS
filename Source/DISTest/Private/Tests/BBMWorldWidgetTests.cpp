@@ -12,8 +12,13 @@
 #include "Level/BBMTitleGameMode.h"
 #include "Level/BBMStageGameMode.h"
 #include "Level/BBMPlayerController.h"
+#include "GameFramework/PlayerController.h"
 #include "Level/BBMCameraActorBase.h"
 #include "Blueprint/UserWidget.h"
+#include "Animation/WidgetAnimation.h"
+#include "Blueprint/WidgetBlueprintGeneratedClass.h"
+#include "MovieScene.h"
+#include "UObject/StrongObjectPtr.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -87,9 +92,23 @@ bool FBBMWidgetZOrderEnumTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("RelativeReverse 열거형 값은 4이어야 함"), static_cast<uint8>(EBBMWidgetAnimPlayMode::RelativeReverse), 4);
 
 	FBBMWidgetAnimConfig DefaultAnimConfig;
-	TestNull(TEXT("기본 AnimConfig의 Animation 에셋은 nullptr여야 함"), DefaultAnimConfig.Animation.Get());
+	TestEqual(TEXT("기본 AnimConfig의 AnimationName은 NAME_None이어야 함"), DefaultAnimConfig.AnimationName, NAME_None);
+	TestNull(TEXT("nullptr 위젯 조회 시 GetAnimation은 nullptr여야 함"), DefaultAnimConfig.GetAnimation(nullptr));
 	TestEqual(TEXT("기본 AnimConfig의 PlayMode는 RelativeForward여야 함"), DefaultAnimConfig.PlayMode, EBBMWidgetAnimPlayMode::RelativeForward);
 	TestEqual(TEXT("기본 AnimConfig의 PlaybackSpeed는 1.0f여야 함"), DefaultAnimConfig.PlaybackSpeed, 1.0f);
+	TestEqual(TEXT("기본 AnimConfig의 LoopCount는 1이어야 함"), DefaultAnimConfig.LoopCount, 1);
+
+#if WITH_EDITOR
+	const FProperty* LoopCountProp = FBBMWidgetAnimConfig::StaticStruct()->FindPropertyByName(GET_MEMBER_NAME_CHECKED(FBBMWidgetAnimConfig, LoopCount));
+	TestNotNull(TEXT("LoopCount 프로퍼티 리플렉션 조회 성공"), LoopCountProp);
+	if (LoopCountProp != nullptr)
+	{
+		TestTrue(TEXT("LoopCount는 Relative 계열 숨김용 EditConditionHides 메타를 가져야 함"), LoopCountProp->HasMetaData(TEXT("EditConditionHides")));
+		const FString EditConditionStr = LoopCountProp->GetMetaData(TEXT("EditCondition"));
+		TestTrue(TEXT("EditCondition은 RelativeForward 제외 조건을 포함해야 함"), EditConditionStr.Contains(TEXT("RelativeForward")));
+		TestTrue(TEXT("EditCondition은 RelativeReverse 제외 조건을 포함해야 함"), EditConditionStr.Contains(TEXT("RelativeReverse")));
+	}
+#endif
 
 	return true;
 }
@@ -453,6 +472,51 @@ bool FBBMGameModeHierarchyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// 4-1. PC 환경에서 ABBMGameModeBase::InitializeLevelSpecificGameMode() 마우스 커서 표시 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMGameModeDesktopCursorTest,
+	"DIS.BBM.WorldWidget.GameModeDesktopCursor",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMGameModeDesktopCursorTest::RunTest(const FString& Parameters)
+{
+	FBBMWidgetScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	APlayerController* TestPC = TestWorld.World->SpawnActor<APlayerController>();
+	TestNotNull(TEXT("기본 APlayerController 스폰 성공"), TestPC);
+	if (TestPC == nullptr)
+	{
+		return false;
+	}
+
+	TestFalse(TEXT("초기 기본 APlayerController의 마우스 커서는 비표시 상태여야 함"), TestPC->ShouldShowMouseCursor());
+
+	ABBMTitleGameMode* TitleGameMode = TestWorld.World->SpawnActor<ABBMTitleGameMode>();
+	TestNotNull(TEXT("테스트용 ABBMTitleGameMode 스폰 성공"), TitleGameMode);
+	if (TitleGameMode == nullptr)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("World->GetFirstPlayerController()가 스폰한 PC를 반환해야 함"), TestWorld.World->GetFirstPlayerController(), TestPC);
+
+	TitleGameMode->DispatchBeginPlay(true);
+
+#if PLATFORM_DESKTOP
+	TestTrue(TEXT("PC 환경에서는 InitializeLevelSpecificGameMode() 이후 마우스 커서가 표시되어야 함"), TestPC->ShouldShowMouseCursor());
+#else
+	TestFalse(TEXT("비PC 환경에서는 기본 APlayerController 마우스 커서가 자동 활성화되지 않아야 함"), TestPC->ShouldShowMouseCursor());
+#endif
+
+	return true;
+}
+
 // 5. OpenState 파생 IsOpen/IsShowing FieldNotify 및 Opening/Closing/Open/Closed 콜백 누적/즉시실행/스냅 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMViewModelTransitionCallbackQueueTest,
@@ -776,8 +840,26 @@ bool FBBMSingleAnimTransitionTest::RunTest(const FString& Parameters)
 	SingleTransition->NotifyAnimFinished();
 	TestFalse(TEXT("Clear로 폐기된 콜백은 실행되면 안 됨"), bClearedCallbackFired);
 
-	// 4. 핸들러 미바인딩(헤드리스) 시 즉시 완료 처리 검증
+	// 4. Playing 중 ClearPresentationHandler 호출 시 타 소유자 방어 및 즉시 완료 스냅 검증
+	bool bClearedWhilePlayingFired = false;
+	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bClearedWhilePlayingFired]()
+	{
+		bClearedWhilePlayingFired = true;
+	}));
+	TestEqual(TEXT("ClearPresentationHandler 전 Playing 상태"), SingleTransition->GetState(), EBBMSingleAnimState::Playing);
+
+	UObject* WrongOwner = NewObject<UBBMSingleAnimTransition>(TestWorld.World);
+	SingleTransition->ClearPresentationHandler(WrongOwner);
+	TestTrue(TEXT("타 소유자 해제 시도 시 기존 바인딩 유지"), SingleTransition->IsPresentationHandlerBound());
+	TestEqual(TEXT("타 소유자 해제 시도 시 Playing 상태 유지"), SingleTransition->GetState(), EBBMSingleAnimState::Playing);
+	TestFalse(TEXT("타 소유자 해제 시도 시 대기 콜백 미실행"), bClearedWhilePlayingFired);
+
 	SingleTransition->ClearPresentationHandler(TestWorld.World);
+	TestFalse(TEXT("소유자 해제 후 핸들러 바인딩 해제"), SingleTransition->IsPresentationHandlerBound());
+	TestEqual(TEXT("Playing 중 핸들러 해제 시 Idle로 즉시 완료 확정"), SingleTransition->GetState(), EBBMSingleAnimState::Idle);
+	TestTrue(TEXT("Playing 중 핸들러 해제 시 대기 콜백 즉시 실행"), bClearedWhilePlayingFired);
+
+	// 5. 핸들러 미바인딩(헤드리스) 시 즉시 완료 처리 검증
 	bool bHeadlessFired = false;
 	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bHeadlessFired]()
 	{
@@ -874,7 +956,136 @@ bool FBBMDualAnimTransitionTest::RunTest(const FString& Parameters)
 	DualTransition->Clear();
 	TestEqual(TEXT("Clear 후 State는 Ended"), DualTransition->GetState(), EBBMDualAnimState::Ended);
 	TestFalse(TEXT("Clear 후 IsActive는 false"), DualTransition->IsActive());
+
+	// 4. Starting/Ending 중 ClearPresentationHandlers 호출 시 완료 확정 및 Started 안정 상태 보존 검증
+	bool bSnapStartedByClear = false;
+	DualTransition->StartWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bSnapStartedByClear]()
+	{
+		bSnapStartedByClear = true;
+	}));
+	TestEqual(TEXT("ClearPresentationHandlers 전 Starting 확인"), DualTransition->GetState(), EBBMDualAnimState::Starting);
 	DualTransition->ClearPresentationHandlers(TestWorld.World);
+	TestEqual(TEXT("Starting 중 핸들러 해제 시 Started 확정"), DualTransition->GetState(), EBBMDualAnimState::Started);
+	TestTrue(TEXT("Starting 중 핸들러 해제 시 대기 콜백 실행"), bSnapStartedByClear);
+
+	// 안정 상태(Started)에서 재차 핸들러 해제를 호출해도 Ended로 덮어쓰지 않아야 함
+	DualTransition->ClearPresentationHandlers(TestWorld.World);
+	TestEqual(TEXT("안정 상태 Started는 핸들러 해제 시 유지되어야 함"), DualTransition->GetState(), EBBMDualAnimState::Started);
+
+	// 다시 바인딩 후 Ending 중 ClearPresentationHandlers 호출 시 Ended 확정 검증
+	DualTransition->BindPresentationHandlers(
+		TestWorld.World,
+		FBBMOnPresentationTransitionRequestedSignature::CreateLambda([](bool) {}),
+		FBBMOnPresentationTransitionRequestedSignature::CreateLambda([](bool) {})
+	);
+	bool bSnapEndedByClear = false;
+	DualTransition->EndWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bSnapEndedByClear]()
+	{
+		bSnapEndedByClear = true;
+	}));
+	TestEqual(TEXT("ClearPresentationHandlers 전 Ending 확인"), DualTransition->GetState(), EBBMDualAnimState::Ending);
+	DualTransition->ClearPresentationHandlers(TestWorld.World);
+	TestEqual(TEXT("Ending 중 핸들러 해제 시 Ended 확정"), DualTransition->GetState(), EBBMDualAnimState::Ended);
+	TestTrue(TEXT("Ending 중 핸들러 해제 시 대기 콜백 실행"), bSnapEndedByClear);
+	TestFalse(TEXT("Ending 완료 확정 후 IsActive는 false"), DualTransition->IsActive());
+
+	return true;
+}
+
+// 6. FBBMWidgetAnimConfig의 WBGC 상속 계층 기반 애니메이션 탐색 및 캐시 무효화 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMWidgetAnimConfigCacheTest,
+	"DIS.BBM.WorldWidget.AnimConfigCacheLookup",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMWidgetAnimConfigCacheTest::RunTest(const FString& Parameters)
+{
+	FBBMWidgetScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	TArray<TStrongObjectPtr<UObject>> KeepAliveObjects;
+
+	auto CreateTestWBGC = [&KeepAliveObjects](UClass* SuperClass, const TCHAR* ClassName) -> UWidgetBlueprintGeneratedClass*
+	{
+		UWidgetBlueprintGeneratedClass* NewWBGC = NewObject<UWidgetBlueprintGeneratedClass>(GetTransientPackage(), ClassName);
+		NewWBGC->SetSuperStruct(SuperClass);
+		NewWBGC->ClassWithin = UObject::StaticClass();
+		NewWBGC->Bind();
+		NewWBGC->StaticLink(true);
+		NewWBGC->GetDefaultObject(true);
+		NewWBGC->UpdateCustomPropertyListForPostConstruction();
+		KeepAliveObjects.Emplace(NewWBGC);
+		return NewWBGC;
+	};
+
+	auto CreateTestWidgetAnim = [&KeepAliveObjects](UWidgetBlueprintGeneratedClass* OwnerWBGC, const FName& MovieSceneName) -> UWidgetAnimation*
+	{
+		const FName AnimObjName = FName(*FString::Printf(TEXT("%s_INST"), *MovieSceneName.ToString()));
+		UWidgetAnimation* Anim = NewObject<UWidgetAnimation>(OwnerWBGC, AnimObjName);
+		UMovieScene* MovieScene = NewObject<UMovieScene>(Anim, MovieSceneName);
+		Anim->MovieScene = MovieScene;
+		OwnerWBGC->Animations.Add(Anim);
+		KeepAliveObjects.Emplace(Anim);
+		KeepAliveObjects.Emplace(MovieScene);
+		return Anim;
+	};
+
+	UWidgetBlueprintGeneratedClass* ParentWBGC = CreateTestWBGC(UBBMUserWidgetBase::StaticClass(), TEXT("BBMTestParentWBGC"));
+	UWidgetBlueprintGeneratedClass* ChildWBGC = CreateTestWBGC(ParentWBGC, TEXT("BBMTestChildWBGC"));
+	UWidgetBlueprintGeneratedClass* OtherWBGC = CreateTestWBGC(UBBMUserWidgetBase::StaticClass(), TEXT("BBMTestOtherWBGC"));
+
+	UWidgetAnimation* ParentFadeAnim = CreateTestWidgetAnim(ParentWBGC, FName(TEXT("ParentFade")));
+	UWidgetAnimation* ParentAltAnim = CreateTestWidgetAnim(ParentWBGC, FName(TEXT("ParentAlt")));
+	UWidgetAnimation* OtherFadeAnim = CreateTestWidgetAnim(OtherWBGC, FName(TEXT("ParentFade")));
+
+	UBBMUserWidgetBase* NativeWidget = NewObject<UBBMUserWidgetBase>(TestWorld.World);
+	UBBMUserWidgetBase* ParentWidgetA = NewObject<UBBMUserWidgetBase>(TestWorld.World, ParentWBGC);
+	UBBMUserWidgetBase* ParentWidgetB = NewObject<UBBMUserWidgetBase>(TestWorld.World, ParentWBGC);
+	UBBMUserWidgetBase* ChildWidget = NewObject<UBBMUserWidgetBase>(TestWorld.World, ChildWBGC);
+	UBBMUserWidgetBase* OtherWidget = NewObject<UBBMUserWidgetBase>(TestWorld.World, OtherWBGC);
+
+	KeepAliveObjects.Emplace(NativeWidget);
+	KeepAliveObjects.Emplace(ParentWidgetA);
+	KeepAliveObjects.Emplace(ParentWidgetB);
+	KeepAliveObjects.Emplace(ChildWidget);
+	KeepAliveObjects.Emplace(OtherWidget);
+
+	FBBMWidgetAnimConfig Config;
+
+	// 1. 빈 이름 / nullptr / 비-WBGC 위젯 방어 검증
+	TestNull(TEXT("AnimationName이 NAME_None이면 nullptr 반환"), Config.GetAnimation(ParentWidgetA));
+	Config.AnimationName = FName(TEXT("ParentFade"));
+	TestNull(TEXT("nullptr 위젯 전달 시 nullptr 반환"), Config.GetAnimation(nullptr));
+	TestNull(TEXT("비-WBGC 네이티브 위젯 전달 시 nullptr 반환"), Config.GetAnimation(NativeWidget));
+
+	// 2. 최초 탐색 및 동일 WBGC·상속 ChildWBGC 캐시 히트 검증
+	TestEqual(TEXT("최초 조회 시 ParentFadeAnim 탐색 성공"), Config.GetAnimation(ParentWidgetA), ParentFadeAnim);
+
+	// WBGC->Animations를 임시로 비워 캐시 히트 여부를 직접 검증
+	TArray<TObjectPtr<UWidgetAnimation>> SavedParentAnims = ParentWBGC->Animations;
+	ParentWBGC->Animations.Empty();
+
+	TestEqual(TEXT("동일 위젯 재호출 시 캐시 히트 유지"), Config.GetAnimation(ParentWidgetA), ParentFadeAnim);
+	TestEqual(TEXT("같은 WBGC 다른 위젯 인스턴스도 캐시 히트 유지"), Config.GetAnimation(ParentWidgetB), ParentFadeAnim);
+	TestEqual(TEXT("부모 WBGC 애님 캐시는 자식 WBGC 위젯에서도 IsChildOf로 캐시 히트"), Config.GetAnimation(ChildWidget), ParentFadeAnim);
+
+	// 3. 캐시 무효화 후 ChildWidget에서 GetSuperClass() 순회로 부모 애님 탐색 검증
+	Config.InvalidateCachedAnimation();
+	ParentWBGC->Animations = MoveTemp(SavedParentAnims);
+	TestEqual(TEXT("캐시 무효화 후 ChildWidget에서 부모 WBGC 애님 계층 탐색 성공"), Config.GetAnimation(ChildWidget), ParentFadeAnim);
+
+	// 4. 전혀 다른 WBGC 위젯 진입 시 Outer 계층 불일치를 감지해 재탐색·재캐싱 검증
+	TestEqual(TEXT("타 WBGC 위젯 전달 시 OtherFadeAnim으로 재캐싱되어야 함"), Config.GetAnimation(OtherWidget), OtherFadeAnim);
+
+	// 5. AnimationName 변경 시 MovieScene 이름 불일치로 재탐색 검증
+	Config.AnimationName = FName(TEXT("ParentAlt"));
+	TestNull(TEXT("OtherWidget에는 ParentAlt 애님이 없으므로 nullptr 반환"), Config.GetAnimation(OtherWidget));
+	TestEqual(TEXT("ParentWidgetA에서 변경된 이름 ParentAlt 탐색 성공"), Config.GetAnimation(ParentWidgetA), ParentAltAnim);
 
 	return true;
 }

@@ -29,6 +29,10 @@ public:
 
 	virtual void NativeConstruct() override;
 
+protected:
+	virtual void BindViewModelPresentationHandlers(UBBMViewModelBase* InViewModel) override;
+	virtual void ClearViewModelPresentationHandlers(UBBMViewModelBase* InViewModel) override;
+
 	/* 뷰모델 접근자 */
 public:
 	/**
@@ -36,5 +40,19 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|Title")
 	UBBMTitleViewModel* GetTitleViewModel() const;
+
+	/* 애니메이션 설정 및 상태 */
+protected:
+	/* 타이틀 화면 오픈 중 무한 반복 재생할 반짝임 애니메이션 설정 */
+	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
+	FBBMWidgetAnimConfig ShiningAnimConfig;
+
+	/* 타이틀 블로킹 오버레이 시작 애니메이션 설정 */
+	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
+	FBBMWidgetAnimConfig BlockingStartAnimConfig;
+
+	/* 타이틀 블로킹 오버레이 종료 애니메이션 설정 */
+	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
+	FBBMWidgetAnimConfig BlockingEndAnimConfig;
 };
 

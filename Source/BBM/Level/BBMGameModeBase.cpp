@@ -9,6 +9,7 @@
 #include "UI/Widget/BBMUserWidgetBase.h"
 #include "UI/ViewModel/BBMViewModelBase.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 
 ABBMGameModeBase::ABBMGameModeBase()
 {
@@ -74,5 +75,16 @@ void ABBMGameModeBase::CreateWorldUIsByPhase(EBBMWidgetCreationPhase Phase)
 
 void ABBMGameModeBase::InitializeLevelSpecificGameMode()
 {
-	// 베이스 클래스는 기본적으로 빈 구현 (파생 클래스에서 오버라이드)
+#if PLATFORM_DESKTOP
+	// PC 환경에서는 타이틀 및 인게임 레벨 진입 시 마우스 커서를 표시함
+	UWorld* World = GetWorld();
+	if (World != nullptr)
+	{
+		APlayerController* PlayerController = World->GetFirstPlayerController();
+		if (PlayerController != nullptr)
+		{
+			PlayerController->SetShowMouseCursor(true);
+		}
+	}
+#endif
 }

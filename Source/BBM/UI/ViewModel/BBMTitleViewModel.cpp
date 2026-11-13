@@ -20,29 +20,42 @@ UBBMTitleViewModel::UBBMTitleViewModel()
 	SettingsViewModel = CreateDefaultSubobject<UBBMSettingsViewModel>(TEXT("SettingsViewModel"));
 	CharacterSelectViewModel = CreateDefaultSubobject<UBBMCharacterSelectViewModel>(TEXT("CharacterSelectViewModel"));
 	CreditsViewModel = CreateDefaultSubobject<UBBMCreditsViewModel>(TEXT("CreditsViewModel"));
+	ShiningTransition = CreateDefaultSubobject<UBBMSingleAnimTransition>(TEXT("ShiningTransition"));
+	BlockingTransition = CreateDefaultSubobject<UBBMDualAnimTransition>(TEXT("BlockingTransition"));
 }
 
 void UBBMTitleViewModel::OnOpen()
 {
 	Super::OnOpen();
 
-	// 타이틀 뷰모델이 열리는 시점에 최신 세이브 런 상태 동기화
+	// 타이틀 뷰모델이 열리는 시점에 최신 세이브 런 상태 동기화 및 반짝임 루프 애니메이션 시작
 	RefreshTitleState();
 }
 
-ESlateVisibility UBBMTitleViewModel::GetContinueVisibility() const
+void UBBMTitleViewModel::OnFinishOpenAnim()
 {
-	return bCanContinue == true ? ESlateVisibility::Visible : ESlateVisibility::Hidden;
+	Super::OnFinishOpenAnim();
+
+	if (ShiningTransition != nullptr)
+	{
+		ShiningTransition->Execute(true);
+	}
+}
+
+void UBBMTitleViewModel::OnClosed()
+{
+	Super::OnClosed();
+
+	// 타이틀이 완전히 닫히면 무한 반복 중인 반짝임 애니메이션 및 블로킹 상태를 즉시 정리
+	if (ShiningTransition != nullptr)
+	{
+		ShiningTransition->Execute(false);
+	}
 }
 
 void UBBMTitleViewModel::SetCanContinue(bool bInCanContinue)
 {
-	if (UE_MVVM_SET_PROPERTY_VALUE(bCanContinue, bInCanContinue) == false)
-	{
-		return;
-	}
-
-	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetContinueVisibility);
+	UE_MVVM_SET_PROPERTY_VALUE(bCanContinue, bInCanContinue);
 }
 
 void UBBMTitleViewModel::SetActiveRunEncounterIndex(int32 InEncounterIndex)

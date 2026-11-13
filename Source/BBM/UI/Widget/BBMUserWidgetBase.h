@@ -72,11 +72,6 @@ public:
 		return Cast<T>(ViewModel.Get());
 	}
 
-	/**
-	 * 서브시스템 등에서 위젯 단독 제거 시 뷰포트에서 즉시 탈착/숨김 처리합니다
-	 */
-	void DetachPresentationImmediate();
-
 	/* 프레젠테이션 이벤트 확장 */
 protected:
 	/* View 프레젠테이션이 열렸을 때 호출되는 블루프린트 이벤트 */
@@ -114,42 +109,42 @@ protected:
 protected:
 	/**
 	 * 단일 애니메이션 전환 모듈(UBBMSingleAnimTransition) 연동 전용 범용 요청 핸들러
+	 * @param bWithAnim 애니메이션 재생 여부
 	 * @param InTransition 완료 통지를 수신할 단일 전환 모듈
 	 * @param InConfig 애니메이션 설정
-	 * @param bWithAnim 애니메이션 재생 여부
 	 */
 	void HandleSingleTransitionRequested(
+		bool bWithAnim,
 		UBBMSingleAnimTransition* InTransition,
-		const FBBMWidgetAnimConfig& InConfig,
-		bool bWithAnim
+		const FBBMWidgetAnimConfig& InConfig
 	);
 
 	/**
 	 * 이중 애니메이션 전환 모듈(UBBMDualAnimTransition)의 Start(열기/시작) 전용 범용 요청 핸들러
+	 * @param bWithAnim 애니메이션 재생 여부
 	 * @param InDualTransition 완료 통지를 수신할 이중 전환 모듈
 	 * @param InStartConfig 시작 애니메이션 설정
 	 * @param InEndConfig 종료 애니메이션 설정
-	 * @param bWithAnim 애니메이션 재생 여부
 	 */
 	void HandleDualTransitionStartRequested(
+		bool bWithAnim,
 		UBBMDualAnimTransition* InDualTransition,
 		const FBBMWidgetAnimConfig& InStartConfig,
-		const FBBMWidgetAnimConfig& InEndConfig,
-		bool bWithAnim
+		const FBBMWidgetAnimConfig& InEndConfig
 	);
 
 	/**
 	 * 이중 애니메이션 전환 모듈(UBBMDualAnimTransition)의 End(닫기/종료) 전용 범용 요청 핸들러
+	 * @param bWithAnim 애니메이션 재생 여부
 	 * @param InDualTransition 완료 통지를 수신할 이중 전환 모듈
 	 * @param InStartConfig 시작 애니메이션 설정
 	 * @param InEndConfig 종료 애니메이션 설정
-	 * @param bWithAnim 애니메이션 재생 여부
 	 */
 	void HandleDualTransitionEndRequested(
+		bool bWithAnim,
 		UBBMDualAnimTransition* InDualTransition,
 		const FBBMWidgetAnimConfig& InStartConfig,
-		const FBBMWidgetAnimConfig& InEndConfig,
-		bool bWithAnim
+		const FBBMWidgetAnimConfig& InEndConfig
 	);
 
 	/* 오픈/클로즈 프레젠테이션 요청 핸들러 및 완료 훅 */
@@ -179,7 +174,7 @@ private:
 	/* 수명 주기 정책에 따른 뷰포트 탈착 또는 가시성 숨김 적용 */
 	void ApplyCloseViewportPresentation();
 
-	/* 애니메이션 설정(EBBMWidgetAnimPlayMode, 속도)에 따른 UMG 분기 재생 헬퍼 */
+	/* 애니메이션 설정(EBBMWidgetAnimPlayMode, 속도, 반복 횟수)에 따른 UMG 분기 재생 헬퍼 */
 	void PlayAnimationByConfig(const FBBMWidgetAnimConfig& InConfig);
 
 	/* 설정 및 연결 멤버 변수 */

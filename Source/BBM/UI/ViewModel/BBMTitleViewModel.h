@@ -9,6 +9,8 @@
 
 #include "CoreMinimal.h"
 #include "UI/ViewModel/BBMViewModelBase.h"
+#include "UI/ViewModel/BBMSingleAnimTransition.h"
+#include "UI/ViewModel/BBMDualAnimTransition.h"
 #include "Components/SlateWrapperTypes.h"
 #include "BBMTitleViewModel.generated.h"
 
@@ -31,6 +33,8 @@ public:
 
 protected:
 	virtual void OnOpen() override;
+	virtual void OnFinishOpenAnim() override;
+	virtual void OnClosed() override;
 
 	/* 필드 노티파이 프로퍼티 (Getter / Setter) */
 public:
@@ -41,10 +45,6 @@ public:
 	/* 이어하기 가능 여부 설정 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
 	void SetCanContinue(bool bInCanContinue);
-
-	/* 이어하기 버튼 가시성 반환 (세이브 없으면 Hidden) */
-	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title", FieldNotify)
-	ESlateVisibility GetContinueVisibility() const;
 
 	/* 현재 진행 중인 런의 조우 인덱스 반환 (활성 런 미존재 시 0) */
 	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
@@ -64,6 +64,14 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
 	UBBMCreditsViewModel* GetCreditsViewModel() const { return CreditsViewModel; }
+
+	/* 타이틀 전환 모듈 접근자 */
+public:
+	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
+	UBBMSingleAnimTransition* GetShiningTransition() const { return ShiningTransition; }
+
+	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
+	UBBMDualAnimTransition* GetBlockingTransition() const { return BlockingTransition; }
 
 	/* 비즈니스 로직 및 메뉴 액션 인터페이스 */
 public:
@@ -114,6 +122,14 @@ private:
 
 	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetCreditsViewModel, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBBMCreditsViewModel> CreditsViewModel;
+
+	/* 타이틀 화면 표시 중 무한 반복 재생되는 반짝임 전환 모듈 */
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetShiningTransition, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UBBMSingleAnimTransition> ShiningTransition;
+
+	/* 타이틀 블로킹 오버레이 시작/종료 전환 모듈 */
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetBlockingTransition, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UBBMDualAnimTransition> BlockingTransition;
 
 	/* 이어하기 가능 여부 */
 	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetCanContinue, Getter = GetCanContinue, meta = (AllowPrivateAccess = "true"))

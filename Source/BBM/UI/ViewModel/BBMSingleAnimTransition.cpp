@@ -127,10 +127,19 @@ void UBBMSingleAnimTransition::ClearPresentationHandler(const UObject* InOwner)
 		return;
 	}
 
-	if (BoundPresentationOwner.IsValid() == false || BoundPresentationOwner.Get() == InOwner)
+	const bool bIsSameOwner = (BoundPresentationOwner.Get() == InOwner);
+	const bool bIsStaleOwner = (BoundPresentationOwner.IsExplicitlyNull() == false && BoundPresentationOwner.IsValid() == false);
+
+	if (bIsSameOwner == true || bIsStaleOwner == true)
 	{
 		BoundPresentationOwner.Reset();
 		PresentationHandler.Unbind();
+
+		// 진행 중이던 전환의 핸들러가 해제되면 상태·대기 콜백 고착을 막기 위해 즉시 완료 확정
+		if (State == EBBMSingleAnimState::Playing)
+		{
+			NotifyAnimFinished();
+		}
 	}
 }
 

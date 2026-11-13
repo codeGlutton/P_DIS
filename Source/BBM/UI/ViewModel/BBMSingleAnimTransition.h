@@ -107,6 +107,7 @@ public:
 
 	/**
 	 * 지정된 소유자가 바인딩한 프레젠테이션 요청 대리자를 안전하게 해제함
+	 * 해제 시점에 Playing 상태라면 상태·대기 콜백 고착을 막기 위해 즉시 완료 확정(NotifyAnimFinished)함
 	 * @param InOwner 기존 바인딩 주체 오브젝트 포인터
 	 */
 	void ClearPresentationHandler(const UObject* InOwner);

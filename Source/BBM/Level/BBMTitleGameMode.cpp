@@ -34,7 +34,7 @@ void ABBMTitleGameMode::InitializeLevelSpecificGameMode()
 		{
 			if (UBBMViewModelBase* TitleVM = UISS->GetViewModel(TEXT("TitleMenu")))
 			{
-				TitleVM->Open();
+				TitleVM->OpenWithAnim();
 			}
 		}
 	}

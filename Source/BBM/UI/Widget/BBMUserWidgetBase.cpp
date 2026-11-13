@@ -4,8 +4,6 @@
 #include "UI/ViewModel/BBMDualAnimTransition.h"
 #include "Animation/WidgetAnimation.h"
 #include "Animation/WidgetAnimationState.h"
-#include "Blueprint/WidgetBlueprintGeneratedClass.h"
-#include "MovieScene.h"
 #include "View/MVVMView.h"
 
 UBBMUserWidgetBase::UBBMUserWidgetBase(const FObjectInitializer& ObjectInitializer) :
@@ -36,15 +34,13 @@ void UBBMUserWidgetBase::NativeConstruct()
 
 void UBBMUserWidgetBase::BeginDestroy()
 {
-	OnAnimationFinishedPlaying().RemoveAll(this);
-
 	if (UBBMViewModelBase* CurrentVM = ViewModel.Get())
 	{
 		ClearViewModelPresentationHandlers(CurrentVM);
 		ViewModel.Reset();
+		StopAllAnimations();
 	}
 
-	StopAllAnimations();
 	Super::BeginDestroy();
 }
 
@@ -59,6 +55,8 @@ void UBBMUserWidgetBase::SetViewModelInstance(UBBMViewModelBase* InViewModel)
 	if (UBBMViewModelBase* OldVM = ViewModel.Get())
 	{
 		ClearViewModelPresentationHandlers(OldVM);
+		ViewModel.Reset();
+		StopAllAnimations();
 	}
 
 	ViewModel = InViewModel;
@@ -82,12 +80,6 @@ void UBBMUserWidgetBase::SetViewModelInstance(UBBMViewModelBase* InViewModel)
 	}
 
 	BP_OnViewModelAssigned(InViewModel);
-}
-
-void UBBMUserWidgetBase::DetachPresentationImmediate()
-{
-	StopAllAnimations();
-	ApplyCloseViewportPresentation();
 }
 
 void UBBMUserWidgetBase::OnOpened()
@@ -124,17 +116,19 @@ void UBBMUserWidgetBase::ClearViewModelPresentationHandlers(UBBMViewModelBase* I
 
 	if (UBBMDualAnimTransition* DualTransition = InViewModel->GetOpenCloseTransition())
 	{
+		UnbindAllFromAnimationFinished(OpenAnimConfig.GetAnimation(this));
+		UnbindAllFromAnimationFinished(CloseAnimConfig.GetAnimation(this));
 		DualTransition->ClearPresentationHandlers(this);
 	}
 }
 
 void UBBMUserWidgetBase::HandleSingleTransitionRequested(
+	bool bWithAnim,
 	UBBMSingleAnimTransition* InTransition,
-	const FBBMWidgetAnimConfig& InConfig,
-	bool bWithAnim
+	const FBBMWidgetAnimConfig& InConfig
 )
 {
-	UWidgetAnimation* Anim = InConfig.Animation.Get();
+	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
 	if (Anim != nullptr)
 	{
 		UnbindAllFromAnimationFinished(Anim);
@@ -152,6 +146,11 @@ void UBBMUserWidgetBase::HandleSingleTransitionRequested(
 	}
 	else
 	{
+		if (Anim != nullptr)
+		{
+			StopAnimation(Anim);
+		}
+
 		if (InTransition != nullptr)
 		{
 			InTransition->NotifyAnimFinished();
@@ -160,19 +159,19 @@ void UBBMUserWidgetBase::HandleSingleTransitionRequested(
 }
 
 void UBBMUserWidgetBase::HandleDualTransitionStartRequested(
+	bool bWithAnim,
 	UBBMDualAnimTransition* InDualTransition,
 	const FBBMWidgetAnimConfig& InStartConfig,
-	const FBBMWidgetAnimConfig& InEndConfig,
-	bool bWithAnim
+	const FBBMWidgetAnimConfig& InEndConfig
 )
 {
-	UWidgetAnimation* EndAnim = InEndConfig.Animation.Get();
+	UWidgetAnimation* EndAnim = InEndConfig.GetAnimation(this);
 	if (EndAnim != nullptr)
 	{
 		UnbindAllFromAnimationFinished(EndAnim);
 		StopAnimation(EndAnim);
 	}
-	UWidgetAnimation* StartAnim = InStartConfig.Animation.Get();
+	UWidgetAnimation* StartAnim = InStartConfig.GetAnimation(this);
 	if (StartAnim != nullptr)
 	{
 		UnbindAllFromAnimationFinished(StartAnim);
@@ -190,6 +189,11 @@ void UBBMUserWidgetBase::HandleDualTransitionStartRequested(
 	}
 	else
 	{
+		if (StartAnim != nullptr)
+		{
+			StopAnimation(StartAnim);
+		}
+
 		if (InDualTransition != nullptr)
 		{
 			InDualTransition->NotifyStartTransitionFinished();
@@ -198,19 +202,19 @@ void UBBMUserWidgetBase::HandleDualTransitionStartRequested(
 }
 
 void UBBMUserWidgetBase::HandleDualTransitionEndRequested(
+	bool bWithAnim,
 	UBBMDualAnimTransition* InDualTransition,
 	const FBBMWidgetAnimConfig& InStartConfig,
-	const FBBMWidgetAnimConfig& InEndConfig,
-	bool bWithAnim
+	const FBBMWidgetAnimConfig& InEndConfig
 )
 {
-	UWidgetAnimation* StartAnim = InStartConfig.Animation.Get();
+	UWidgetAnimation* StartAnim = InStartConfig.GetAnimation(this);
 	if (StartAnim != nullptr)
 	{
 		UnbindAllFromAnimationFinished(StartAnim);
 		StopAnimation(StartAnim);
 	}
-	UWidgetAnimation* EndAnim = InEndConfig.Animation.Get();
+	UWidgetAnimation* EndAnim = InEndConfig.GetAnimation(this);
 	if (EndAnim != nullptr)
 	{
 		UnbindAllFromAnimationFinished(EndAnim);
@@ -224,10 +228,15 @@ void UBBMUserWidgetBase::HandleDualTransitionEndRequested(
 		FinishedDelegate.BindDynamic(InDualTransition, &UBBMDualAnimTransition::NotifyEndTransitionFinished);
 		BindToAnimationFinished(EndAnim, FinishedDelegate);
 
-		PlayAnimationByConfig(InStartConfig);
+		PlayAnimationByConfig(InEndConfig);
 	}
 	else
 	{
+		if (EndAnim != nullptr)
+		{
+			StopAnimation(EndAnim);
+		}
+
 		if (InDualTransition != nullptr)
 		{
 			InDualTransition->NotifyEndTransitionFinished();
@@ -237,13 +246,13 @@ void UBBMUserWidgetBase::HandleDualTransitionEndRequested(
 
 void UBBMUserWidgetBase::HandleOpenPresentationRequested(bool bWithAnim)
 {
-	UWidgetAnimation* EndAnim = CloseAnimConfig.Animation.Get();
+	UWidgetAnimation* EndAnim = CloseAnimConfig.GetAnimation(this);
 	if (EndAnim != nullptr)
 	{
 		UnbindAllFromAnimationFinished(EndAnim);
 		StopAnimation(EndAnim);
 	}
-	UWidgetAnimation* StartAnim = OpenAnimConfig.Animation.Get();
+	UWidgetAnimation* StartAnim = OpenAnimConfig.GetAnimation(this);
 	if (StartAnim != nullptr)
 	{
 		UnbindAllFromAnimationFinished(StartAnim);
@@ -266,19 +275,24 @@ void UBBMUserWidgetBase::HandleOpenPresentationRequested(bool bWithAnim)
 	}
 	else
 	{
+		if (StartAnim != nullptr)
+		{
+			StopAnimation(StartAnim);
+		}
+
 		HandleOpenAnimationFinished();
 	}
 }
 
 void UBBMUserWidgetBase::HandleClosePresentationRequested(bool bWithAnim)
 {
-	UWidgetAnimation* StartAnim = OpenAnimConfig.Animation.Get();
+	UWidgetAnimation* StartAnim = OpenAnimConfig.GetAnimation(this);
 	if (StartAnim != nullptr)
 	{
 		UnbindAllFromAnimationFinished(StartAnim);
 		StopAnimation(StartAnim);
 	}
-	UWidgetAnimation* EndAnim = CloseAnimConfig.Animation.Get();
+	UWidgetAnimation* EndAnim = CloseAnimConfig.GetAnimation(this);
 	if (EndAnim != nullptr)
 	{
 		UnbindAllFromAnimationFinished(EndAnim);
@@ -296,6 +310,11 @@ void UBBMUserWidgetBase::HandleClosePresentationRequested(bool bWithAnim)
 	}
 	else
 	{
+		if (EndAnim != nullptr)
+		{
+			StopAnimation(EndAnim);
+		}
+
 		HandleCloseAnimationFinished();
 	}
 }
@@ -353,11 +372,13 @@ void UBBMUserWidgetBase::ApplyCloseViewportPresentation()
 
 void UBBMUserWidgetBase::PlayAnimationByConfig(const FBBMWidgetAnimConfig& InConfig)
 {
-	UWidgetAnimation* Anim = InConfig.Animation;
+	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
 	if (Anim == nullptr)
 	{
 		return;
 	}
+
+	const int32 SafeLoopCount = FMath::Max(0, InConfig.LoopCount);
 
 	switch (InConfig.PlayMode)
 	{
@@ -370,15 +391,15 @@ void UBBMUserWidgetBase::PlayAnimationByConfig(const FBBMWidgetAnimConfig& InCon
 		break;
 
 	case EBBMWidgetAnimPlayMode::Forward:
-		PlayAnimation(Anim, 0.0f, 1, EUMGSequencePlayMode::Forward, InConfig.PlaybackSpeed);
+		PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::Forward, InConfig.PlaybackSpeed);
 		break;
 
 	case EBBMWidgetAnimPlayMode::Reverse:
-		PlayAnimation(Anim, 0.0f, 1, EUMGSequencePlayMode::Reverse, InConfig.PlaybackSpeed);
+		PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::Reverse, InConfig.PlaybackSpeed);
 		break;
 
 	case EBBMWidgetAnimPlayMode::PingPong:
-		PlayAnimation(Anim, 0.0f, 1, EUMGSequencePlayMode::PingPong, InConfig.PlaybackSpeed);
+		PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::PingPong, InConfig.PlaybackSpeed);
 		break;
 	}
 }

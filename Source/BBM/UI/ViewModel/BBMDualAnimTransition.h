@@ -133,6 +133,7 @@ public:
 
 	/**
 	 * 지정 소유자가 바인딩한 양방향 핸들러를 안전하게 해제함
+	 * 해제 시점에 Starting/Ending 전이 중이면 즉시 완료 확정하며, Started/Ended 안정 상태는 유지함
 	 */
 	void ClearPresentationHandlers(const UObject* InOwner);
 

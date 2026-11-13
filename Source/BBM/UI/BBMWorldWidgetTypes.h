@@ -9,7 +9,6 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "Animation/WidgetAnimation.h"
 #include "BBMWorldWidgetTypes.generated.h"
 
 /* 애니메이션 전환 요청 및 완료 대리자 선언 */
@@ -24,6 +23,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FBBMOnTransitionEventDynamicSignature);
 /* 독립 전방 선언 */
 class UBBMUserWidgetBase;
 class UBBMViewModelBase;
+class UUserWidget;
 class UWidgetAnimation;
 
 /**
@@ -99,17 +99,32 @@ struct BBM_API FBBMWidgetAnimConfig
 	GENERATED_BODY()
 
 public:
-	/* 재생할 위젯 애니메이션 이름 (UMG 에디터 상의 애니메이션 이름 또는 FProperty 이름) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BBM|UI|Animation")
-	TObjectPtr<UWidgetAnimation> Animation = nullptr;
+	/* 대상 위젯의 WBGC 상속 계층에서 애니메이션을 조회·캐싱하여 반환 */
+	UWidgetAnimation* GetAnimation(const UUserWidget* InWidget) const;
+
+	/* 캐싱된 애니메이션 참조 초기화 */
+	void InvalidateCachedAnimation() const;
+
+public:
+	/* 재생할 위젯 애니메이션 이름 (UMG 에디터 애니메이션 MovieScene 이름) */
+	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
+	FName AnimationName = NAME_None;
 
 	/* 재생 모드 (절대 시작 3종 + 상대적 반전 2종) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BBM|UI|Animation")
+	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
 	EBBMWidgetAnimPlayMode PlayMode = EBBMWidgetAnimPlayMode::RelativeForward;
 
 	/* 재생 속도 배율 (기본값: 1.0f) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "BBM|UI|Animation")
+	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
 	float PlaybackSpeed = 1.0f;
+
+	/* 재생 반복 횟수 (1: 1회 재생, 0: 무한 반복 / Relative 계열은 엔진 미지원으로 에디터 숨김) */
+	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite, meta = (ClampMin = "0", UIMin = "0", EditCondition = "PlayMode != EBBMWidgetAnimPlayMode::RelativeForward && PlayMode != EBBMWidgetAnimPlayMode::RelativeReverse", EditConditionHides))
+	int32 LoopCount = 1;
+
+private:
+	/* 마지막으로 탐색된 애니메이션 약참조 캐시 (Outer WBGC 상속 검사로 타 위젯 혼용 방지) */
+	mutable TWeakObjectPtr<UWidgetAnimation> CachedAnimation;
 };
 
 /**

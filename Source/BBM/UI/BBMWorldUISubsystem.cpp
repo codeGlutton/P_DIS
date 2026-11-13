@@ -195,7 +195,6 @@ void UBBMWorldUISubsystem::ReleaseWidgetInstance(UBBMUserWidgetBase* InWidget)
 		return;
 	}
 
-	InWidget->DetachPresentationImmediate();
 	InWidget->SetViewModelInstance(nullptr);
 }
 

@@ -15,6 +15,8 @@
 #include "UI/BBMWorldUISubsystem.h"
 #include "UI/ViewModel/BBMViewModelBase.h"
 #include "UI/ViewModel/BBMTitleViewModel.h"
+#include "UI/ViewModel/BBMSingleAnimTransition.h"
+#include "UI/ViewModel/BBMDualAnimTransition.h"
 #include "Save/BBMGameDataSubsystem.h"
 #include "Save/BBMRunSaveGame.h"
 
@@ -146,7 +148,6 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 		DelayedTitleVM->Open();
 		TestTrue(TEXT("ViewModel Open 후 IsOpen은 true"), DelayedTitleVM->IsOpen());
 		TestEqual(TEXT("헤드리스 Open 후 OpenState는 Started"), DelayedTitleVM->GetOpenState(), EBBMDualAnimState::Started);
-		TestEqual(TEXT("OnOpen 내 RefreshTitleState 호출로 ContinueVisibility 동기화 완료"), DelayedTitleVM->GetContinueVisibility(), ESlateVisibility::Hidden);
 		TestEqual(TEXT("위젯 연결 전에는 아직 숨김 상태 유지"), OpenedWidget->GetVisibility(), ESlateVisibility::Collapsed);
 
 		// 이미 열린 ViewModel에 위젯을 뒤늦게 연결하면 즉시 프레젠테이션 가시성이 동기화됨
@@ -211,7 +212,6 @@ bool FBBMTitleViewModelSaveContinueVisibilityTest::RunTest(const FString& Parame
 
 	TitleVM->RefreshTitleState();
 	TestFalse(TEXT("활성 런 없을 시 bCanContinue는 false"), TitleVM->GetCanContinue());
-	TestEqual(TEXT("활성 런 없을 시 ContinueVisibility는 Hidden"), TitleVM->GetContinueVisibility(), ESlateVisibility::Hidden);
 	TestEqual(TEXT("활성 런 없을 시 현재 조우 인덱스는 0"), TitleVM->GetActiveRunEncounterIndex(), 0);
 
 	// 2-2. 활성 런 세이브가 존재할 때 -> ContinueVisibility == Visible, bCanContinue == true
@@ -223,8 +223,98 @@ bool FBBMTitleViewModelSaveContinueVisibilityTest::RunTest(const FString& Parame
 
 	TitleVM->RefreshTitleState();
 	TestTrue(TEXT("활성 런 존재 시 bCanContinue는 true"), TitleVM->GetCanContinue());
-	TestEqual(TEXT("활성 런 존재 시 ContinueVisibility는 Visible"), TitleVM->GetContinueVisibility(), ESlateVisibility::Visible);
 	TestEqual(TEXT("활성 런 존재 시 현재 조우 인덱스는 3"), TitleVM->GetActiveRunEncounterIndex(), 3);
+
+	return true;
+}
+
+// 3. UBBMTitleViewModel Shining/Blocking 전환 모듈 구성 및 UBBMTitleWidget 설정·바인딩·정리 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMTitleViewModelTransitionsTest,
+	"DIS.BBM.UI.TitleViewModelTransitions",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMTitleViewModelTransitionsTest::RunTest(const FString& Parameters)
+{
+	FBBMMVVMScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드 유효 검증"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	UBBMTitleWidget* TitleWidget = CreateWidget<UBBMTitleWidget>(TestWorld.World, UBBMTitleWidget::StaticClass());
+	UBBMTitleViewModel* TitleVM = NewObject<UBBMTitleViewModel>(TestWorld.World);
+	TestNotNull(TEXT("UBBMTitleWidget 생성 성공"), TitleWidget);
+	TestNotNull(TEXT("UBBMTitleViewModel 생성 성공"), TitleVM);
+	if (TitleWidget == nullptr || TitleVM == nullptr)
+	{
+		return false;
+	}
+
+	UBBMSingleAnimTransition* ShiningTransition = TitleVM->GetShiningTransition();
+	UBBMDualAnimTransition* BlockingTransition = TitleVM->GetBlockingTransition();
+	TestNotNull(TEXT("ShiningTransition 서브오브젝트 유효"), ShiningTransition);
+	TestNotNull(TEXT("BlockingTransition 서브오브젝트 유효"), BlockingTransition);
+	if (ShiningTransition == nullptr || BlockingTransition == nullptr)
+	{
+		return false;
+	}
+
+	// 3-1. UBBMTitleWidget의 Shining(무한 반복) 및 Blocking 애니메이션 기본 설정 검증
+	FStructProperty* ShiningConfigProp = FindFProperty<FStructProperty>(UBBMTitleWidget::StaticClass(), TEXT("ShiningAnimConfig"));
+	FStructProperty* BlockingStartProp = FindFProperty<FStructProperty>(UBBMTitleWidget::StaticClass(), TEXT("BlockingStartAnimConfig"));
+	FStructProperty* BlockingEndProp = FindFProperty<FStructProperty>(UBBMTitleWidget::StaticClass(), TEXT("BlockingEndAnimConfig"));
+	TestNotNull(TEXT("ShiningAnimConfig 프로퍼티 조회 성공"), ShiningConfigProp);
+	TestNotNull(TEXT("BlockingStartAnimConfig 프로퍼티 조회 성공"), BlockingStartProp);
+	TestNotNull(TEXT("BlockingEndAnimConfig 프로퍼티 조회 성공"), BlockingEndProp);
+	if (ShiningConfigProp != nullptr && BlockingStartProp != nullptr && BlockingEndProp != nullptr)
+	{
+		const FBBMWidgetAnimConfig* ShiningConfig = ShiningConfigProp->ContainerPtrToValuePtr<FBBMWidgetAnimConfig>(TitleWidget);
+		const FBBMWidgetAnimConfig* BlockingStartConfig = BlockingStartProp->ContainerPtrToValuePtr<FBBMWidgetAnimConfig>(TitleWidget);
+		const FBBMWidgetAnimConfig* BlockingEndConfig = BlockingEndProp->ContainerPtrToValuePtr<FBBMWidgetAnimConfig>(TitleWidget);
+		TestEqual(TEXT("ShiningAnimConfig 기본 PlayMode는 Forward여야 함"), ShiningConfig->PlayMode, EBBMWidgetAnimPlayMode::Forward);
+		TestEqual(TEXT("ShiningAnimConfig 기본 LoopCount는 무한 반복(0)이어야 함"), ShiningConfig->LoopCount, 0);
+		TestEqual(TEXT("BlockingStartAnimConfig 기본 PlayMode는 RelativeForward여야 함"), BlockingStartConfig->PlayMode, EBBMWidgetAnimPlayMode::RelativeForward);
+		TestEqual(TEXT("BlockingEndAnimConfig 기본 PlayMode는 RelativeReverse여야 함"), BlockingEndConfig->PlayMode, EBBMWidgetAnimPlayMode::RelativeReverse);
+	}
+
+	// 3-2. ViewModel 주입 시 Shining/Blocking 핸들러 바인딩 및 Open/Close 수명 주기 연동 검증
+	TitleWidget->SetViewModelInstance(TitleVM);
+	TestTrue(TEXT("SetViewModelInstance 후 ShiningTransition 핸들러가 바인딩되어야 함"), ShiningTransition->IsPresentationHandlerBound());
+
+	int32 ShiningStartCount = 0;
+	int32 ShiningFinishCount = 0;
+	ShiningTransition->OnTransitionStartedNative.AddLambda([&ShiningStartCount](bool bWithAnim)
+	{
+		if (bWithAnim == true)
+		{
+			++ShiningStartCount;
+		}
+	});
+	ShiningTransition->OnFinishedBeforeCallbacksNative.AddLambda([&ShiningFinishCount]()
+	{
+		++ShiningFinishCount;
+	});
+
+	// Open() 호출 시 OnOpen()에서 ShiningTransition->Execute(true) 호출 및 헤드리스 환경 안전 완료 검증
+	TitleVM->Open();
+	TestEqual(TEXT("Open() 시 OnOpen()에서 ShiningTransition 시작 호출이 발생해야 함"), ShiningStartCount, 1);
+	TestEqual(TEXT("헤드리스 뷰포트 없는 환경에서는 보류된 Shining 요청이 고착되지 않고 Idle로 정리되어야 함"), ShiningTransition->GetState(), EBBMSingleAnimState::Idle);
+
+	// BlockingTransition 실행 후 Close() 시 OnFinishCloseAnim()에서 정리되는지 검증
+	BlockingTransition->Start();
+	TestEqual(TEXT("BlockingTransition Start 후 Started 상태"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+
+	TitleVM->Close();
+	TestEqual(TEXT("Close() 완료 후 BlockingTransition은 Ended로 정리되어야 함"), BlockingTransition->GetState(), EBBMDualAnimState::Ended);
+	TestEqual(TEXT("Close() 완료 후 ShiningTransition은 Idle 상태 유지"), ShiningTransition->GetState(), EBBMSingleAnimState::Idle);
+	TestTrue(TEXT("OnFinishCloseAnim() 내 Execute(false)로 완료 통지가 정상 수행되어야 함"), ShiningFinishCount >= 1);
+
+	// 3-3. ViewModel 해제 시 핸들러 언바인딩 검증
+	TitleWidget->SetViewModelInstance(nullptr);
+	TestFalse(TEXT("SetViewModelInstance(nullptr) 후 ShiningTransition 핸들러가 해제되어야 함"), ShiningTransition->IsPresentationHandlerBound());
 
 	return true;
 }

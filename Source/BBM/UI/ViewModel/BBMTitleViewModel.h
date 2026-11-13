@@ -59,11 +59,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
 	UBBMSettingsViewModel* GetSettingsViewModel() const { return SettingsViewModel; }
 
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
+	void SetSettingsViewModel(UBBMSettingsViewModel* InSettingsViewModel);
+
 	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
 	UBBMCharacterSelectViewModel* GetCharacterSelectViewModel() const { return CharacterSelectViewModel; }
 
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
+	void SetCharacterSelectViewModel(UBBMCharacterSelectViewModel* InCharacterSelectViewModel);
+
 	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
 	UBBMCreditsViewModel* GetCreditsViewModel() const { return CreditsViewModel; }
+	
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
+	void SetCreditsViewModel(UBBMCreditsViewModel* InCreditsViewModel);
 
 	/* 타이틀 전환 모듈 접근자 */
 public:
@@ -114,13 +123,13 @@ public:
 	/* 내부 프로퍼티 */
 private:
 	/* 서브 ViewModel 컴포지션 */
-	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetSettingsViewModel, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetSettingsViewModel, Getter = GetSettingsViewModel, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBBMSettingsViewModel> SettingsViewModel;
 
-	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetCharacterSelectViewModel, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetCharacterSelectViewModel, Getter = GetCharacterSelectViewModel, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBBMCharacterSelectViewModel> CharacterSelectViewModel;
 
-	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetCreditsViewModel, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetCreditsViewModel, Getter = GetCreditsViewModel, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBBMCreditsViewModel> CreditsViewModel;
 
 	/* 타이틀 화면 표시 중 무한 반복 재생되는 반짝임 전환 모듈 */

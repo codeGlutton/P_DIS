@@ -6,48 +6,12 @@ UBBMViewModelBase::UBBMViewModelBase()
 	OpenCloseTransition = CreateDefaultSubobject<UBBMDualAnimTransition>(TEXT("OpenCloseTransition"));
 }
 
-void UBBMViewModelBase::PostInitProperties()
-{
-	Super::PostInitProperties();
-
-	if (HasAnyFlags(RF_ClassDefaultObject) == false)
-	{
-		if (OpenCloseTransition != nullptr)
-		{
-			OpenCloseTransition->OnStartingNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionOpenStarted);
-			OpenCloseTransition->OnEndingNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionCloseStarted);
-			OpenCloseTransition->OnStartedNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionOpenFinished);
-			OpenCloseTransition->OnEndedNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionCloseFinished);
-
-			OpenCloseTransition->AddFieldValueChangedDelegate(
-				UBBMDualAnimTransition::FFieldNotificationClassDescriptor::State,
-				FFieldValueChangedDelegate::CreateUObject(this, &UBBMViewModelBase::HandleTransitionStateChanged)
-			);
-			OpenCloseTransition->AddFieldValueChangedDelegate(
-				UBBMDualAnimTransition::FFieldNotificationClassDescriptor::IsStarted,
-				FFieldValueChangedDelegate::CreateUObject(this, &UBBMViewModelBase::HandleTransitionStartedChanged)
-			);
-			OpenCloseTransition->AddFieldValueChangedDelegate(
-				UBBMDualAnimTransition::FFieldNotificationClassDescriptor::IsActive,
-				FFieldValueChangedDelegate::CreateUObject(this, &UBBMViewModelBase::HandleTransitionActiveChanged)
-			);
-		}
-
-		// CDO가 아닌 실제 뷰모델 인스턴스의 프로퍼티 초기화 및 전환 모듈 바인딩 완료 후 파생 훅 호출
-		BeginViewModel();
-		BP_BeginViewModel();
-	}
-}
-
 void UBBMViewModelBase::BeginDestroy()
 {
-	if (OpenCloseTransition != nullptr)
+	if (IsTemplate() == false && bIsInitialized == true)
 	{
-		OpenCloseTransition->OnStartingNative.RemoveAll(this);
-		OpenCloseTransition->OnEndingNative.RemoveAll(this);
-		OpenCloseTransition->OnStartedNative.RemoveAll(this);
-		OpenCloseTransition->OnEndedNative.RemoveAll(this);
-		OpenCloseTransition->RemoveAllFieldValueChangedDelegates(this);
+		BP_EndViewModel();
+		EndViewModel();
 	}
 
 	Super::BeginDestroy();
@@ -116,8 +80,52 @@ EBBMDualAnimState UBBMViewModelBase::GetOpenState() const
 	return (OpenCloseTransition != nullptr) ? OpenCloseTransition->GetState() : EBBMDualAnimState::Ended;
 }
 
+void UBBMViewModelBase::FinishInitialization()
+{
+	if (IsTemplate() == true || bIsInitialized == true)
+	{
+		return;
+	}
+
+	bIsInitialized = true;
+	BeginViewModel();
+	BP_BeginViewModel();
+}
+
 void UBBMViewModelBase::BeginViewModel()
 {
+	if (OpenCloseTransition != nullptr)
+	{
+		OpenCloseTransition->OnStartingNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionOpenStarted);
+		OpenCloseTransition->OnEndingNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionCloseStarted);
+		OpenCloseTransition->OnStartedNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionOpenFinished);
+		OpenCloseTransition->OnEndedNative.AddUObject(this, &UBBMViewModelBase::HandleTransitionCloseFinished);
+
+		OpenCloseTransition->AddFieldValueChangedDelegate(
+			UBBMDualAnimTransition::FFieldNotificationClassDescriptor::State,
+			FFieldValueChangedDelegate::CreateUObject(this, &UBBMViewModelBase::HandleTransitionStateChanged)
+		);
+		OpenCloseTransition->AddFieldValueChangedDelegate(
+			UBBMDualAnimTransition::FFieldNotificationClassDescriptor::IsStarted,
+			FFieldValueChangedDelegate::CreateUObject(this, &UBBMViewModelBase::HandleTransitionStartedChanged)
+		);
+		OpenCloseTransition->AddFieldValueChangedDelegate(
+			UBBMDualAnimTransition::FFieldNotificationClassDescriptor::IsActive,
+			FFieldValueChangedDelegate::CreateUObject(this, &UBBMViewModelBase::HandleTransitionActiveChanged)
+		);
+	}
+}
+
+void UBBMViewModelBase::EndViewModel()
+{
+	if (OpenCloseTransition != nullptr)
+	{
+		OpenCloseTransition->OnStartingNative.RemoveAll(this);
+		OpenCloseTransition->OnEndingNative.RemoveAll(this);
+		OpenCloseTransition->OnStartedNative.RemoveAll(this);
+		OpenCloseTransition->OnEndedNative.RemoveAll(this);
+		OpenCloseTransition->RemoveAllFieldValueChangedDelegates(this);
+	}
 }
 
 void UBBMViewModelBase::OnOpen()

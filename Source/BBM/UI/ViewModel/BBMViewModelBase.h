@@ -27,7 +27,6 @@ class BBM_API UBBMViewModelBase : public UMVVMViewModelBase
 public:
 	UBBMViewModelBase();
 
-	virtual void PostInitProperties() override;
 	virtual void BeginDestroy() override;
 
 	/* 오픈 및 클로즈 제어 인터페이스 */
@@ -96,12 +95,17 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|MVVM")
 	UBBMDualAnimTransition* GetOpenCloseTransition() const { return OpenCloseTransition; }
 
+	/* 뷰모델 초기화 완료 알림 */
+public:
+	void FinishInitialization();
+
 	/* 뷰모델 초기화 및 오픈/클로즈 수명 주기 훅 */
 protected:
 	/**
-	 * CDO가 아닌 실제 뷰모델 인스턴스 초기화 및 전환 모듈 바인딩 완료 직후 호출되는 C++ 가상 함수
+	 * 실제 뷰모델 인스턴스 초기화 직후 호출되는 C++ 가상 함수
 	 */
 	virtual void BeginViewModel();
+	virtual void EndViewModel();
 
 	/**
 	 * Open/OpenWithAnim 호출 직후 즉시 호출되는 C++ 가상 함수 (OpenState == Starting 시점)
@@ -128,6 +132,12 @@ protected:
 	 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "BBM|UI|MVVM", meta = (DisplayName = "Begin ViewModel"))
 	void BP_BeginViewModel();
+
+	/**
+	 * CDO가 아닌 실제 뷰모델 인스턴스 제거 직전 호출되는 블루프린트 이벤트
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "BBM|UI|MVVM", meta = (DisplayName = "End ViewModel"))
+	void BP_EndViewModel();
 
 	/**
 	 * Open/OpenWithAnim 호출 직후 즉시 호출되는 블루프린트 이벤트
@@ -168,4 +178,7 @@ private:
 	/* Open/Close 양방향 전환 상태·콜백·핸드셰이크 전담 모듈 */
 	UPROPERTY(Category = "BBM|UI|MVVM", BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBBMDualAnimTransition> OpenCloseTransition;
+
+	/* VM의 초기화 여부 */
+	bool bIsInitialized = false;
 };

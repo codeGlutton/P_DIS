@@ -43,9 +43,19 @@ public:
 protected:
 	/**
 	 * 파생 게임모드(타이틀, 스테이지 등)에서 고유 레벨 로직을 수행하기 위한 가상 함수
-	 * BeforeEncounter UI가 생성된 직후, AfterEncounter UI가 생성되기 전에 호출되며 기본 구현에서는 PC 환경의 마우스 커서 표시를 활성화함
+	 * BeginPlay() 직후, BeforeEncounter UI가 생성되기 전에 호출
+	 */
+	virtual void PreInitializeLevelSpecificGameMode();
+	/**
+	 * 파생 게임모드(타이틀, 스테이지 등)에서 고유 레벨 로직을 수행하기 위한 가상 함수
+	 * BeforeEncounter UI가 생성된 직후, AfterEncounter UI가 생성되기 전에 호출
 	 */
 	virtual void InitializeLevelSpecificGameMode();
+	/**
+	 * 파생 게임모드(타이틀, 스테이지 등)에서 고유 레벨 로직을 수행하기 위한 가상 함수
+	 * AfterEncounter UI가 생성된 직후에 호출
+	 */
+	virtual void PostInitializeLevelSpecificGameMode();
 
 	/* 설정 프로퍼티 */
 protected:

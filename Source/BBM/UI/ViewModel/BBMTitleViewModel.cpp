@@ -17,9 +17,6 @@
 
 UBBMTitleViewModel::UBBMTitleViewModel()
 {
-	SettingsViewModel = CreateDefaultSubobject<UBBMSettingsViewModel>(TEXT("SettingsViewModel"));
-	CharacterSelectViewModel = CreateDefaultSubobject<UBBMCharacterSelectViewModel>(TEXT("CharacterSelectViewModel"));
-	CreditsViewModel = CreateDefaultSubobject<UBBMCreditsViewModel>(TEXT("CreditsViewModel"));
 	ShiningTransition = CreateDefaultSubobject<UBBMSingleAnimTransition>(TEXT("ShiningTransition"));
 	BlockingTransition = CreateDefaultSubobject<UBBMDualAnimTransition>(TEXT("BlockingTransition"));
 }
@@ -61,6 +58,21 @@ void UBBMTitleViewModel::SetCanContinue(bool bInCanContinue)
 void UBBMTitleViewModel::SetActiveRunEncounterIndex(int32 InEncounterIndex)
 {
 	UE_MVVM_SET_PROPERTY_VALUE(ActiveRunEncounterIndex, InEncounterIndex);
+}
+
+void UBBMTitleViewModel::SetSettingsViewModel(UBBMSettingsViewModel* InSettingsViewModel)
+{
+	UE_MVVM_SET_PROPERTY_VALUE(SettingsViewModel, InSettingsViewModel);
+}
+
+void UBBMTitleViewModel::SetCharacterSelectViewModel(UBBMCharacterSelectViewModel* InCharacterSelectViewModel)
+{
+	UE_MVVM_SET_PROPERTY_VALUE(CharacterSelectViewModel, InCharacterSelectViewModel);
+}
+
+void UBBMTitleViewModel::SetCreditsViewModel(UBBMCreditsViewModel* InCreditsViewModel)
+{
+	UE_MVVM_SET_PROPERTY_VALUE(CreditsViewModel, InCreditsViewModel);
 }
 
 void UBBMTitleViewModel::RefreshTitleState()

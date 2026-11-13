@@ -22,14 +22,20 @@ void ABBMGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 1단계: 인카운터 초기화 전 UI 생성 (예: FadeLoading 위젯 등)
+	// 1단계: 인카운터 초기화 전 처리 실행 훅
+	PreInitializeLevelSpecificGameMode();
+
+	// 2단계: 인카운터 초기화 전 UI 생성 (예: FadeLoading 위젯 등)
 	CreateWorldUIsByPhase(EBBMWidgetCreationPhase::BeforeEncounter);
 
-	// 2단계: 레벨 특화 게임모드 초기화 실행 (스테이지 게임모드에서 인카운터 배치 실행)
+	// 3단계: 레벨 특화 게임모드 초기화 실행 (스테이지 게임모드에서 인카운터 배치 실행)
 	InitializeLevelSpecificGameMode();
 
-	// 3단계: 인카운터 초기화 후 UI 생성 (예: 인게임 전투 HUD 등)
+	// 4단계: 인카운터 초기화 후 UI 생성 (예: 인게임 전투 HUD 등)
 	CreateWorldUIsByPhase(EBBMWidgetCreationPhase::AfterEncounter);
+
+	// 5단계: 인카운터 초기화 후 처리 실행 훅
+	PostInitializeLevelSpecificGameMode();
 }
 
 void ABBMGameModeBase::CreateWorldUIsByPhase(EBBMWidgetCreationPhase Phase)
@@ -73,7 +79,7 @@ void ABBMGameModeBase::CreateWorldUIsByPhase(EBBMWidgetCreationPhase Phase)
 	}
 }
 
-void ABBMGameModeBase::InitializeLevelSpecificGameMode()
+void ABBMGameModeBase::PreInitializeLevelSpecificGameMode()
 {
 #if PLATFORM_DESKTOP
 	// PC 환경에서는 타이틀 및 인게임 레벨 진입 시 마우스 커서를 표시함
@@ -87,4 +93,12 @@ void ABBMGameModeBase::InitializeLevelSpecificGameMode()
 		}
 	}
 #endif
+}
+
+void ABBMGameModeBase::InitializeLevelSpecificGameMode()
+{
+}
+
+void ABBMGameModeBase::PostInitializeLevelSpecificGameMode()
+{
 }

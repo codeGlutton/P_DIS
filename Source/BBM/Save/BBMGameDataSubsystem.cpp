@@ -23,12 +23,21 @@
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
+#include "Misc/App.h"
 #include "Async/Async.h"
+#include "Audio/BBMAudioSettings.h"
+#include "AudioDevice.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
+#include "GameFramework/GameUserSettings.h"
+#include "Sound/SoundClass.h"
+#include "Sound/SoundMix.h"
 
 UBBMGameDataSubsystem::UBBMGameDataSubsystem() :
 	UserSaveData(nullptr),
 	CurrentRunData(nullptr),
-	bIsAsyncOperationInProgress(false)
+	bIsAsyncOperationInProgress(false),
+	bAppliedInitialViewportSettings(false)
 {
 }
 
@@ -61,10 +70,32 @@ void UBBMGameDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			CurrentRunData = CastedRun;
 		}
 	}
+
+	// 4. 초기 유저 환경설정 정규화 및 엔진 오디오/화면 런타임 초기 복원
+	if (UserSaveData != nullptr)
+	{
+		const FBBMUserSettingsData InitialSettings = GetUserSettingsData();
+		ApplyUserSettingsRuntime(InitialSettings);
+	}
+
+	// Standalone 초기화 시점에는 GameViewport가 아직 생성 전일 수 있으므로 생성 완료 시 1회 화면 설정 보정 바인딩
+	if (GEngine != nullptr && GEngine->GameViewport == nullptr && FApp::CanEverRender() == true && IsRunningCommandlet() == false)
+	{
+		ViewportCreatedHandle = UGameViewportClient::OnViewportCreated().AddUObject(
+			this,
+			&UBBMGameDataSubsystem::HandleViewportCreatedForInitialSettings
+		);
+	}
 }
 
 void UBBMGameDataSubsystem::Deinitialize()
 {
+	if (ViewportCreatedHandle.IsValid() == true)
+	{
+		UGameViewportClient::OnViewportCreated().Remove(ViewportCreatedHandle);
+		ViewportCreatedHandle.Reset();
+	}
+
 	Super::Deinitialize();
 }
 
@@ -316,9 +347,150 @@ void UBBMGameDataSubsystem::LoadUserSettingAsync(FSimpleDelegate OnComplete)
 		if (UBBMUserSaveGame* Casted = Cast<UBBMUserSaveGame>(LoadedGame))
 		{
 			UserSaveData = Casted;
+			ApplyUserSettingsRuntime(GetUserSettingsData());
 		}
 		OnComplete.ExecuteIfBound();
 	});
+}
+
+FBBMUserSettingsData UBBMGameDataSubsystem::GetUserSettingsData() const
+{
+	if (UserSaveData == nullptr)
+	{
+		return FBBMUserSettingsData();
+	}
+
+	FBBMUserSettingsData Result = UserSaveData->ToSettingsData();
+	Result.ClampValues();
+	return Result;
+}
+
+void UBBMGameDataSubsystem::ApplyUserSettingsRuntime(const FBBMUserSettingsData& InSettings)
+{
+	FBBMUserSettingsData SanitizedSettings = InSettings;
+	SanitizedSettings.ClampValues();
+
+	if (UserSaveData != nullptr)
+	{
+		UserSaveData->ApplySettingsData(SanitizedSettings);
+	}
+
+	ApplyAudioSettingsInternal(SanitizedSettings);
+	ApplyDisplaySettingsInternal(SanitizedSettings);
+
+	if (OnUserSettingsChanged.IsBound() == true)
+	{
+		OnUserSettingsChanged.Broadcast(SanitizedSettings);
+	}
+}
+
+void UBBMGameDataSubsystem::CommitAndSaveUserSettings(FSimpleDelegate OnComplete)
+{
+	const FBBMUserSettingsData CurrentSettings = GetUserSettingsData();
+	ApplyUserSettingsRuntime(CurrentSettings);
+	SaveUserSettingAsync(OnComplete);
+}
+
+void UBBMGameDataSubsystem::ResetUserSettingsToDefaults()
+{
+	const FBBMUserSettingsData DefaultSettings;
+	ApplyUserSettingsRuntime(DefaultSettings);
+}
+
+void UBBMGameDataSubsystem::ApplyAudioSettingsInternal(const FBBMUserSettingsData& InSettings)
+{
+	if (GEngine == nullptr || GEngine->UseSound() == false)
+	{
+		return;
+	}
+
+	const UBBMAudioSettings* AudioSettings = GetDefault<UBBMAudioSettings>();
+	if (AudioSettings == nullptr)
+	{
+		return;
+	}
+
+	USoundMix* SoundMix = AudioSettings->UserSettingsSoundMix.LoadSynchronous();
+	if (SoundMix == nullptr)
+	{
+		return;
+	}
+
+	const UWorld* World = GetWorld();
+	FAudioDeviceHandle AudioDevice = (World != nullptr) ? World->GetAudioDevice() : GEngine->GetMainAudioDevice();
+	if (AudioDevice.IsValid() == false)
+	{
+		return;
+	}
+
+	AudioDevice->PushSoundMixModifier(SoundMix);
+
+	const TPair<const TSoftObjectPtr<USoundClass>*, float> ClassVolumePairs[] =
+	{
+		{ &AudioSettings->MasterSoundClass, InSettings.MasterVolume },
+		{ &AudioSettings->BGMSoundClass, InSettings.BGMVolume },
+		{ &AudioSettings->SFXSoundClass, InSettings.SFXVolume },
+		{ &AudioSettings->DialogueSoundClass, InSettings.DialogueVolume }
+	};
+
+	for (const TPair<const TSoftObjectPtr<USoundClass>*, float>& Pair : ClassVolumePairs)
+	{
+		if (Pair.Key == nullptr || Pair.Key->IsNull() == true)
+		{
+			continue;
+		}
+
+		if (USoundClass* SoundClass = Pair.Key->LoadSynchronous())
+		{
+			AudioDevice->SetSoundMixClassOverride(SoundMix, SoundClass, Pair.Value, 1.0f, 0.0f, false);
+		}
+	}
+}
+
+void UBBMGameDataSubsystem::ApplyDisplaySettingsInternal(const FBBMUserSettingsData& InSettings)
+{
+	if (GEngine == nullptr)
+	{
+		return;
+	}
+
+	UGameUserSettings* EngineUserSettings = GEngine->GetGameUserSettings();
+	if (EngineUserSettings == nullptr)
+	{
+		return;
+	}
+
+	EngineUserSettings->SetVSyncEnabled(InSettings.bVSyncEnabled);
+
+#if PLATFORM_DESKTOP
+	EngineUserSettings->SetFullscreenMode(InSettings.WindowMode.GetValue());
+	EngineUserSettings->SetScreenResolution(InSettings.ScreenResolution);
+#endif
+
+	// 실제 렌더링 환경에서만 뷰포트 해상도 및 창모드/VSync 즉각 반영 (SaveSettings는 호출하지 않음)
+	if (FApp::CanEverRender() == true && IsRunningCommandlet() == false)
+	{
+		EngineUserSettings->ApplyResolutionSettings(false);
+		EngineUserSettings->ApplyNonResolutionSettings();
+		EngineUserSettings->RequestUIUpdate();
+	}
+}
+
+void UBBMGameDataSubsystem::HandleViewportCreatedForInitialSettings()
+{
+	if (bAppliedInitialViewportSettings == true)
+	{
+		return;
+	}
+
+	bAppliedInitialViewportSettings = true;
+	ApplyDisplaySettingsInternal(GetUserSettingsData());
+
+	if (ViewportCreatedHandle.IsValid() == true)
+	{
+		UGameViewportClient::OnViewportCreated().Remove(ViewportCreatedHandle);
+		ViewportCreatedHandle.Reset();
+	}
 }
 
 void UBBMGameDataSubsystem::SaveGameAsyncInternal(

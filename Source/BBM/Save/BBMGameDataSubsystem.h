@@ -11,10 +11,12 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Stage/BBMStageTypes.h"
+#include "Save/BBMSaveTypes.h"
 
 /* 델리게이트 선언 */
 DECLARE_DYNAMIC_DELEGATE_OneParam(FBBMAsyncSaveCompleteDynamicDelegate, bool, bSuccess);
 DECLARE_MULTICAST_DELEGATE_OneParam(FBBMSaveOperationEvent, bool /* bSuccess */);
+DECLARE_MULTICAST_DELEGATE_OneParam(FBBMOnUserSettingsChanged, const FBBMUserSettingsData& /* NewSettings */);
 
 #include "BBMGameDataSubsystem.generated.h"
 
@@ -119,9 +121,32 @@ public:
 	/* 영구 유저 설정 데이터를 파일에서 비동기로 로드 */
 	void LoadUserSettingAsync(FSimpleDelegate OnComplete = FSimpleDelegate());
 
+	/* 유저 환경설정 스냅샷 조회 */
+	UFUNCTION(Category = "BBM|Settings", BlueprintCallable, BlueprintPure)
+	FBBMUserSettingsData GetUserSettingsData() const;
+
+	/* 유저 환경설정 즉각 런타임 적용 (디스크 저장 없이 오디오/화면 반영 및 대리자 통지) */
+	UFUNCTION(Category = "BBM|Settings", BlueprintCallable)
+	void ApplyUserSettingsRuntime(const FBBMUserSettingsData& InSettings);
+
+	/* 현재 유저 환경설정 확정 적용 및 비동기 디스크 저장 */
+	void CommitAndSaveUserSettings(FSimpleDelegate OnComplete = FSimpleDelegate());
+
+	/* 유저 환경설정을 기본값으로 복원 후 즉각 런타임 적용 */
+	UFUNCTION(Category = "BBM|Settings", BlueprintCallable)
+	void ResetUserSettingsToDefaults();
+
+	/* 현재 비동기 세이브/로드 진행 여부 조회 */
+	UFUNCTION(Category = "BBM|Save", BlueprintCallable, BlueprintPure)
+	bool IsAsyncOperationInProgress() const { return bIsAsyncOperationInProgress; }
+
 	/* 게임 오버 또는 최종 클리어 시 런 데이터 삭제 */
 	UFUNCTION(Category = "BBM|Save", BlueprintCallable)
 	void ClearCurrentRunData();
+
+	/* 유저 환경설정 변경 통지 대리자 */
+public:
+	FBBMOnUserSettingsChanged OnUserSettingsChanged;
 
 	/* 세이브 파일 안전 백업 및 복구 헬퍼 */
 public:
@@ -148,6 +173,17 @@ public:
 	 */
 	UFUNCTION(Category = "BBM|Save", BlueprintCallable)
 	static bool RestoreFromBackupIfNeeded(const FString& InSlotName);
+
+	/* 내부 환경설정 런타임 적용 및 초기화 복원 */
+protected:
+	/* 사운드 믹스 및 사운드 클래스 볼륨 오버라이드 적용 */
+	void ApplyAudioSettingsInternal(const FBBMUserSettingsData& InSettings);
+
+	/* UGameUserSettings 기반 창모드/해상도/VSync 런타임 적용 (SaveSettings 미호출) */
+	void ApplyDisplaySettingsInternal(const FBBMUserSettingsData& InSettings);
+
+	/* GameViewport 생성 시점 초기 화면 설정 재적용 콜백 */
+	void HandleViewportCreatedForInitialSettings();
 
 	/* 내부 비동기 저장 및 로드 파이프라인 */
 protected:
@@ -181,4 +217,10 @@ protected:
 	/* 현재 비동기 세이브/로드가 진행 중인지 여부 */
 	UPROPERTY(Category = "BBM|Save", Transient, BlueprintReadOnly)
 	bool bIsAsyncOperationInProgress;
+
+	/* 초기 뷰포트 생성 시점 화면 설정 복원 델리게이트 핸들 */
+	FDelegateHandle ViewportCreatedHandle;
+
+	/* 뷰포트 생성 콜백 기반 초기 화면 복원 완료 여부 */
+	bool bAppliedInitialViewportSettings = false;
 };

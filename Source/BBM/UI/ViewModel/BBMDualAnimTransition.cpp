@@ -57,9 +57,9 @@ void UBBMDualAnimTransition::End()
 	ExecuteEnd(false, FBBMOnWidgetAnimFinishedSignature(), FBBMOnWidgetAnimFinishedDynamicSignature());
 }
 
-void UBBMDualAnimTransition::StartWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete)
+void UBBMDualAnimTransition::StartWithAnimDynamic(FBBMOnWidgetAnimFinishedDynamicSignature OnComplete)
 {
-	ExecuteStart(true, FBBMOnWidgetAnimFinishedSignature(), OnComplete);
+	ExecuteStart(true, FBBMOnWidgetAnimFinishedSignature(), MoveTemp(OnComplete));
 }
 
 void UBBMDualAnimTransition::StartWithAnim(FBBMOnWidgetAnimFinishedSignature OnComplete)
@@ -67,50 +67,14 @@ void UBBMDualAnimTransition::StartWithAnim(FBBMOnWidgetAnimFinishedSignature OnC
 	ExecuteStart(true, MoveTemp(OnComplete), FBBMOnWidgetAnimFinishedDynamicSignature());
 }
 
-void UBBMDualAnimTransition::EndWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete)
+void UBBMDualAnimTransition::EndWithAnimDynamic(FBBMOnWidgetAnimFinishedDynamicSignature OnComplete)
 {
-	ExecuteEnd(true, FBBMOnWidgetAnimFinishedSignature(), OnComplete);
+	ExecuteEnd(true, FBBMOnWidgetAnimFinishedSignature(), MoveTemp(OnComplete));
 }
 
 void UBBMDualAnimTransition::EndWithAnim(FBBMOnWidgetAnimFinishedSignature OnComplete)
 {
 	ExecuteEnd(true, MoveTemp(OnComplete), FBBMOnWidgetAnimFinishedDynamicSignature());
-}
-
-void UBBMDualAnimTransition::ExecuteStart(
-	bool bWithAnim,
-	FBBMOnWidgetAnimFinishedSignature InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
-)
-{
-	ExecuteDirectionalTransition(
-		StartTransition,
-		EndTransition,
-		EBBMDualAnimState::Started,
-		EBBMDualAnimState::Starting,
-		OnStartingNative,
-		bWithAnim,
-		MoveTemp(InNativeComplete),
-		InDynamicComplete
-	);
-}
-
-void UBBMDualAnimTransition::ExecuteEnd(
-	bool bWithAnim,
-	FBBMOnWidgetAnimFinishedSignature InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
-)
-{
-	ExecuteDirectionalTransition(
-		EndTransition,
-		StartTransition,
-		EBBMDualAnimState::Ended,
-		EBBMDualAnimState::Ending,
-		OnEndingNative,
-		bWithAnim,
-		MoveTemp(InNativeComplete),
-		InDynamicComplete
-	);
 }
 
 void UBBMDualAnimTransition::Clear()
@@ -187,6 +151,42 @@ void UBBMDualAnimTransition::NotifyEndTransitionFinished()
 	}
 }
 
+void UBBMDualAnimTransition::ExecuteStart(
+	bool bWithAnim,
+	FBBMOnWidgetAnimFinishedSignature InNativeComplete,
+	FBBMOnWidgetAnimFinishedDynamicSignature InDynamicComplete
+)
+{
+	ExecuteDirectionalTransition(
+		StartTransition,
+		EndTransition,
+		EBBMDualAnimState::Started,
+		EBBMDualAnimState::Starting,
+		OnStartingNative,
+		bWithAnim,
+		MoveTemp(InNativeComplete),
+		MoveTemp(InDynamicComplete)
+	);
+}
+
+void UBBMDualAnimTransition::ExecuteEnd(
+	bool bWithAnim,
+	FBBMOnWidgetAnimFinishedSignature InNativeComplete,
+	FBBMOnWidgetAnimFinishedDynamicSignature InDynamicComplete
+)
+{
+	ExecuteDirectionalTransition(
+		EndTransition,
+		StartTransition,
+		EBBMDualAnimState::Ended,
+		EBBMDualAnimState::Ending,
+		OnEndingNative,
+		bWithAnim,
+		MoveTemp(InNativeComplete),
+		MoveTemp(InDynamicComplete)
+	);
+}
+
 void UBBMDualAnimTransition::ExecuteDirectionalTransition(
 	UBBMSingleAnimTransition* TargetSlot,
 	UBBMSingleAnimTransition* OppositeSlot,
@@ -195,7 +195,7 @@ void UBBMDualAnimTransition::ExecuteDirectionalTransition(
 	FSimpleMulticastDelegate& OnTransitioningNative,
 	bool bWithAnim,
 	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
+	FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
 )
 {
 	if (TargetSlot == nullptr || OppositeSlot == nullptr)
@@ -210,14 +210,14 @@ void UBBMDualAnimTransition::ExecuteDirectionalTransition(
 	// 이미 목표 완료 상태면 재실행 없이 전달된 콜백만 즉시 처리
 	if (State == CompletedState)
 	{
-		UBBMSingleAnimTransition::InvokeCallbacksImmediate(MoveTemp(InNativeComplete), InDynamicComplete);
+		UBBMSingleAnimTransition::InvokeCallbacksImmediate(MoveTemp(InNativeComplete), MoveTemp(InDynamicComplete));
 		return;
 	}
 
 	// 이미 동일 방향 전환 진행 중이면 대상 슬롯에 콜백 누적(또는 무애님 즉시 스냅)을 위임
 	if (State == TransitioningState)
 	{
-		TargetSlot->ExecuteInternal(bWithAnim, MoveTemp(InNativeComplete), InDynamicComplete);
+		TargetSlot->ExecuteInternal(bWithAnim, MoveTemp(InNativeComplete), MoveTemp(InDynamicComplete));
 		return;
 	}
 
@@ -233,7 +233,7 @@ void UBBMDualAnimTransition::ExecuteDirectionalTransition(
 		return;
 	}
 
-	TargetSlot->ExecuteInternal(bWithAnim, MoveTemp(InNativeComplete), InDynamicComplete);
+	TargetSlot->ExecuteInternal(bWithAnim, MoveTemp(InNativeComplete), MoveTemp(InDynamicComplete));
 }
 
 void UBBMDualAnimTransition::HandleStartSlotFinishedBeforeCallbacks()

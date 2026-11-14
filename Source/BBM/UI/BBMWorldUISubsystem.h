@@ -13,8 +13,11 @@
 #include "BBMWorldUISubsystem.generated.h"
 
 /* 독립 전방 선언 */
+class UBBMLayerRootWidget;
 class UBBMUserWidgetBase;
 class UBBMViewModelBase;
+class UUserWidget;
+class UWidget;
 
 /**
  * BBM 월드 UI 관리 서브시스템
@@ -138,8 +141,44 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|MVVM")
 	int32 GetRegisteredViewModelCount() const;
 
-	/* 내부 정리 헬퍼 */
+	/* 레이어 루트 위젯 위임 헬퍼 인터페이스 */
+public:
+	/**
+	 * 대상 위젯을 루트 위젯 내 지정된 ZOrder 레이어 캔버스 자식으로 추가함
+	 * (이미 뷰포트 또는 레이어에 올라가 있으면 중복 추가하지 않고 false 반환)
+	 * @param InWidget 추가할 위젯 인스턴스
+	 * @param InLayer 배치할 대상 ZOrder 레이어
+	 * @return 레이어 추가 성공 여부
+	 */
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Layer")
+	bool AddWidgetToLayer(UUserWidget* InWidget, EBBMWidgetZOrder InLayer);
+
+	/**
+	 * 이미 레이어에 올라가 있는 위젯의 슬롯 ZOrder를 해당 레이어 최상단으로 승격함
+	 * @param InWidget 최상단으로 이동할 위젯 인스턴스
+	 * @return 최상단 이동 성공 여부 (레이어 미소속 시 false)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Layer")
+	bool BringWidgetToLayerTop(UUserWidget* InWidget);
+
+	/**
+	 * 지정 위젯이 루트 레이어 캔버스 중 하나의 직계 자식인지 확인함
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|Layer")
+	bool IsWidgetInAnyLayer(const UWidget* InWidget) const;
+
+#if WITH_EDITOR
+	/**
+	 * 에디터 자동화 테스트 검증을 위해 루트 레이어 위젯의 ZOrder 정규화 임계치를 임시 조정함
+	 */
+	void SetLayerZOrderMaxThresholdForTesting(int32 InThreshold);
+#endif
+
+	/* 내부 정리 및 루트 위젯 보장 헬퍼 */
 private:
+	/* 루트 레이어 위젯 생성 및 뷰포트 등록을 보장 초기화함 */
+	bool EnsureLayerRootInitialized();
+
 	/* 위젯 인스턴스의 프레젠테이션과 ViewModel 바인딩을 즉시 해제함 */
 	void ReleaseWidgetInstance(UBBMUserWidgetBase* InWidget);
 
@@ -155,5 +194,10 @@ protected:
 	/* 식별 키별 등록된 활성 MVVM 뷰모델 맵 (UPROPERTY 보관으로 GC 방지) */
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UBBMViewModelBase>> ActiveViewModels;
+
+private:
+	/* 뷰포트에 단독 등록되는 UI 레이어 루트 위젯 */
+	UPROPERTY(Transient)
+	TObjectPtr<UBBMLayerRootWidget> LayerRootWidget;
 };
 

@@ -5,11 +5,13 @@
  *********************************************************************/
 
 #include "UI/BBMWorldUISubsystem.h"
+#include "UI/Widget/BBMLayerRootWidget.h"
 #include "UI/Widget/BBMUserWidgetBase.h"
 #include "UI/ViewModel/BBMViewModelBase.h"
 #include "Engine/World.h"
 
-UBBMWorldUISubsystem::UBBMWorldUISubsystem()
+UBBMWorldUISubsystem::UBBMWorldUISubsystem() :
+	LayerRootWidget(nullptr)
 {
 }
 
@@ -18,6 +20,14 @@ void UBBMWorldUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 	ActiveWidgets.Empty();
 	ActiveViewModels.Empty();
+
+	if (UWorld* World = GetWorld())
+	{
+		if (World->IsGameWorld() == true)
+		{
+			EnsureLayerRootInitialized();
+		}
+	}
 }
 
 void UBBMWorldUISubsystem::Deinitialize()
@@ -25,6 +35,16 @@ void UBBMWorldUISubsystem::Deinitialize()
 	// 위젯을 먼저 분리한 뒤 ViewModel을 닫아 소멸 시 불필요한 프레젠테이션 역참조를 방지
 	ClearAllWidgets();
 	ClearAllViewModels();
+
+	if (LayerRootWidget != nullptr)
+	{
+		if (LayerRootWidget->IsInViewport() == true)
+		{
+			LayerRootWidget->RemoveFromParent();
+		}
+		LayerRootWidget = nullptr;
+	}
+
 	Super::Deinitialize();
 }
 
@@ -188,6 +208,76 @@ int32 UBBMWorldUISubsystem::GetRegisteredViewModelCount() const
 	return ActiveViewModels.Num();
 }
 
+bool UBBMWorldUISubsystem::AddWidgetToLayer(UUserWidget* InWidget, EBBMWidgetZOrder InLayer)
+{
+	if (EnsureLayerRootInitialized() == false)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMWorldUISubsystem::AddWidgetToLayer] Failed to initialize LayerRootWidget."));
+		return false;
+	}
+
+	return LayerRootWidget->AddWidgetToLayer(InWidget, InLayer);
+}
+
+bool UBBMWorldUISubsystem::BringWidgetToLayerTop(UUserWidget* InWidget)
+{
+	if (LayerRootWidget == nullptr)
+	{
+		return false;
+	}
+
+	return LayerRootWidget->BringWidgetToLayerTop(InWidget);
+}
+
+bool UBBMWorldUISubsystem::IsWidgetInAnyLayer(const UWidget* InWidget) const
+{
+	if (LayerRootWidget == nullptr)
+	{
+		return false;
+	}
+
+	return LayerRootWidget->IsWidgetInAnyLayer(InWidget);
+}
+
+#if WITH_EDITOR
+void UBBMWorldUISubsystem::SetLayerZOrderMaxThresholdForTesting(int32 InThreshold)
+{
+	if (EnsureLayerRootInitialized() == true)
+	{
+		LayerRootWidget->SetLayerZOrderMaxThresholdForTesting(InThreshold);
+	}
+}
+#endif
+
+bool UBBMWorldUISubsystem::EnsureLayerRootInitialized()
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr || World->IsGameWorld() == false)
+	{
+		return false;
+	}
+
+	if (LayerRootWidget == nullptr)
+	{
+		LayerRootWidget = CreateWidget<UBBMLayerRootWidget>(World, UBBMLayerRootWidget::StaticClass());
+		if (LayerRootWidget == nullptr)
+		{
+			UE_LOG(LogTemp, Error, TEXT("[UBBMWorldUISubsystem::EnsureLayerRootInitialized] Failed to create UBBMLayerRootWidget."));
+			return false;
+		}
+
+		LayerRootWidget->InitializeLayerStructure();
+	}
+
+	// 헤드리스 테스트 월드처럼 뷰포트 클라이언트가 없을 때는 AddToViewport 경고 없이 레이어 구조만 유지함
+	if (LayerRootWidget->IsInViewport() == false && World->GetGameViewport() != nullptr)
+	{
+		LayerRootWidget->AddToViewport(0);
+	}
+
+	return LayerRootWidget != nullptr;
+}
+
 void UBBMWorldUISubsystem::ReleaseWidgetInstance(UBBMUserWidgetBase* InWidget)
 {
 	if (InWidget == nullptr)
@@ -196,6 +286,11 @@ void UBBMWorldUISubsystem::ReleaseWidgetInstance(UBBMUserWidgetBase* InWidget)
 	}
 
 	InWidget->SetViewModelInstance(nullptr);
+
+	if (InWidget->IsInLayer() == true)
+	{
+		InWidget->RemoveFromParent();
+	}
 }
 
 void UBBMWorldUISubsystem::ReleaseViewModelInstance(UBBMViewModelBase* InViewModel)

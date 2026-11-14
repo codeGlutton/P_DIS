@@ -22,6 +22,8 @@ class BBM_API UBBMSingleAnimTransition : public UMVVMViewModelBase
 {
 	GENERATED_BODY()
 
+	friend class UBBMDualAnimTransition;
+
 	/* 생성자 */
 public:
 	UBBMSingleAnimTransition();
@@ -55,7 +57,7 @@ public:
 	 * @param OnComplete 전환 완료 시 실행될 블루프린트 대리자
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|MVVM", meta = (DisplayName = "Execute"))
-	void ExecuteDynamic(bool bWithAnim, const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete);
+	void ExecuteDynamic(bool bWithAnim, FBBMOnWidgetAnimFinishedDynamicSignature OnComplete);
 
 	/**
 	 * C++ 전용 단일 애니메이션 전환 실행 인터페이스
@@ -65,15 +67,6 @@ public:
 	void Execute(
 		bool bWithAnim = true,
 		FBBMOnWidgetAnimFinishedSignature OnComplete = FBBMOnWidgetAnimFinishedSignature()
-	);
-
-	/**
-	 * 내부 및 컴포짓 모듈용 통합 실행 진입점
-	 */
-	void ExecuteInternal(
-		bool bWithAnim,
-		FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-		const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
 	);
 
 	/**
@@ -124,14 +117,23 @@ public:
 	 */
 	static void InvokeCallbacksImmediate(
 		FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-		const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
+		FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
 	);
 
 	/* 내부 실행 헬퍼 */
 private:
+	/**
+	* 내부 및 컴포짓 모듈용 통합 실행 진입점
+	*/
+	void ExecuteInternal(
+		bool bWithAnim,
+		FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
+		FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
+	);
+
 	void EnqueuePendingCallbacks(
 		FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-		const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
+		FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
 	);
 
 	void ExecutePendingCallbacks();

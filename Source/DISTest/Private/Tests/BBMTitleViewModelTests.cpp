@@ -43,18 +43,15 @@ struct FBBMMVVMScopedTestWorld
 
 	FBBMMVVMScopedTestWorld()
 	{
-		World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("BBM_MVVM_TestWorld"));
-		if (World != nullptr)
+		GameInstance = NewObject<UGameInstance>(GEngine);
+		if (GameInstance != nullptr)
 		{
-			FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::Game);
-			WorldContext.SetCurrentWorld(World);
-
-			GameInstance = NewObject<UGameInstance>(GEngine);
-			GameInstance->Init();
-			WorldContext.OwningGameInstance = GameInstance;
-			World->SetGameInstance(GameInstance);
-
-			World->InitializeActorsForPlay(FURL());
+			GameInstance->InitializeStandalone();
+			World = GameInstance->GetWorld();
+			if (World != nullptr)
+			{
+				World->InitializeActorsForPlay(FURL());
+			}
 		}
 	}
 
@@ -129,6 +126,8 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 
 	if (TitleWidget != nullptr && TitleVM != nullptr)
 	{
+		TitleVM->FinishInitialization();
+
 		// 수동 연결 전에는 위젯 내부 단일 ViewModel이 비어 있어야 함
 		TestNull(TEXT("수동 연결 전 GetViewModel은 nullptr"), TitleWidget->GetViewModel());
 		TestNull(TEXT("수동 연결 전 TitleWidget->GetTitleViewModel은 nullptr"), TitleWidget->GetTitleViewModel());
@@ -154,6 +153,8 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 
 	if (OpenedWidget != nullptr && DelayedTitleVM != nullptr)
 	{
+		DelayedTitleVM->FinishInitialization();
+
 		// 위젯 연결 전 ViewModel->Open() 호출 시 논리 상태 및 OnOpen/OnFinishOpenAnim이 즉시 반영됨
 		OpenedWidget->SetVisibility(ESlateVisibility::Collapsed);
 		DelayedTitleVM->Open();
@@ -212,6 +213,7 @@ bool FBBMTitleViewModelSaveContinueVisibilityTest::RunTest(const FString& Parame
 	{
 		return false;
 	}
+	TitleVM->FinishInitialization();
 
 	// 2-1. 초기 상태: 활성 런 세이브가 없을 때 -> ContinueVisibility == Hidden, bCanContinue == false
 	GameDataSS->EnsureSaveDataLoaded();
@@ -263,6 +265,7 @@ bool FBBMTitleViewModelTransitionsTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+	TitleVM->FinishInitialization();
 
 	UBBMSingleAnimTransition* ShiningTransition = TitleVM->GetShiningTransition();
 	UBBMDualAnimTransition* BlockingTransition = TitleVM->GetBlockingTransition();
@@ -309,18 +312,19 @@ bool FBBMTitleViewModelTransitionsTest::RunTest(const FString& Parameters)
 		++ShiningFinishCount;
 	});
 
-	// Open() 호출 시 OnOpen()에서 ShiningTransition->Execute(true) 호출 및 헤드리스 환경 안전 완료 검증
+	// Open() 호출 시 OnFinishOpenAnim()에서 ShiningTransition->Execute(true) 호출 및 헤드리스 환경 안전 완료 검증
 	TitleVM->Open();
-	TestEqual(TEXT("Open() 시 OnOpen()에서 ShiningTransition 시작 호출이 발생해야 함"), ShiningStartCount, 1);
-	TestEqual(TEXT("헤드리스 뷰포트 없는 환경에서는 보류된 Shining 요청이 고착되지 않고 Idle로 정리되어야 함"), ShiningTransition->GetState(), EBBMSingleAnimState::Idle);
+	TestEqual(TEXT("Open() 시 OnFinishOpenAnim()에서 ShiningTransition 시작 호출이 발생해야 함"), ShiningStartCount, 1);
+	TestEqual(TEXT("헤드리스 애니메이션 미설정 환경에서는 Shining 요청이 고착되지 않고 Idle로 정리되어야 함"), ShiningTransition->GetState(), EBBMSingleAnimState::Idle);
 
-	// BlockingTransition 실행 후 Close() 시 OnFinishCloseAnim()에서 정리되는지 검증
+	// BlockingTransition 실행 후 Close() 시 OnClosed()에서 ShiningTransition 정리 검증
 	BlockingTransition->Start();
 	TestEqual(TEXT("BlockingTransition Start 후 Started 상태"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
 
+	const int32 ShiningFinishCountBeforeClose = ShiningFinishCount;
 	TitleVM->Close();
 	TestEqual(TEXT("Close() 완료 후 ShiningTransition은 Idle 상태 유지"), ShiningTransition->GetState(), EBBMSingleAnimState::Idle);
-	TestTrue(TEXT("OnFinishCloseAnim() 내 Execute(false)로 완료 통지가 정상 수행되어야 함"), ShiningFinishCount >= 1);
+	TestTrue(TEXT("OnClosed() 내 Execute(false)로 완료 통지가 추가 수행되어야 함"), ShiningFinishCount > ShiningFinishCountBeforeClose);
 
 	// 3-3. ViewModel 해제 시 핸들러 언바인딩 검증
 	TitleWidget->SetViewModelInstance(nullptr);
@@ -364,6 +368,12 @@ bool FBBMSettingsAndCreditsWidgetsTest::RunTest(const FString& Parameters)
 	UBBMCreditsViewModel* CreditsVM = NewObject<UBBMCreditsViewModel>(TestWorld.World);
 	TestNotNull(TEXT("UBBMSettingsViewModel 생성 성공"), SettingsVM);
 	TestNotNull(TEXT("UBBMCreditsViewModel 생성 성공"), CreditsVM);
+	if (SettingsVM == nullptr || CreditsVM == nullptr)
+	{
+		return false;
+	}
+	SettingsVM->FinishInitialization();
+	CreditsVM->FinishInitialization();
 
 	SettingsWidget->SetViewModelInstance(SettingsVM);
 	CreditsWidget->SetViewModelInstance(CreditsVM);
@@ -509,6 +519,7 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+	SettingsVM->FinishInitialization();
 
 	int32 SettingsChangedCount = 0;
 	FBBMUserSettingsData LastBroadcastedSettings;

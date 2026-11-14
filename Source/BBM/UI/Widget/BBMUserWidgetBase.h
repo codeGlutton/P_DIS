@@ -16,6 +16,7 @@
 class UBBMViewModelBase;
 class UBBMSingleAnimTransition;
 class UBBMDualAnimTransition;
+class UBBMWorldUISubsystem;
 struct FWidgetAnimationState;
 
 /**
@@ -47,6 +48,30 @@ public:
 	/* 기본 ZOrder 레이어 설정 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI")
 	void SetDefaultZOrderLayer(EBBMWidgetZOrder InZOrderLayer) { DefaultZOrderLayer = InZOrderLayer; }
+
+	/* 레이어 부착 및 최상단 ZOrder 관리 */
+public:
+	/**
+	 * UBBMWorldUISubsystem의 루트 위젯 내 지정된 ZOrder 레이어 캔버스 자식으로 추가함
+	 * (이미 뷰포트 또는 레이어 위에 올라가 있거나 서브시스템이 없으면 false 반환)
+	 * @param InLayer 배치할 대상 ZOrder 레이어
+	 * @return 레이어 추가 성공 여부
+	 */
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Layer")
+	bool AddToLayer(EBBMWidgetZOrder InLayer);
+
+	/**
+	 * 현재 소속된 레이어 캔버스 내에서 이 위젯의 ZOrder를 최상단으로 승격함
+	 * @return 최상단 이동 성공 여부
+	 */
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Layer")
+	bool BringToLayerTop();
+
+	/**
+	 * 위젯이 뷰포트에 직접 등록되었거나 루트 레이어 캔버스 내부에 위치하는지 여부를 반환함
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|Layer")
+	bool IsInLayer() const;
 
 	/* 단일 ViewModel 연결 및 조회 인터페이스 */
 public:
@@ -165,13 +190,13 @@ private:
 
 	/* 내부 헬퍼 */
 private:
-	/* 게임 뷰포트가 유효한 경우에만 AddToViewport를 수행하는 안전 헬퍼 */
-	void TryAddToGameViewport();
+	/* 현재 월드에서 UBBMWorldUISubsystem을 조회하는 공통 헬퍼 */
+	UBBMWorldUISubsystem* ResolveWorldUISubsystem() const;
 
-	/* 수명 주기 정책에 따른 뷰포트 등록 및 가시성 표시 적용 */
+	/* 수명 주기 정책에 따른 레이어 등록, 최상단 ZOrder 승격 및 가시성 표시 적용 */
 	void ApplyOpenViewportPresentation();
 
-	/* 수명 주기 정책에 따른 뷰포트 탈착 또는 가시성 숨김 적용 */
+	/* 수명 주기 정책에 따른 레이어 분리 또는 가시성 숨김 적용 */
 	void ApplyCloseViewportPresentation();
 
 	/* 애니메이션 설정(EBBMWidgetAnimPlayMode, 속도, 반복 횟수)에 따른 UMG 분기 재생 헬퍼 */

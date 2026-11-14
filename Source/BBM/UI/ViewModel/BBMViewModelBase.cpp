@@ -10,7 +10,6 @@ void UBBMViewModelBase::BeginDestroy()
 {
 	if (IsTemplate() == false && bIsInitialized == true)
 	{
-		BP_EndViewModel();
 		EndViewModel();
 	}
 
@@ -33,11 +32,11 @@ void UBBMViewModelBase::Close()
 	}
 }
 
-void UBBMViewModelBase::OpenWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete)
+void UBBMViewModelBase::OpenWithAnimDynamic(FBBMOnWidgetAnimFinishedDynamicSignature OnComplete)
 {
 	if (OpenCloseTransition != nullptr)
 	{
-		OpenCloseTransition->StartWithAnimDynamic(OnComplete);
+		OpenCloseTransition->StartWithAnimDynamic(MoveTemp(OnComplete));
 	}
 }
 
@@ -49,11 +48,11 @@ void UBBMViewModelBase::OpenWithAnim(FBBMOnWidgetAnimFinishedSignature OnComplet
 	}
 }
 
-void UBBMViewModelBase::CloseWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete)
+void UBBMViewModelBase::CloseWithAnimDynamic(FBBMOnWidgetAnimFinishedDynamicSignature OnComplete)
 {
 	if (OpenCloseTransition != nullptr)
 	{
-		OpenCloseTransition->EndWithAnimDynamic(OnComplete);
+		OpenCloseTransition->EndWithAnimDynamic(MoveTemp(OnComplete));
 	}
 }
 
@@ -89,7 +88,6 @@ void UBBMViewModelBase::FinishInitialization()
 
 	bIsInitialized = true;
 	BeginViewModel();
-	BP_BeginViewModel();
 }
 
 void UBBMViewModelBase::BeginViewModel()
@@ -147,25 +145,21 @@ void UBBMViewModelBase::OnFinishCloseAnim()
 void UBBMViewModelBase::HandleTransitionOpenStarted()
 {
 	OnOpen();
-	BP_OnOpen();
 }
 
 void UBBMViewModelBase::HandleTransitionCloseStarted()
 {
 	OnClosed();
-	BP_OnClosed();
 }
 
 void UBBMViewModelBase::HandleTransitionOpenFinished()
 {
 	OnFinishOpenAnim();
-	BP_OnFinishOpenAnim();
 }
 
 void UBBMViewModelBase::HandleTransitionCloseFinished()
 {
 	OnFinishCloseAnim();
-	BP_OnFinishCloseAnim();
 }
 
 void UBBMViewModelBase::HandleTransitionStateChanged(UObject* InObject, UE::FieldNotification::FFieldId InFieldId)

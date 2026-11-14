@@ -48,7 +48,7 @@ public:
 	 * @param OnComplete 오픈 애니메이션 완료 시 호출될 대리자
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|MVVM", meta = (DisplayName = "Open With Anim"))
-	void OpenWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete);
+	void OpenWithAnimDynamic(FBBMOnWidgetAnimFinishedDynamicSignature OnComplete);
 
 	/**
 	 * C++ 전용 OpenWithAnim 오버로딩
@@ -61,7 +61,7 @@ public:
 	 * @param OnComplete 클로즈 애니메이션 완료 시 호출될 대리자
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|MVVM", meta = (DisplayName = "Close With Anim"))
-	void CloseWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete);
+	void CloseWithAnimDynamic(FBBMOnWidgetAnimFinishedDynamicSignature OnComplete);
 
 	/**
 	 * C++ 전용 CloseWithAnim 오버로딩
@@ -126,42 +126,6 @@ protected:
 	 * 클로즈 애니메이션 완료 시(애니메이션 미설정 시 즉시) 호출되는 C++ 가상 함수
 	 */
 	virtual void OnFinishCloseAnim();
-
-	/**
-	 * CDO가 아닌 실제 뷰모델 인스턴스 초기화 완료 직후 호출되는 블루프린트 이벤트
-	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "BBM|UI|MVVM", meta = (DisplayName = "Begin ViewModel"))
-	void BP_BeginViewModel();
-
-	/**
-	 * CDO가 아닌 실제 뷰모델 인스턴스 제거 직전 호출되는 블루프린트 이벤트
-	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "BBM|UI|MVVM", meta = (DisplayName = "End ViewModel"))
-	void BP_EndViewModel();
-
-	/**
-	 * Open/OpenWithAnim 호출 직후 즉시 호출되는 블루프린트 이벤트
-	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "BBM|UI|MVVM", meta = (DisplayName = "On Open"))
-	void BP_OnOpen();
-
-	/**
-	 * Close/CloseWithAnim 호출 직후 즉시 호출되는 블루프린트 이벤트
-	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "BBM|UI|MVVM", meta = (DisplayName = "On Closed"))
-	void BP_OnClosed();
-
-	/**
-	 * 오픈 애니메이션 완료 시(애니메이션 미설정 시 즉시) 호출되는 블루프린트 이벤트
-	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "BBM|UI|MVVM", meta = (DisplayName = "On Finish Open Anim"))
-	void BP_OnFinishOpenAnim();
-
-	/**
-	 * 클로즈 애니메이션 완료 시(애니메이션 미설정 시 즉시) 호출되는 블루프린트 이벤트
-	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "BBM|UI|MVVM", meta = (DisplayName = "On Finish Close Anim"))
-	void BP_OnFinishCloseAnim();
 
 	/* 내부 전환 모듈 연동 핸들러 */
 private:

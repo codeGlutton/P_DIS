@@ -27,8 +27,6 @@ class BBM_API UBBMTitleWidget : public UBBMUserWidgetBase
 public:
 	UBBMTitleWidget(const FObjectInitializer& ObjectInitializer);
 
-	virtual void NativeConstruct() override;
-
 protected:
 	virtual void BindViewModelPresentationHandlers(UBBMViewModelBase* InViewModel) override;
 	virtual void ClearViewModelPresentationHandlers(UBBMViewModelBase* InViewModel) override;

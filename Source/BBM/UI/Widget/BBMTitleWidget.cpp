@@ -24,11 +24,6 @@ UBBMTitleWidget::UBBMTitleWidget(const FObjectInitializer& ObjectInitializer) :
 	BlockingEndAnimConfig.PlayMode = EBBMWidgetAnimPlayMode::RelativeReverse;
 }
 
-void UBBMTitleWidget::NativeConstruct()
-{
-	Super::NativeConstruct();
-}
-
 void UBBMTitleWidget::BindViewModelPresentationHandlers(UBBMViewModelBase* InViewModel)
 {
 	Super::BindViewModelPresentationHandlers(InViewModel);

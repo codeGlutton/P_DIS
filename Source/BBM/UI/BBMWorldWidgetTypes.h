@@ -27,31 +27,31 @@ class UUserWidget;
 class UWidgetAnimation;
 
 /**
- * BBM UI 위젯 ZOrder 레이어 구분 열거형 (10 간격)
+ * BBM UI 위젯 ZOrder 레이어 구분 열거형 (순차 0~6 레이어)
  */
 UENUM(BlueprintType)
 enum class EBBMWidgetZOrder : uint8
 {
 	/* 최하단 배경 아트 및 맵 오버레이 (0) */
-	Background   = 0   UMETA(DisplayName = "Background (0)"),
+	Background   = 0  UMETA(DisplayName = "Background (0)"),
 
-	/* 기본 인게임 HUD 및 상시 표시 상태바 (10) */
-	Base         = 10  UMETA(DisplayName = "Base HUD (10)"),
+	/* 기본 인게임 HUD 및 상시 표시 상태바 (1) */
+	Base         = 1  UMETA(DisplayName = "Base HUD (1)"),
 
-	/* 인벤토리, 상점, 캐릭터 장비 등 메인 게임플레이 창 (20) */
-	Content      = 20  UMETA(DisplayName = "Content / Windows (20)"),
+	/* 인벤토리, 상점, 캐릭터 장비 등 메인 게임플레이 창 (2) */
+	Content      = 2  UMETA(DisplayName = "Content / Windows (2)"),
 
-	/* 팝업 창, 모달 대화상자, 확인 창 (30) */
-	Popup        = 30  UMETA(DisplayName = "Popups / Modals (30)"),
+	/* 팝업 창, 모달 대화상자, 확인 창 (3) */
+	Popup        = 3  UMETA(DisplayName = "Popups / Modals (3)"),
 
-	/* 알림, 보상 획득 배너, 획득 토스트 메시지 (40) */
-	Notification = 40  UMETA(DisplayName = "Notifications / Alerts (40)"),
+	/* 알림, 보상 획득 배너, 획득 토스트 메시지 (4) */
+	Notification = 4  UMETA(DisplayName = "Notifications / Alerts (4)"),
 
-	/* 화면 암전 FadeInOut 및 레벨/지역 전환 로딩 표기 위젯 (50) */
-	FadeLoading  = 50  UMETA(DisplayName = "Fade & Loading (50)"),
+	/* 화면 암전 FadeInOut 및 레벨/지역 전환 로딩 표기 위젯 (5) */
+	FadeLoading  = 5  UMETA(DisplayName = "Fade & Loading (5)"),
 
-	/* 최상단 시스템 메시지, 에러 팝업, 디버그 오버레이 (60) */
-	System       = 60  UMETA(DisplayName = "System / Debug (60)")
+	/* 최상단 시스템 메시지, 에러 팝업, 디버그 오버레이 (6) */
+	System       = 6  UMETA(DisplayName = "System / Debug (6)")
 };
 
 /**
@@ -60,10 +60,10 @@ enum class EBBMWidgetZOrder : uint8
 UENUM(BlueprintType)
 enum class EBBMWidgetLifecyclePolicy : uint8
 {
-	/* 상시 뷰포트 유지 (생성 시 AddToViewport, Open/Close 시 Visibility만 전환하여 재계산 오버헤드 최소화) */
+	/* 상시 레이어 유지 (최초 Open 시 AddToLayer, 이후 Open/Close 시 Visibility 및 최상단 ZOrder 전환) */
 	PersistentViewport UMETA(DisplayName = "Persistent Viewport (Visibility Toggle)"),
 
-	/* 필요 시에만 뷰포트 등록 (Open 시 AddToViewport, Close 시 RemoveFromParent하여 렌더 트리 부하 최소화) */
+	/* 필요 시에만 레이어 등록 (Open 시 AddToLayer, Close 시 RemoveFromParent하여 렌더 트리 부하 최소화) */
 	DynamicDetach      UMETA(DisplayName = "Dynamic Detach (Attach On Open / Detach On Close)")
 };
 

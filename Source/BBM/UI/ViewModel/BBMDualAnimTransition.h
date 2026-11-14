@@ -73,7 +73,7 @@ public:
 	 * 시작 애니메이션과 함께 Start 전환을 실행하고 완료 대리자를 등록함 (블루프린트용)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|MVVM", meta = (DisplayName = "Start With Anim"))
-	void StartWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete);
+	void StartWithAnimDynamic(FBBMOnWidgetAnimFinishedDynamicSignature OnComplete);
 
 	/**
 	 * C++ 전용 StartWithAnim 실행 인터페이스
@@ -84,30 +84,12 @@ public:
 	 * 종료 애니메이션과 함께 End 전환을 실행하고 완료 대리자를 등록함 (블루프린트용)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|MVVM", meta = (DisplayName = "End With Anim"))
-	void EndWithAnimDynamic(const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete);
+	void EndWithAnimDynamic(FBBMOnWidgetAnimFinishedDynamicSignature OnComplete);
 
 	/**
 	 * C++ 전용 EndWithAnim 실행 인터페이스
 	 */
 	void EndWithAnim(FBBMOnWidgetAnimFinishedSignature OnComplete = FBBMOnWidgetAnimFinishedSignature());
-
-	/**
-	 * C++ 통합 시작 진입점
-	 */
-	void ExecuteStart(
-		bool bWithAnim,
-		FBBMOnWidgetAnimFinishedSignature InNativeComplete,
-		const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
-	);
-
-	/**
-	 * C++ 통합 종료 진입점
-	 */
-	void ExecuteEnd(
-		bool bWithAnim,
-		FBBMOnWidgetAnimFinishedSignature InNativeComplete,
-		const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
-	);
 
 	/**
 	 * 양방향 대기 콜백을 비우고 State를 Ended로 초기화함
@@ -151,6 +133,18 @@ public:
 
 	/* 내부 전이 조율 헬퍼 */
 private:
+	void ExecuteStart(
+		bool bWithAnim,
+		FBBMOnWidgetAnimFinishedSignature InNativeComplete,
+		FBBMOnWidgetAnimFinishedDynamicSignature InDynamicComplete
+	);
+
+	void ExecuteEnd(
+		bool bWithAnim,
+		FBBMOnWidgetAnimFinishedSignature InNativeComplete,
+		FBBMOnWidgetAnimFinishedDynamicSignature InDynamicComplete
+	);
+
 	void ExecuteDirectionalTransition(
 		UBBMSingleAnimTransition* TargetSlot,
 		UBBMSingleAnimTransition* OppositeSlot,
@@ -159,7 +153,7 @@ private:
 		FSimpleMulticastDelegate& OnTransitioningNative,
 		bool bWithAnim,
 		FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-		const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
+		FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
 	);
 
 	void HandleStartSlotFinishedBeforeCallbacks();

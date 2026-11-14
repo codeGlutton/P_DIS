@@ -19,62 +19,14 @@ void UBBMSingleAnimTransition::SetState(EBBMSingleAnimState InNewState)
 	}
 }
 
-void UBBMSingleAnimTransition::ExecuteDynamic(bool bWithAnim, const FBBMOnWidgetAnimFinishedDynamicSignature& OnComplete)
+void UBBMSingleAnimTransition::ExecuteDynamic(bool bWithAnim, FBBMOnWidgetAnimFinishedDynamicSignature OnComplete)
 {
-	ExecuteInternal(bWithAnim, FBBMOnWidgetAnimFinishedSignature(), OnComplete);
+	ExecuteInternal(bWithAnim, FBBMOnWidgetAnimFinishedSignature(), MoveTemp(OnComplete));
 }
 
 void UBBMSingleAnimTransition::Execute(bool bWithAnim, FBBMOnWidgetAnimFinishedSignature OnComplete)
 {
 	ExecuteInternal(bWithAnim, MoveTemp(OnComplete), FBBMOnWidgetAnimFinishedDynamicSignature());
-}
-
-void UBBMSingleAnimTransition::ExecuteInternal(
-	bool bWithAnim,
-	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
-)
-{
-	// 이미 재생 중이면 콜백을 누적하고, 무애님 요청 시 즉시 완료 스냅 처리
-	if (State == EBBMSingleAnimState::Playing)
-	{
-		EnqueuePendingCallbacks(MoveTemp(InNativeComplete), InDynamicComplete);
-
-		if (bWithAnim == false)
-		{
-			if (PresentationHandler.IsBound() == true)
-			{
-				PresentationHandler.Execute(false);
-			}
-			else
-			{
-				NotifyAnimFinished();
-			}
-		}
-		return;
-	}
-
-	ClearPendingCallbacks();
-	EnqueuePendingCallbacks(MoveTemp(InNativeComplete), InDynamicComplete);
-
-	SetState(EBBMSingleAnimState::Playing);
-	OnTransitionStartedNative.Broadcast(bWithAnim);
-	OnTransitionStarted.Broadcast(bWithAnim);
-
-	// 시작 훅 실행 도중 Clear() 등으로 상태가 변경되었으면 후속 프레젠테이션 요청 중단
-	if (State != EBBMSingleAnimState::Playing)
-	{
-		return;
-	}
-
-	if (PresentationHandler.IsBound() == true)
-	{
-		PresentationHandler.Execute(bWithAnim);
-	}
-	else
-	{
-		NotifyAnimFinished();
-	}
 }
 
 void UBBMSingleAnimTransition::Clear()
@@ -145,7 +97,7 @@ void UBBMSingleAnimTransition::ClearPresentationHandler(const UObject* InOwner)
 
 void UBBMSingleAnimTransition::InvokeCallbacksImmediate(
 	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
+	FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
 )
 {
 	if (InDynamicComplete.IsBound() == true)
@@ -159,14 +111,62 @@ void UBBMSingleAnimTransition::InvokeCallbacksImmediate(
 	}
 }
 
+void UBBMSingleAnimTransition::ExecuteInternal(
+	bool bWithAnim,
+	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
+	FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
+)
+{
+	// 이미 재생 중이면 콜백을 누적하고, 무애님 요청 시 즉시 완료 스냅 처리
+	if (State == EBBMSingleAnimState::Playing)
+	{
+		EnqueuePendingCallbacks(MoveTemp(InNativeComplete), MoveTemp(InDynamicComplete));
+
+		if (bWithAnim == false)
+		{
+			if (PresentationHandler.IsBound() == true)
+			{
+				PresentationHandler.Execute(false);
+			}
+			else
+			{
+				NotifyAnimFinished();
+			}
+		}
+		return;
+	}
+
+	ClearPendingCallbacks();
+	EnqueuePendingCallbacks(MoveTemp(InNativeComplete), MoveTemp(InDynamicComplete));
+
+	SetState(EBBMSingleAnimState::Playing);
+	OnTransitionStartedNative.Broadcast(bWithAnim);
+	OnTransitionStarted.Broadcast(bWithAnim);
+
+	// 시작 훅 실행 도중 Clear() 등으로 상태가 변경되었으면 후속 프레젠테이션 요청 중단
+	if (State != EBBMSingleAnimState::Playing)
+	{
+		return;
+	}
+
+	if (PresentationHandler.IsBound() == true)
+	{
+		PresentationHandler.Execute(bWithAnim);
+	}
+	else
+	{
+		NotifyAnimFinished();
+	}
+}
+
 void UBBMSingleAnimTransition::EnqueuePendingCallbacks(
 	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-	const FBBMOnWidgetAnimFinishedDynamicSignature& InDynamicComplete
+	FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
 )
 {
 	if (InDynamicComplete.IsBound() == true)
 	{
-		PendingDynamicCallbacks.Add(InDynamicComplete);
+		PendingDynamicCallbacks.Add(MoveTemp(InDynamicComplete));
 	}
 
 	if (InNativeComplete.IsBound() == true)

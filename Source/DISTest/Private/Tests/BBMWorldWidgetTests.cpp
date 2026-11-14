@@ -1,9 +1,14 @@
 #include "Misc/AutomationTest.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
+#include "Misc/ScopeExit.h"
 #include "UI/BBMWorldWidgetTypes.h"
+#include "UI/Widget/BBMLayerRootWidget.h"
 #include "UI/Widget/BBMUserWidgetBase.h"
 #include "UI/BBMWorldUISubsystem.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "UI/ViewModel/BBMViewModelBase.h"
 #include "UI/ViewModel/BBMSingleAnimTransition.h"
 #include "UI/ViewModel/BBMDualAnimTransition.h"
@@ -48,7 +53,7 @@ struct FBBMWidgetScopedTestWorld
 	}
 };
 
-// 1. EBBMWidgetZOrder 레이어 값 및 10 간격 일관성 검증
+// 1. EBBMWidgetZOrder 순차 레이어 값(0~6) 일관성 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMWidgetZOrderEnumTest,
 	"DIS.BBM.WorldWidget.ZOrderEnumValues",
@@ -58,17 +63,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FBBMWidgetZOrderEnumTest::RunTest(const FString& Parameters)
 {
 	TestEqual(TEXT("Background 레이어 값은 0이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::Background), 0);
-	TestEqual(TEXT("Base 레이어 값은 10이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::Base), 10);
-	TestEqual(TEXT("Content 레이어 값은 20이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::Content), 20);
-	TestEqual(TEXT("Popup 레이어 값은 30이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::Popup), 30);
-	TestEqual(TEXT("Notification 레이어 값은 40이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::Notification), 40);
-	TestEqual(TEXT("FadeLoading 레이어 값은 50이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::FadeLoading), 50);
-	TestEqual(TEXT("System 레이어 값은 60이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::System), 60);
+	TestEqual(TEXT("Base 레이어 값은 1이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::Base), 1);
+	TestEqual(TEXT("Content 레이어 값은 2여야 함"), static_cast<uint8>(EBBMWidgetZOrder::Content), 2);
+	TestEqual(TEXT("Popup 레이어 값은 3이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::Popup), 3);
+	TestEqual(TEXT("Notification 레이어 값은 4여야 함"), static_cast<uint8>(EBBMWidgetZOrder::Notification), 4);
+	TestEqual(TEXT("FadeLoading 레이어 값은 5여야 함"), static_cast<uint8>(EBBMWidgetZOrder::FadeLoading), 5);
+	TestEqual(TEXT("System 레이어 값은 6이어야 함"), static_cast<uint8>(EBBMWidgetZOrder::System), 6);
 
 	// FBBMWorldWidgetConfig / FBBMWorldViewModelConfig / FBBMWorldUIConfig 기본 설정 검증
 	FBBMWorldWidgetConfig DefaultWidgetConfig;
 	TestFalse(TEXT("기본 WidgetConfig의 bOverrideZOrder는 false여야 함"), DefaultWidgetConfig.bOverrideZOrder);
-	TestEqual(TEXT("기본 WidgetConfig의 ZOrderLayer는 Base(10)여야 함"), DefaultWidgetConfig.ZOrderLayer, EBBMWidgetZOrder::Base);
+	TestEqual(TEXT("기본 WidgetConfig의 ZOrderLayer는 Base(1)여야 함"), DefaultWidgetConfig.ZOrderLayer, EBBMWidgetZOrder::Base);
 	TestNull(TEXT("기본 WidgetConfig의 WidgetClass는 nullptr여야 함"), DefaultWidgetConfig.WidgetClass.Get());
 
 	FBBMWorldViewModelConfig DefaultViewModelConfig;
@@ -140,6 +145,8 @@ bool FBBMUserWidgetBaseLifecycleTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+
+	ViewModel->FinishInitialization();
 
 	// FieldNotify 통지 기록용 델리게이트 등록
 	int32 IsOpenNotifyCount = 0;
@@ -318,6 +325,7 @@ bool FBBMWorldUISubsystemTest::RunTest(const FString& Parameters)
 
 	if (HUDWidget != nullptr && HUDViewModel != nullptr)
 	{
+		HUDViewModel->FinishInitialization();
 		TestEqual(TEXT("ZOrder 미지정 시 클래스 기본값(Base) 유지"), HUDWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Base);
 		TestNull(TEXT("수동 연결 전 위젯의 ViewModel은 nullptr"), HUDWidget->GetViewModel());
 
@@ -342,7 +350,7 @@ bool FBBMWorldUISubsystemTest::RunTest(const FString& Parameters)
 	if (NewHUDWidget != nullptr && HUDWidget != nullptr)
 	{
 		TestNotEqual(TEXT("기존 위젯과 다른 새 인스턴스여야 함"), HUDWidget, NewHUDWidget);
-		TestFalse(TEXT("교체된 이전 위젯은 뷰포트에서 분리되었어야 함"), HUDWidget->IsInViewport());
+		TestFalse(TEXT("교체된 이전 위젯은 레이어에서 분리되었어야 함"), HUDWidget->IsInLayer());
 		TestNull(TEXT("교체된 이전 위젯의 ViewModel 참조는 해제되었어야 함"), HUDWidget->GetViewModel());
 		TestEqual(TEXT("명시적으로 지정된 ZOrderLayer(Notification)가 적용되어야 함"), NewHUDWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Notification);
 		TestEqual(TEXT("동일 키 교체 후에도 총 등록 위젯 수는 1이어야 함"), UISS->GetRegisteredWidgetCount(), 1);
@@ -367,6 +375,7 @@ bool FBBMWorldUISubsystemTest::RunTest(const FString& Parameters)
 	UBBMViewModelBase* PairVM = UISS->CreateAndRegisterViewModelByConfig(PairKey, ValidVMConfig);
 	if (PairWidget != nullptr && PairVM != nullptr)
 	{
+		PairVM->FinishInitialization();
 		PairWidget->SetViewModelInstance(PairVM);
 		PairVM->Open();
 	}
@@ -381,14 +390,20 @@ bool FBBMWorldUISubsystemTest::RunTest(const FString& Parameters)
 	ConfigA.bOverrideZOrder = true;
 	ConfigA.ZOrderLayer = EBBMWidgetZOrder::Base;
 	UISS->CreateAndRegisterWidgetByConfig(TEXT("WidgetA"), ConfigA);
-	UISS->CreateAndRegisterViewModelByConfig(TEXT("WidgetA"), ValidVMConfig);
+	if (UBBMViewModelBase* WidgetAVM = UISS->CreateAndRegisterViewModelByConfig(TEXT("WidgetA"), ValidVMConfig))
+	{
+		WidgetAVM->FinishInitialization();
+	}
 
 	FBBMWorldWidgetConfig ConfigB;
 	ConfigB.WidgetClass = UBBMUserWidgetBase::StaticClass();
 	ConfigB.bOverrideZOrder = true;
 	ConfigB.ZOrderLayer = EBBMWidgetZOrder::Popup;
 	UISS->CreateAndRegisterWidgetByConfig(TEXT("WidgetB"), ConfigB);
-	UISS->CreateAndRegisterViewModelByConfig(TEXT("WidgetB"), ValidVMConfig);
+	if (UBBMViewModelBase* WidgetBVM = UISS->CreateAndRegisterViewModelByConfig(TEXT("WidgetB"), ValidVMConfig))
+	{
+		WidgetBVM->FinishInitialization();
+	}
 
 	FBBMWorldWidgetConfig ConfigC;
 	ConfigC.WidgetClass = UBBMUserWidgetBase::StaticClass();
@@ -481,14 +496,32 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FBBMGameModeDesktopCursorTest::RunTest(const FString& Parameters)
 {
-	FBBMWidgetScopedTestWorld TestWorld;
-	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
-	if (TestWorld.World == nullptr)
+	UGameInstance* TestGameInstance = NewObject<UGameInstance>(GEngine);
+	TestNotNull(TEXT("테스트용 UGameInstance 생성 성공"), TestGameInstance);
+	if (TestGameInstance == nullptr)
 	{
 		return false;
 	}
 
-	APlayerController* TestPC = TestWorld.World->SpawnActor<APlayerController>();
+	TestGameInstance->InitializeStandalone();
+	UWorld* TestWorld = TestGameInstance->GetWorld();
+	TestNotNull(TEXT("테스트 월드가 유효해야 함"), TestWorld);
+	if (TestWorld == nullptr)
+	{
+		TestGameInstance->Shutdown();
+		return false;
+	}
+
+	ON_SCOPE_EXIT
+	{
+		TestGameInstance->Shutdown();
+		GEngine->DestroyWorldContext(TestWorld);
+		TestWorld->DestroyWorld(false);
+	};
+
+	TestWorld->InitializeActorsForPlay(FURL());
+
+	APlayerController* TestPC = TestWorld->SpawnActor<APlayerController>();
 	TestNotNull(TEXT("기본 APlayerController 스폰 성공"), TestPC);
 	if (TestPC == nullptr)
 	{
@@ -497,14 +530,14 @@ bool FBBMGameModeDesktopCursorTest::RunTest(const FString& Parameters)
 
 	TestFalse(TEXT("초기 기본 APlayerController의 마우스 커서는 비표시 상태여야 함"), TestPC->ShouldShowMouseCursor());
 
-	ABBMTitleGameMode* TitleGameMode = TestWorld.World->SpawnActor<ABBMTitleGameMode>();
+	ABBMTitleGameMode* TitleGameMode = TestWorld->SpawnActor<ABBMTitleGameMode>();
 	TestNotNull(TEXT("테스트용 ABBMTitleGameMode 스폰 성공"), TitleGameMode);
 	if (TitleGameMode == nullptr)
 	{
 		return false;
 	}
 
-	TestEqual(TEXT("World->GetFirstPlayerController()가 스폰한 PC를 반환해야 함"), TestWorld.World->GetFirstPlayerController(), TestPC);
+	TestEqual(TEXT("World->GetFirstPlayerController()가 스폰한 PC를 반환해야 함"), TestWorld->GetFirstPlayerController(), TestPC);
 
 	TitleGameMode->DispatchBeginPlay(true);
 
@@ -539,6 +572,8 @@ bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters
 	{
 		return false;
 	}
+
+	ViewModel->FinishInitialization();
 
 	int32 IsOpenNotifyCount = 0;
 	int32 IsShowingNotifyCount = 0;
@@ -1086,6 +1121,189 @@ bool FBBMWidgetAnimConfigCacheTest::RunTest(const FString& Parameters)
 	Config.AnimationName = FName(TEXT("ParentAlt"));
 	TestNull(TEXT("OtherWidget에는 ParentAlt 애님이 없으므로 nullptr 반환"), Config.GetAnimation(OtherWidget));
 	TestEqual(TEXT("ParentWidgetA에서 변경된 이름 ParentAlt 탐색 성공"), Config.GetAnimation(ParentWidgetA), ParentAltAnim);
+
+	return true;
+}
+
+// 9. 루트 레이어 위젯(UCanvasPanel), AddToLayer, BringToLayerTop, PersistentViewport 재오픈 승격 및 자동 ZOrder 정규화 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMWorldUILayerManagementTest,
+	"DIS.BBM.WorldWidget.LayerAndZOrderNormalization",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMWorldUILayerManagementTest::RunTest(const FString& Parameters)
+{
+	// 1. EBBMWidgetZOrder 7개 레이어별 독립 UCanvasPanel 및 루트 ZOrder(0~6) 생성 검증
+	{
+		FBBMWidgetScopedTestWorld ProbeWorld;
+		TestTrue(TEXT("프로브 테스트 월드가 유효해야 함"), ProbeWorld.World != nullptr);
+		if (ProbeWorld.World == nullptr)
+		{
+			return false;
+		}
+
+		const TArray<EBBMWidgetZOrder> ExpectedLayers = {
+			EBBMWidgetZOrder::Background,
+			EBBMWidgetZOrder::Base,
+			EBBMWidgetZOrder::Content,
+			EBBMWidgetZOrder::Popup,
+			EBBMWidgetZOrder::Notification,
+			EBBMWidgetZOrder::FadeLoading,
+			EBBMWidgetZOrder::System
+		};
+
+		TSet<UPanelWidget*> DistinctLayerCanvases;
+		UBBMUserWidgetBase* ProbeWidget = CreateWidget<UBBMUserWidgetBase>(ProbeWorld.World, UBBMUserWidgetBase::StaticClass());
+		TestNotNull(TEXT("프로브 위젯 생성 성공"), ProbeWidget);
+		if (ProbeWidget == nullptr)
+		{
+			return false;
+		}
+
+		for (const EBBMWidgetZOrder Layer : ExpectedLayers)
+		{
+			TestTrue(TEXT("각 EBBMWidgetZOrder 레이어로 AddToLayer 성공해야 함"), ProbeWidget->AddToLayer(Layer));
+			TestTrue(TEXT("AddToLayer 후 IsInLayer는 true여야 함"), ProbeWidget->IsInLayer());
+
+			UCanvasPanel* LayerCanvas = Cast<UCanvasPanel>(ProbeWidget->GetParent());
+			TestNotNull(TEXT("레이어에 추가된 위젯의 부모는 UCanvasPanel이어야 함"), LayerCanvas);
+			if (LayerCanvas != nullptr)
+			{
+				TestFalse(TEXT("각 EBBMWidgetZOrder 레이어는 서로 다른 UCanvasPanel 인스턴스여야 함"), DistinctLayerCanvases.Contains(LayerCanvas));
+				DistinctLayerCanvases.Add(LayerCanvas);
+
+				const UCanvasPanelSlot* LayerSlot = Cast<UCanvasPanelSlot>(LayerCanvas->Slot);
+				TestNotNull(TEXT("레이어 캔버스는 루트 캔버스 슬롯에 배치되어 있어야 함"), LayerSlot);
+				if (LayerSlot != nullptr)
+				{
+					TestEqual(TEXT("레이어 캔버스 루트 ZOrder는 열거형 정수값(0~6)과 일치해야 함"), LayerSlot->GetZOrder(), static_cast<int32>(Layer));
+					TestEqual(TEXT("레이어 캔버스는 전체 화면 앵커를 가져야 함"), LayerSlot->GetAnchors(), FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+				}
+			}
+
+			ProbeWidget->RemoveFromParent();
+			TestFalse(TEXT("RemoveFromParent 후 IsInLayer는 false여야 함"), ProbeWidget->IsInLayer());
+		}
+
+		TestEqual(TEXT("총 7개의 독립 레이어 캔버스가 확인되어야 함"), DistinctLayerCanvases.Num(), ExpectedLayers.Num());
+	}
+
+	FBBMWidgetScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드가 유효해야 함"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	UBBMWorldUISubsystem* UISS = TestWorld.World->GetSubsystem<UBBMWorldUISubsystem>();
+	TestNotNull(TEXT("UBBMWorldUISubsystem 획득 성공 검증"), UISS);
+	if (UISS == nullptr)
+	{
+		return false;
+	}
+
+	// 2. AddToLayer 슬롯 레이아웃, ZOrder 순차 증가 및 중복 부착 방지 검증
+	FBBMWorldWidgetConfig PopupConfig;
+	PopupConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
+	PopupConfig.bOverrideZOrder = true;
+	PopupConfig.ZOrderLayer = EBBMWidgetZOrder::Popup;
+
+	FBBMWorldViewModelConfig VMConfig;
+	VMConfig.ViewModelClass = UBBMTitleViewModel::StaticClass();
+
+	UBBMUserWidgetBase* PopupA = UISS->CreateAndRegisterWidgetByConfig(TEXT("PopupA"), PopupConfig);
+	UBBMUserWidgetBase* PopupB = UISS->CreateAndRegisterWidgetByConfig(TEXT("PopupB"), PopupConfig);
+	UBBMUserWidgetBase* PopupC = UISS->CreateAndRegisterWidgetByConfig(TEXT("PopupC"), PopupConfig);
+	UBBMViewModelBase* VMA = UISS->CreateAndRegisterViewModelByConfig(TEXT("PopupA"), VMConfig);
+	UBBMViewModelBase* VMB = UISS->CreateAndRegisterViewModelByConfig(TEXT("PopupB"), VMConfig);
+
+	TestNotNull(TEXT("PopupA 생성 성공"), PopupA);
+	TestNotNull(TEXT("PopupB 생성 성공"), PopupB);
+	TestNotNull(TEXT("PopupC 생성 성공"), PopupC);
+	if (PopupA == nullptr || PopupB == nullptr || PopupC == nullptr || VMA == nullptr || VMB == nullptr)
+	{
+		return false;
+	}
+
+	VMA->FinishInitialization();
+	VMB->FinishInitialization();
+	PopupA->SetViewModelInstance(VMA);
+	PopupB->SetViewModelInstance(VMB);
+
+	TestFalse(TEXT("최초 부착 전 PopupA IsInLayer는 false여야 함"), PopupA->IsInLayer());
+
+	// PersistentViewport 최초 Open 시 ApplyOpenViewportPresentation에서 AddToLayer 처리
+	VMA->Open();
+	VMB->Open();
+
+	TestTrue(TEXT("Open 후 PopupA IsInLayer는 true여야 함"), PopupA->IsInLayer());
+	TestTrue(TEXT("Open 후 PopupB IsInLayer는 true여야 함"), PopupB->IsInLayer());
+	TestEqual(TEXT("PopupA와 PopupB는 동일한 Popup UCanvasPanel 부모를 공유해야 함"), PopupA->GetParent(), PopupB->GetParent());
+
+	const UCanvasPanelSlot* SlotA = Cast<UCanvasPanelSlot>(PopupA->Slot);
+	const UCanvasPanelSlot* SlotB = Cast<UCanvasPanelSlot>(PopupB->Slot);
+	TestNotNull(TEXT("PopupA 슬롯은 UCanvasPanelSlot이어야 함"), SlotA);
+	TestNotNull(TEXT("PopupB 슬롯은 UCanvasPanelSlot이어야 함"), SlotB);
+	if (SlotA == nullptr || SlotB == nullptr)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("AddToLayer 후 슬롯 Anchors는 전체 스트레치여야 함"), SlotA->GetAnchors(), FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+	TestEqual(TEXT("AddToLayer 후 슬롯 Offsets는 0이어야 함"), SlotA->GetOffsets(), FMargin(0.0f));
+	TestEqual(TEXT("AddToLayer 후 슬롯 Alignment는 0,0이어야 함"), SlotA->GetAlignment(), FVector2D(0.0f, 0.0f));
+	TestFalse(TEXT("AddToLayer 후 슬롯 AutoSize는 false여야 함"), SlotA->GetAutoSize());
+	TestEqual(TEXT("첫 번째 위젯 ZOrder는 0이어야 함"), SlotA->GetZOrder(), 0);
+	TestEqual(TEXT("두 번째 위젯 ZOrder는 1이어야 함"), SlotB->GetZOrder(), 1);
+
+	// 이미 올라간 위젯은 동일/타 레이어로 재추가 불가, RemoveFromParent 후에만 재부착 가능
+	TestFalse(TEXT("이미 레이어에 있는 위젯은 같은 레이어 재추가 불가"), PopupA->AddToLayer(EBBMWidgetZOrder::Popup));
+	TestFalse(TEXT("이미 레이어에 있는 위젯은 다른 레이어 이동 추가 불가"), PopupA->AddToLayer(EBBMWidgetZOrder::Content));
+
+	TestTrue(TEXT("PopupC 레이어 추가 성공"), PopupC->AddToLayer(EBBMWidgetZOrder::Content));
+	TestTrue(TEXT("PopupC 레이어 부착 확인"), PopupC->IsInLayer());
+	PopupC->RemoveFromParent();
+	TestFalse(TEXT("RemoveFromParent 후 PopupC IsInLayer는 false여야 함"), PopupC->IsInLayer());
+
+	// 3. PersistentViewport 닫았다 다시 열 때 최상단 승격(BringToLayerTop) 검증
+	VMA->Close();
+	TestEqual(TEXT("Close 후 PersistentViewport 위젯은 Collapsed여야 함"), PopupA->GetVisibility(), ESlateVisibility::Collapsed);
+	TestTrue(TEXT("Close 후에도 PersistentViewport 위젯은 레이어에 남아 있어야 함"), PopupA->IsInLayer());
+
+	VMA->Open();
+	TestEqual(TEXT("재오픈 후 가시성이 SelfHitTestInvisible로 복구되어야 함"), PopupA->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
+	TestEqual(TEXT("재오픈 후 PopupA ZOrder가 2로 승격되어야 함"), SlotA->GetZOrder(), 2);
+
+	// 이미 최상단인 위젯에 BringToLayerTop 재호출 시 카운터 불변 검증 (다음 추가 슬롯이 3이어야 함)
+	TestTrue(TEXT("이미 최상단인 위젯 BringToLayerTop 호출은 true 반환"), PopupA->BringToLayerTop());
+	TestTrue(TEXT("PopupC를 Popup 레이어에 추가"), PopupC->AddToLayer(EBBMWidgetZOrder::Popup));
+	const UCanvasPanelSlot* SlotC = Cast<UCanvasPanelSlot>(PopupC->Slot);
+	TestNotNull(TEXT("PopupC 슬롯 유효 검증"), SlotC);
+	if (SlotC == nullptr)
+	{
+		return false;
+	}
+	TestEqual(TEXT("이미 최상단 재호출 후 추가된 PopupC ZOrder는 3이어야 함"), SlotC->GetZOrder(), 3);
+
+#if WITH_EDITOR
+	// 4. ZOrder 임계치 도달 시 순서 유지 압축 정규화(예: 1,2,3 -> 0,1,2 후 최상단 3 할당) 검증
+	UISS->SetLayerZOrderMaxThresholdForTesting(4);
+	// 현재 ZOrder: PopupB(1) < PopupA(2) < PopupC(3), 다음 할당값 == Threshold(4)
+	TestTrue(TEXT("임계치 도달 상태에서 PopupB BringToLayerTop 성공"), PopupB->BringToLayerTop());
+	TestEqual(TEXT("정규화 후 PopupA ZOrder는 1이어야 함"), SlotA->GetZOrder(), 1);
+	TestEqual(TEXT("정규화 후 PopupC ZOrder는 2여야 함"), SlotC->GetZOrder(), 2);
+	TestEqual(TEXT("정규화 직후 최상단 승격된 PopupB ZOrder는 3이어야 함"), SlotB->GetZOrder(), 3);
+#endif
+
+	// 5. UBBMWorldUISubsystem이 없는 위젯에서 AddToLayer 호출 시 경고 로그 + false 반환 검증
+	AddExpectedMessagePlain(TEXT("UBBMWorldUISubsystem is unavailable"), ELogVerbosity::Warning, EAutomationExpectedMessageFlags::Contains, 1);
+	UBBMUserWidgetBase* OrphanWidget = NewObject<UBBMUserWidgetBase>(GetTransientPackage());
+	TestNotNull(TEXT("고립 위젯 생성 성공"), OrphanWidget);
+	if (OrphanWidget != nullptr)
+	{
+		TestFalse(TEXT("서브시스템 없는 환경에서 AddToLayer는 false를 반환해야 함"), OrphanWidget->AddToLayer(EBBMWidgetZOrder::Base));
+	}
 
 	return true;
 }

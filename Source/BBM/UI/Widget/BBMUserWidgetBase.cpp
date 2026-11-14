@@ -1,9 +1,11 @@
 #include "UI/Widget/BBMUserWidgetBase.h"
+#include "UI/BBMWorldUISubsystem.h"
 #include "UI/ViewModel/BBMViewModelBase.h"
 #include "UI/ViewModel/BBMSingleAnimTransition.h"
 #include "UI/ViewModel/BBMDualAnimTransition.h"
 #include "Animation/WidgetAnimation.h"
 #include "Animation/WidgetAnimationState.h"
+#include "Engine/World.h"
 #include "View/MVVMView.h"
 
 UBBMUserWidgetBase::UBBMUserWidgetBase(const FObjectInitializer& ObjectInitializer) :
@@ -20,13 +22,12 @@ void UBBMUserWidgetBase::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// 상시 뷰포트 유지 정책인 경우 현재 표시 중이 아니라면 기본 숨김 상태로 뷰포트에 등록
+	// 상시 뷰포트 유지 정책인 경우 현재 표시 중이 아니라면 기본 숨김 상태
 	if (LifecyclePolicy == EBBMWidgetLifecyclePolicy::PersistentViewport)
 	{
 		const bool bIsViewModelShowing = (ViewModel.IsValid() == true && ViewModel->IsShowing() == true);
-		if (IsInViewport() == false && bIsViewModelShowing == false)
+		if (bIsViewModelShowing == false)
 		{
-			TryAddToGameViewport();
 			SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
@@ -134,7 +135,7 @@ void UBBMUserWidgetBase::HandleSingleTransitionRequested(
 		UnbindAllFromAnimationFinished(Anim);
 	}
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (Anim != nullptr) && (IsInViewport() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true) && (Anim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
@@ -177,7 +178,7 @@ void UBBMUserWidgetBase::HandleDualTransitionStartRequested(
 		UnbindAllFromAnimationFinished(StartAnim);
 	}
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (StartAnim != nullptr) && (IsInViewport() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true) && (StartAnim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
@@ -220,7 +221,7 @@ void UBBMUserWidgetBase::HandleDualTransitionEndRequested(
 		UnbindAllFromAnimationFinished(EndAnim);
 	}
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (EndAnim != nullptr) && (IsInViewport() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true) && (EndAnim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
@@ -263,7 +264,7 @@ void UBBMUserWidgetBase::HandleOpenPresentationRequested(bool bWithAnim)
 	OnOpened();
 	BP_OnOpened();
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (StartAnim != nullptr) && (IsInViewport() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true) && (StartAnim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
@@ -298,7 +299,7 @@ void UBBMUserWidgetBase::HandleClosePresentationRequested(bool bWithAnim)
 		UnbindAllFromAnimationFinished(EndAnim);
 	}
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (EndAnim != nullptr) && (IsInViewport() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true) && (EndAnim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
@@ -340,19 +341,74 @@ void UBBMUserWidgetBase::HandleCloseAnimationFinished()
 	}
 }
 
-void UBBMUserWidgetBase::TryAddToGameViewport()
+bool UBBMUserWidgetBase::AddToLayer(EBBMWidgetZOrder InLayer)
 {
-	UWorld* World = GetWorld();
-	if (IsInViewport() == false && World != nullptr && World->IsGameWorld() == true && World->GetGameViewport() != nullptr)
+	// 이미 뷰포트 또는 레이어 위에 존재하면 중복 등록 및 타 레이어 이동을 허용하지 않음
+	if (IsInLayer() == true)
 	{
-		AddToViewport(static_cast<int32>(DefaultZOrderLayer));
+		return false;
 	}
+
+	UBBMWorldUISubsystem* UIWorldSubsystem = ResolveWorldUISubsystem();
+	if (UIWorldSubsystem == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMUserWidgetBase::AddToLayer] UBBMWorldUISubsystem is unavailable."));
+		return false;
+	}
+
+	return UIWorldSubsystem->AddWidgetToLayer(this, InLayer);
+}
+
+bool UBBMUserWidgetBase::BringToLayerTop()
+{
+	UBBMWorldUISubsystem* UIWorldSubsystem = ResolveWorldUISubsystem();
+	if (UIWorldSubsystem == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMUserWidgetBase::BringToLayerTop] UBBMWorldUISubsystem is unavailable."));
+		return false;
+	}
+
+	return UIWorldSubsystem->BringWidgetToLayerTop(this);
+}
+
+bool UBBMUserWidgetBase::IsInLayer() const
+{
+	if (IsInViewport() == true)
+	{
+		return true;
+	}
+
+	const UBBMWorldUISubsystem* UIWorldSubsystem = ResolveWorldUISubsystem();
+	return (UIWorldSubsystem != nullptr) && (UIWorldSubsystem->IsWidgetInAnyLayer(this) == true);
+}
+
+UBBMWorldUISubsystem* UBBMUserWidgetBase::ResolveWorldUISubsystem() const
+{
+	const UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return nullptr;
+	}
+
+	return World->GetSubsystem<UBBMWorldUISubsystem>();
 }
 
 void UBBMUserWidgetBase::ApplyOpenViewportPresentation()
 {
-	TryAddToGameViewport();
-	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (IsInLayer() == false)
+	{
+		AddToLayer(DefaultZOrderLayer);
+	}
+	else if (LifecyclePolicy == EBBMWidgetLifecyclePolicy::PersistentViewport)
+	{
+		// 재오픈 시 동일 레이어 캔버스 내 형제 위젯들보다 상위에 배치되도록 ZOrder를 최상단으로 승격함
+		BringToLayerTop();
+	}
+
+	if (LifecyclePolicy == EBBMWidgetLifecyclePolicy::PersistentViewport)
+	{
+		SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
 }
 
 void UBBMUserWidgetBase::ApplyCloseViewportPresentation()
@@ -361,9 +417,9 @@ void UBBMUserWidgetBase::ApplyCloseViewportPresentation()
 	{
 		SetVisibility(ESlateVisibility::Collapsed);
 	}
-	else if (LifecyclePolicy == EBBMWidgetLifecyclePolicy::DynamicDetach)
+	else
 	{
-		if (IsInViewport() == true)
+		if (IsInLayer() == true)
 		{
 			RemoveFromParent();
 		}

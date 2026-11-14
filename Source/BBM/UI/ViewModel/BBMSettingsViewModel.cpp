@@ -73,7 +73,7 @@ void UBBMSettingsViewModel::SetMasterVolume(float InMasterVolume)
 	const float ClampedVolume = FMath::Clamp(InMasterVolume, 0.0f, 1.0f);
 	CachedCurrentSettings.MasterVolume = ClampedVolume;
 
-	if (UE_MVVM_SET_PROPERTY_VALUE(MasterVolume, InMasterVolume) == false)
+	if (UE_MVVM_SET_PROPERTY_VALUE(MasterVolume, ClampedVolume) == false)
 	{
 		return;
 	}
@@ -94,7 +94,7 @@ void UBBMSettingsViewModel::SetBGMVolume(float InBGMVolume)
 	const float ClampedVolume = FMath::Clamp(InBGMVolume, 0.0f, 1.0f);
 	CachedCurrentSettings.BGMVolume = ClampedVolume;
 
-	if (UE_MVVM_SET_PROPERTY_VALUE(BGMVolume, InBGMVolume) == false)
+	if (UE_MVVM_SET_PROPERTY_VALUE(BGMVolume, ClampedVolume) == false)
 	{
 		return;
 	}
@@ -115,7 +115,7 @@ void UBBMSettingsViewModel::SetSFXVolume(float InSFXVolume)
 	const float ClampedVolume = FMath::Clamp(InSFXVolume, 0.0f, 1.0f);
 	CachedCurrentSettings.SFXVolume = ClampedVolume;
 
-	if (UE_MVVM_SET_PROPERTY_VALUE(SFXVolume, InSFXVolume) == false)
+	if (UE_MVVM_SET_PROPERTY_VALUE(SFXVolume, ClampedVolume) == false)
 	{
 		return;
 	}
@@ -136,7 +136,7 @@ void UBBMSettingsViewModel::SetDialogueVolume(float InDialogueVolume)
 	const float ClampedVolume = FMath::Clamp(InDialogueVolume, 0.0f, 1.0f);
 	CachedCurrentSettings.DialogueVolume = ClampedVolume;
 
-	if (UE_MVVM_SET_PROPERTY_VALUE(DialogueVolume, InDialogueVolume) == false)
+	if (UE_MVVM_SET_PROPERTY_VALUE(DialogueVolume, ClampedVolume) == false)
 	{
 		return;
 	}

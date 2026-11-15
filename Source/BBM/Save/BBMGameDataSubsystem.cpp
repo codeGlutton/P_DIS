@@ -114,49 +114,8 @@ UBBMRunSaveGame* UBBMGameDataSubsystem::GetCurrentRunData() const
 	return CurrentRunData;
 }
 
-bool UBBMGameDataSubsystem::EnsureSaveDataLoaded()
-{
-	bool bLoadedOrCreated = true;
-
-	if (UserSaveData == nullptr)
-	{
-		UserSaveData = NewObject<UBBMUserSaveGame>(this, UBBMUserSaveGame::StaticClass());
-		RestoreFromBackupIfNeeded(UBBMUserSaveGame::SlotName);
-		if (UGameplayStatics::DoesSaveGameExist(UBBMUserSaveGame::SlotName, UBBMUserSaveGame::UserIndex) == true)
-		{
-			if (USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(UBBMUserSaveGame::SlotName, UBBMUserSaveGame::UserIndex))
-			{
-				if (UBBMUserSaveGame* CastedUser = Cast<UBBMUserSaveGame>(Loaded))
-				{
-					UserSaveData = CastedUser;
-				}
-			}
-		}
-	}
-
-	if (CurrentRunData == nullptr)
-	{
-		CurrentRunData = NewObject<UBBMRunSaveGame>(this, UBBMRunSaveGame::StaticClass());
-		RestoreFromBackupIfNeeded(UBBMRunSaveGame::SlotName);
-		if (UGameplayStatics::DoesSaveGameExist(UBBMRunSaveGame::SlotName, UBBMRunSaveGame::UserIndex) == true)
-		{
-			if (USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(UBBMRunSaveGame::SlotName, UBBMRunSaveGame::UserIndex))
-			{
-				if (UBBMRunSaveGame* CastedRun = Cast<UBBMRunSaveGame>(Loaded))
-				{
-					CurrentRunData = CastedRun;
-				}
-			}
-		}
-	}
-
-	return bLoadedOrCreated;
-}
-
 void UBBMGameDataSubsystem::ResetAndInitializeNewRun(const UBBMPlayerCharacterDefinition* PlayerDef)
 {
-	EnsureSaveDataLoaded();
-
 	if (CurrentRunData != nullptr)
 	{
 		CurrentRunData->ResetRunData();
@@ -521,6 +480,15 @@ void UBBMGameDataSubsystem::SaveGameAsyncInternal(
 	}
 
 	bIsAsyncOperationInProgress = true;
+	if (OnSaveStartedNative.IsBound() == true)
+	{
+		OnSaveStartedNative.Broadcast();
+	}
+	if (OnSaveStarted.IsBound() == true)
+	{
+		OnSaveStarted.Broadcast();
+	}
+
 	const TWeakObjectPtr<UBBMGameDataSubsystem> WeakThis(this);
 
 	// 2. [백그라운드 스레드] 파일 시스템 I/O 순차 실행: (sav 확인 -> bak 복제) -> (새 바이트 데이터를 sav로 파일 쓰기)
@@ -553,9 +521,17 @@ void UBBMGameDataSubsystem::SaveGameAsyncInternal(
 		// 3. [메인 스레드] 완료 통보 및 상태 플래그 해제
 		Async(EAsyncExecution::TaskGraphMainThread, [WeakThis, OnComplete, bSaved]()
 		{
-			if (WeakThis.IsValid())
+			if (WeakThis.IsValid() == true)
 			{
 				WeakThis->bIsAsyncOperationInProgress = false;
+				if (WeakThis->OnSaveCompletedNative.IsBound() == true)
+				{
+					WeakThis->OnSaveCompletedNative.Broadcast(bSaved);
+				}
+				if (WeakThis->OnSaveCompleted.IsBound() == true)
+				{
+					WeakThis->OnSaveCompleted.Broadcast(bSaved);
+				}
 			}
 			if (OnComplete)
 			{

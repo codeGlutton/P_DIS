@@ -120,19 +120,19 @@ protected:
 	/**
 	 * 오픈 애니메이션 완료 시(애니메이션 미설정 시 즉시) 호출되는 C++ 가상 함수
 	 */
-	virtual void OnFinishOpenAnim();
+	virtual void OnFinishOpenAnim(bool bInterrupted);
 
 	/**
 	 * 클로즈 애니메이션 완료 시(애니메이션 미설정 시 즉시) 호출되는 C++ 가상 함수
 	 */
-	virtual void OnFinishCloseAnim();
+	virtual void OnFinishCloseAnim(bool bInterrupted);
 
 	/* 내부 전환 모듈 연동 핸들러 */
 private:
-	void HandleTransitionOpenStarted();
-	void HandleTransitionCloseStarted();
-	void HandleTransitionOpenFinished();
-	void HandleTransitionCloseFinished();
+	void HandleTransitionOpenStarted(bool bWithAnim);
+	void HandleTransitionCloseStarted(bool bWithAnim);
+	void HandleTransitionOpenFinished(bool bInterrupted);
+	void HandleTransitionCloseFinished(bool bInterrupted);
 	void HandleTransitionStateChanged(UObject* InObject, UE::FieldNotification::FFieldId InFieldId);
 	void HandleTransitionStartedChanged(UObject* InObject, UE::FieldNotification::FFieldId InFieldId);
 	void HandleTransitionActiveChanged(UObject* InObject, UE::FieldNotification::FFieldId InFieldId);

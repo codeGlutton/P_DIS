@@ -12,8 +12,6 @@
 #include "UI/BBMWorldWidgetTypes.h"
 #include "BBMSingleAnimTransition.generated.h"
 
-DECLARE_MULTICAST_DELEGATE_OneParam(FBBMOnSingleAnimTransitionStartedNativeSignature, bool /*bWithAnim*/);
-
 /**
  * 단일 UI 애니메이션의 상태(FieldNotify), 대기 콜백 및 위젯 핸드셰이크를 전담하는 경량 MVVM 모듈
  */
@@ -70,13 +68,13 @@ public:
 	);
 
 	/**
-	 * 대기 중인 완료 콜백을 모두 폐기하고 상태를 Idle로 초기화함
+	 * 진행 중이던 전환을 중단 처리하고 대기 콜백에 중단 여부(bInterrupted=true)를 통지한 뒤 상태를 Idle로 초기화함
 	 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|MVVM")
 	void Clear();
 
 	/**
-	 * 현재 상태를 유지한 채 대기 중인 완료 콜백 목록만 비움
+	 * 상태 및 훅 통지 없이 대기 중인 완료 콜백 목록만 비움
 	 */
 	void ClearPendingCallbacks();
 
@@ -117,7 +115,8 @@ public:
 	 */
 	static void InvokeCallbacksImmediate(
 		FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-		FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
+		FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete,
+		bool bInterrupted = false
 	);
 
 	/* 내부 실행 헬퍼 */
@@ -131,30 +130,32 @@ private:
 		FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
 	);
 
+	void FinishTransitionInternal(bool bInterrupted);
+
 	void EnqueuePendingCallbacks(
 		FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
 		FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
 	);
 
-	void ExecutePendingCallbacks();
+	void ExecutePendingCallbacks(bool bInterrupted);
 
 	/* C++ 컴포짓 조합용 네이티브 이벤트 */
 public:
 	/* Idle -> Playing 전이 직후 발송되는 시작 훅 */
-	FBBMOnSingleAnimTransitionStartedNativeSignature OnTransitionStartedNative;
+	FBBMOnAnimTransitionStartedNativeSignature OnTransitionStartedNative;
 
 	/* Playing -> Idle 상태 전이 직후, 누적 사용자 콜백 실행 직전에 발송되는 완료 훅 */
-	FSimpleMulticastDelegate OnFinishedBeforeCallbacksNative;
+	FBBMOnAnimTransitionFinishedNativeSignature OnFinishedBeforeCallbacksNative;
 
 	/* 블루프린트 연동용 동적 멀티캐스트 대리자 */
 public:
 	/* Idle -> Playing 전이 직후 발송되는 시작 블루프린트 이벤트 */
 	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|MVVM|Event")
-	FBBMOnSingleAnimTransitionStartedDynamicSignature OnTransitionStarted;
+	FBBMOnTransitionStartedDynamicSignature OnTransitionStarted;
 
 	/* Playing -> Idle 전이 직후, 대기 콜백 실행 직전에 발송되는 완료 블루프린트 이벤트 */
 	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|MVVM|Event")
-	FBBMOnTransitionEventDynamicSignature OnTransitionFinished;
+	FBBMOnTransitionFinishedDynamicSignature OnTransitionFinished;
 
 	/* 멤버 변수 */
 private:

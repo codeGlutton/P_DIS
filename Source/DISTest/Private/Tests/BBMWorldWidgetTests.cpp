@@ -13,6 +13,9 @@
 #include "UI/ViewModel/BBMSingleAnimTransition.h"
 #include "UI/ViewModel/BBMDualAnimTransition.h"
 #include "UI/ViewModel/BBMTitleViewModel.h"
+#include "UI/ViewModel/BBMSettingsViewModel.h"
+#include "UI/ViewModel/BBMCharacterSelectViewModel.h"
+#include "UI/ViewModel/BBMCreditsViewModel.h"
 #include "Level/BBMGameModeBase.h"
 #include "Level/BBMTitleGameMode.h"
 #include "Level/BBMStageGameMode.h"
@@ -20,12 +23,37 @@
 #include "GameFramework/PlayerController.h"
 #include "Level/BBMCameraActorBase.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/NamedSlot.h"
 #include "Animation/WidgetAnimation.h"
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "MovieScene.h"
 #include "UObject/StrongObjectPtr.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+
+namespace
+{
+	/**
+	 * 범용 테스트에서 UBBMTitleViewModel 초기화 전 필수 서브 ViewModel 3종을 주입하는 헬퍼
+	 */
+	void PrepareTitleSubViewModels(UObject* Outer, UBBMViewModelBase* BaseVM)
+	{
+		UBBMTitleViewModel* TitleVM = Cast<UBBMTitleViewModel>(BaseVM);
+		if (Outer == nullptr || TitleVM == nullptr)
+		{
+			return;
+		}
+
+		UBBMSettingsViewModel* SettingsVM = NewObject<UBBMSettingsViewModel>(Outer);
+		UBBMCharacterSelectViewModel* CharacterSelectVM = NewObject<UBBMCharacterSelectViewModel>(Outer);
+		UBBMCreditsViewModel* CreditsVM = NewObject<UBBMCreditsViewModel>(Outer);
+
+		TitleVM->SetSettingsViewModel(SettingsVM);
+		TitleVM->SetCharacterSelectViewModel(CharacterSelectVM);
+		TitleVM->SetCreditsViewModel(CreditsVM);
+	}
+}
 
 struct FBBMWidgetScopedTestWorld
 {
@@ -146,6 +174,7 @@ bool FBBMUserWidgetBaseLifecycleTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
+	PrepareTitleSubViewModels(TestWorld.World, ViewModel);
 	ViewModel->FinishInitialization();
 
 	// FieldNotify 통지 기록용 델리게이트 등록
@@ -220,9 +249,9 @@ bool FBBMUserWidgetBaseLifecycleTest::RunTest(const FString& Parameters)
 
 	// 3. 애니메이션이 없는 상태에서 OpenWithAnim 즉시 완료 검증
 	bool bOpenCallbackFired = false;
-	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bOpenCallbackFired]()
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bOpenCallbackFired](bool bInterrupted)
 	{
-		bOpenCallbackFired = true;
+		bOpenCallbackFired = (bInterrupted == false);
 	}));
 	TestTrue(TEXT("OpenWithAnim 호출 시 애니메이션이 없으면 즉시 완료 대리자 호출됨"), bOpenCallbackFired);
 	TestTrue(TEXT("OpenWithAnim 호출 후 IsOpen은 true여야 함"), ViewModel->IsOpen());
@@ -230,9 +259,9 @@ bool FBBMUserWidgetBaseLifecycleTest::RunTest(const FString& Parameters)
 
 	// 4. 애니메이션이 없는 상태에서 CloseWithAnim 즉시 완료 검증
 	bool bCloseCallbackFired = false;
-	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bCloseCallbackFired]()
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bCloseCallbackFired](bool bInterrupted)
 	{
-		bCloseCallbackFired = true;
+		bCloseCallbackFired = (bInterrupted == false);
 	}));
 	TestTrue(TEXT("CloseWithAnim 호출 시 애니메이션이 없으면 즉시 완료 대리자 호출됨"), bCloseCallbackFired);
 	TestFalse(TEXT("CloseWithAnim 호출 후 IsOpen은 false여야 함"), ViewModel->IsOpen());
@@ -241,17 +270,17 @@ bool FBBMUserWidgetBaseLifecycleTest::RunTest(const FString& Parameters)
 	// 5. View가 없는 헤드리스 상태에서도 OpenWithAnim/CloseWithAnim 즉시 완료 검증
 	Widget->SetViewModelInstance(nullptr);
 	bool bHeadlessOpenFired = false;
-	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bHeadlessOpenFired]()
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bHeadlessOpenFired](bool bInterrupted)
 	{
-		bHeadlessOpenFired = true;
+		bHeadlessOpenFired = (bInterrupted == false);
 	}));
 	TestTrue(TEXT("헤드리스 OpenWithAnim 즉시 완료 검증"), bHeadlessOpenFired);
 	TestTrue(TEXT("헤드리스 OpenWithAnim 후 IsOpen은 true"), ViewModel->IsOpen());
 
 	bool bHeadlessCloseFired = false;
-	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bHeadlessCloseFired]()
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bHeadlessCloseFired](bool bInterrupted)
 	{
-		bHeadlessCloseFired = true;
+		bHeadlessCloseFired = (bInterrupted == false);
 	}));
 	TestTrue(TEXT("헤드리스 CloseWithAnim 즉시 완료 검증"), bHeadlessCloseFired);
 	TestFalse(TEXT("헤드리스 CloseWithAnim 후 IsOpen은 false"), ViewModel->IsOpen());
@@ -325,6 +354,7 @@ bool FBBMWorldUISubsystemTest::RunTest(const FString& Parameters)
 
 	if (HUDWidget != nullptr && HUDViewModel != nullptr)
 	{
+		PrepareTitleSubViewModels(TestWorld.World, HUDViewModel);
 		HUDViewModel->FinishInitialization();
 		TestEqual(TEXT("ZOrder 미지정 시 클래스 기본값(Base) 유지"), HUDWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Base);
 		TestNull(TEXT("수동 연결 전 위젯의 ViewModel은 nullptr"), HUDWidget->GetViewModel());
@@ -375,6 +405,7 @@ bool FBBMWorldUISubsystemTest::RunTest(const FString& Parameters)
 	UBBMViewModelBase* PairVM = UISS->CreateAndRegisterViewModelByConfig(PairKey, ValidVMConfig);
 	if (PairWidget != nullptr && PairVM != nullptr)
 	{
+		PrepareTitleSubViewModels(TestWorld.World, PairVM);
 		PairVM->FinishInitialization();
 		PairWidget->SetViewModelInstance(PairVM);
 		PairVM->Open();
@@ -392,6 +423,7 @@ bool FBBMWorldUISubsystemTest::RunTest(const FString& Parameters)
 	UISS->CreateAndRegisterWidgetByConfig(TEXT("WidgetA"), ConfigA);
 	if (UBBMViewModelBase* WidgetAVM = UISS->CreateAndRegisterViewModelByConfig(TEXT("WidgetA"), ValidVMConfig))
 	{
+		PrepareTitleSubViewModels(TestWorld.World, WidgetAVM);
 		WidgetAVM->FinishInitialization();
 	}
 
@@ -402,6 +434,7 @@ bool FBBMWorldUISubsystemTest::RunTest(const FString& Parameters)
 	UISS->CreateAndRegisterWidgetByConfig(TEXT("WidgetB"), ConfigB);
 	if (UBBMViewModelBase* WidgetBVM = UISS->CreateAndRegisterViewModelByConfig(TEXT("WidgetB"), ValidVMConfig))
 	{
+		PrepareTitleSubViewModels(TestWorld.World, WidgetBVM);
 		WidgetBVM->FinishInitialization();
 	}
 
@@ -573,6 +606,7 @@ bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters
 		return false;
 	}
 
+	PrepareTitleSubViewModels(TestWorld.World, ViewModel);
 	ViewModel->FinishInitialization();
 
 	int32 IsOpenNotifyCount = 0;
@@ -630,9 +664,9 @@ bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters
 
 	// 1. Closed 상태에서 CloseWithAnim 요청 시 CloseHandler 재실행 없이 콜백만 즉시 처리
 	bool bClosedImmediateCallbackFired = false;
-	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bClosedImmediateCallbackFired]()
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bClosedImmediateCallbackFired](bool bInterrupted)
 	{
-		bClosedImmediateCallbackFired = true;
+		bClosedImmediateCallbackFired = (bInterrupted == false);
 	}));
 	TestTrue(TEXT("Closed 상태에서 CloseWithAnim 콜백은 즉시 실행되어야 함"), bClosedImmediateCallbackFired);
 	TestEqual(TEXT("Closed 상태에서 CloseWithAnim 호출 시 CloseHandler가 호출되면 안 됨"), CloseHandlerCallCount, 0);
@@ -641,9 +675,12 @@ bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters
 
 	// 2. Opening 진입 및 Opening 중 OpenWithAnim 다중 호출 시 콜백만 누적 검증
 	TArray<int32> OpenCallbackOrder;
-	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&OpenCallbackOrder]()
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&OpenCallbackOrder](bool bInterrupted)
 	{
-		OpenCallbackOrder.Add(1);
+		if (bInterrupted == false)
+		{
+			OpenCallbackOrder.Add(1);
+		}
 	}));
 	TestEqual(TEXT("첫 OpenWithAnim 후 OpenState는 Starting이어야 함"), ViewModel->GetOpenState(), EBBMDualAnimState::Starting);
 	TestTrue(TEXT("Opening 상태에서 IsOpen은 true여야 함"), ViewModel->IsOpen());
@@ -653,13 +690,19 @@ bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters
 	TestEqual(TEXT("OpenHandler는 1회 호출되어야 함"), OpenHandlerCallCount, 1);
 	TestEqual(TEXT("애니메이션 완료 전까지 Open 콜백은 아직 실행되면 안 됨"), OpenCallbackOrder.Num(), 0);
 
-	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&OpenCallbackOrder]()
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&OpenCallbackOrder](bool bInterrupted)
 	{
-		OpenCallbackOrder.Add(2);
+		if (bInterrupted == false)
+		{
+			OpenCallbackOrder.Add(2);
+		}
 	}));
-	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&OpenCallbackOrder]()
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&OpenCallbackOrder](bool bInterrupted)
 	{
-		OpenCallbackOrder.Add(3);
+		if (bInterrupted == false)
+		{
+			OpenCallbackOrder.Add(3);
+		}
 	}));
 	TestEqual(TEXT("Opening 중 추가 OpenWithAnim 호출 시 OpenHandler는 재호출되지 않아야 함"), OpenHandlerCallCount, 1);
 	TestEqual(TEXT("추가 요청 시점에도 애니메이션 완료 전까지 콜백 미실행"), OpenCallbackOrder.Num(), 0);
@@ -679,18 +722,21 @@ bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters
 
 	// 4. Open 상태에서 OpenWithAnim 요청 시 재실행 없이 즉시 콜백 처리 검증
 	bool bOpenImmediateCallbackFired = false;
-	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bOpenImmediateCallbackFired]()
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bOpenImmediateCallbackFired](bool bInterrupted)
 	{
-		bOpenImmediateCallbackFired = true;
+		bOpenImmediateCallbackFired = (bInterrupted == false);
 	}));
 	TestTrue(TEXT("Open 상태에서 OpenWithAnim 콜백은 즉시 실행되어야 함"), bOpenImmediateCallbackFired);
 	TestEqual(TEXT("Open 상태에서 OpenWithAnim 호출 시 OpenHandler가 재호출되면 안 됨"), OpenHandlerCallCount, 1);
 
 	// 5. Closing 진입 시 IsOpen == false, IsShowing == true 및 Closing 중 CloseWithAnim 콜백 누적 검증
 	TArray<int32> CloseCallbackOrder;
-	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CloseCallbackOrder]()
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CloseCallbackOrder](bool bInterrupted)
 	{
-		CloseCallbackOrder.Add(1);
+		if (bInterrupted == false)
+		{
+			CloseCallbackOrder.Add(1);
+		}
 	}));
 	TestEqual(TEXT("첫 CloseWithAnim 후 OpenState는 Ending이어야 함"), ViewModel->GetOpenState(), EBBMDualAnimState::Ending);
 	TestFalse(TEXT("Closing 상태에서 IsOpen은 false여야 함"), ViewModel->IsOpen());
@@ -699,9 +745,12 @@ bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters
 	TestEqual(TEXT("Started->Ending 전이 시 IsShowing FieldNotify는 1회 유지"), IsShowingNotifyCount, 1);
 	TestEqual(TEXT("CloseHandler는 1회 호출되어야 함"), CloseHandlerCallCount, 1);
 
-	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CloseCallbackOrder]()
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CloseCallbackOrder](bool bInterrupted)
 	{
-		CloseCallbackOrder.Add(2);
+		if (bInterrupted == false)
+		{
+			CloseCallbackOrder.Add(2);
+		}
 	}));
 	TestEqual(TEXT("Closing 중 추가 CloseWithAnim 호출 시 CloseHandler는 재호출되지 않아야 함"), CloseHandlerCallCount, 1);
 	TestEqual(TEXT("완료 전 Close 콜백 미실행"), CloseCallbackOrder.Num(), 0);
@@ -722,13 +771,19 @@ bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters
 
 	// 7. Opening 중 무애님 Open() 호출(옵션 B) 시 즉시 스냅 및 누적 콜백 일괄 호출 검증
 	int32 SnapOpenCount = 0;
-	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapOpenCount]()
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapOpenCount](bool bInterrupted)
 	{
-		++SnapOpenCount;
+		if (bInterrupted == false)
+		{
+			++SnapOpenCount;
+		}
 	}));
-	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapOpenCount]()
+	ViewModel->OpenWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapOpenCount](bool bInterrupted)
 	{
-		++SnapOpenCount;
+		if (bInterrupted == false)
+		{
+			++SnapOpenCount;
+		}
 	}));
 	TestEqual(TEXT("Opening 스냅 전 콜백 수 0"), SnapOpenCount, 0);
 	ViewModel->Open();
@@ -737,13 +792,19 @@ bool FBBMViewModelTransitionCallbackQueueTest::RunTest(const FString& Parameters
 
 	// 8. Closing 중 무애님 Close() 호출(옵션 B) 시 즉시 스냅 및 누적 콜백 일괄 호출 검증
 	int32 SnapCloseCount = 0;
-	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCloseCount]()
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCloseCount](bool bInterrupted)
 	{
-		++SnapCloseCount;
+		if (bInterrupted == false)
+		{
+			++SnapCloseCount;
+		}
 	}));
-	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCloseCount]()
+	ViewModel->CloseWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCloseCount](bool bInterrupted)
 	{
-		++SnapCloseCount;
+		if (bInterrupted == false)
+		{
+			++SnapCloseCount;
+		}
 	}));
 	TestEqual(TEXT("Closing 스냅 전 콜백 수 0"), SnapCloseCount, 0);
 	ViewModel->Close();
@@ -821,9 +882,12 @@ bool FBBMSingleAnimTransitionTest::RunTest(const FString& Parameters)
 
 	// 1. 비동기 실행 중 다중 콜백 누적 및 NotifyAnimFinished 일괄 실행 검증
 	TArray<int32> CallbackOrder;
-	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CallbackOrder]()
+	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CallbackOrder](bool bInterrupted)
 	{
-		CallbackOrder.Add(1);
+		if (bInterrupted == false)
+		{
+			CallbackOrder.Add(1);
+		}
 	}));
 	TestEqual(TEXT("Execute 후 State는 Playing이어야 함"), SingleTransition->GetState(), EBBMSingleAnimState::Playing);
 	TestTrue(TEXT("Execute 후 IsPlaying은 true여야 함"), SingleTransition->IsPlaying());
@@ -831,9 +895,12 @@ bool FBBMSingleAnimTransitionTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("State FieldNotify 1회"), StateNotifyCount, 1);
 	TestEqual(TEXT("IsPlaying FieldNotify 1회"), IsPlayingNotifyCount, 1);
 
-	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CallbackOrder]()
+	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CallbackOrder](bool bInterrupted)
 	{
-		CallbackOrder.Add(2);
+		if (bInterrupted == false)
+		{
+			CallbackOrder.Add(2);
+		}
 	}));
 	TestEqual(TEXT("Playing 중 재실행 시 Handler는 추가 호출되지 않아야 함"), HandlerCallCount, 1);
 	TestEqual(TEXT("완료 전 콜백 미실행"), CallbackOrder.Num(), 0);
@@ -852,34 +919,56 @@ bool FBBMSingleAnimTransitionTest::RunTest(const FString& Parameters)
 
 	// 2. Playing 중 무애님 Execute(false) 호출 시 즉시 스냅 및 누적 콜백 일괄 호출 검증
 	int32 SnapCount = 0;
-	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCount]()
+	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCount](bool bInterrupted)
 	{
-		++SnapCount;
+		if (bInterrupted == false)
+		{
+			++SnapCount;
+		}
 	}));
-	SingleTransition->Execute(false, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCount]()
+	SingleTransition->Execute(false, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&SnapCount](bool bInterrupted)
 	{
-		++SnapCount;
+		if (bInterrupted == false)
+		{
+			++SnapCount;
+		}
 	}));
 	TestEqual(TEXT("무애님 스냅 후 State는 Idle"), SingleTransition->GetState(), EBBMSingleAnimState::Idle);
 	TestEqual(TEXT("무애님 스냅 후 누적+신규 콜백 2개 실행"), SnapCount, 2);
 
-	// 3. Clear() 호출 시 미실행 콜백 폐기 및 상태 리셋 검증
-	bool bClearedCallbackFired = false;
-	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bClearedCallbackFired]()
+	// 3. Clear() vs ClearPendingCallbacks() 구분: Clear()는 bInterrupted=true 통지, ClearPendingCallbacks()는 무음 폐기
+	int32 ClearCallbackCount = 0;
+	bool bObservedInterruptedOnClear = false;
+	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&ClearCallbackCount, &bObservedInterruptedOnClear](bool bInterrupted)
 	{
-		bClearedCallbackFired = true;
+		++ClearCallbackCount;
+		bObservedInterruptedOnClear = bInterrupted;
 	}));
 	TestEqual(TEXT("Clear 전 Playing 상태"), SingleTransition->GetState(), EBBMSingleAnimState::Playing);
 	SingleTransition->Clear();
 	TestEqual(TEXT("Clear 후 Idle 복귀"), SingleTransition->GetState(), EBBMSingleAnimState::Idle);
+	TestEqual(TEXT("Playing 중 Clear 시 콜백이 1회 호출되어야 함"), ClearCallbackCount, 1);
+	TestTrue(TEXT("Clear 호출 시 콜백 bInterrupted는 true여야 함"), bObservedInterruptedOnClear);
 	SingleTransition->NotifyAnimFinished();
-	TestFalse(TEXT("Clear로 폐기된 콜백은 실행되면 안 됨"), bClearedCallbackFired);
+	TestEqual(TEXT("Clear 이후 추가 NotifyAnimFinished 시 중복 호출되지 않아야 함"), ClearCallbackCount, 1);
+
+	bool bDiscardedCallbackFired = false;
+	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bDiscardedCallbackFired](bool /*bInterrupted*/)
+	{
+		bDiscardedCallbackFired = true;
+	}));
+	SingleTransition->ClearPendingCallbacks();
+	TestEqual(TEXT("ClearPendingCallbacks 후에도 Playing 상태는 유지되어야 함"), SingleTransition->GetState(), EBBMSingleAnimState::Playing);
+	SingleTransition->NotifyAnimFinished();
+	TestFalse(TEXT("ClearPendingCallbacks로 비운 콜백은 실행되면 안 됨"), bDiscardedCallbackFired);
 
 	// 4. Playing 중 ClearPresentationHandler 호출 시 타 소유자 방어 및 즉시 완료 스냅 검증
 	bool bClearedWhilePlayingFired = false;
-	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bClearedWhilePlayingFired]()
+	bool bClearedWhilePlayingInterrupted = true;
+	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bClearedWhilePlayingFired, &bClearedWhilePlayingInterrupted](bool bInterrupted)
 	{
 		bClearedWhilePlayingFired = true;
+		bClearedWhilePlayingInterrupted = bInterrupted;
 	}));
 	TestEqual(TEXT("ClearPresentationHandler 전 Playing 상태"), SingleTransition->GetState(), EBBMSingleAnimState::Playing);
 
@@ -893,12 +982,13 @@ bool FBBMSingleAnimTransitionTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("소유자 해제 후 핸들러 바인딩 해제"), SingleTransition->IsPresentationHandlerBound());
 	TestEqual(TEXT("Playing 중 핸들러 해제 시 Idle로 즉시 완료 확정"), SingleTransition->GetState(), EBBMSingleAnimState::Idle);
 	TestTrue(TEXT("Playing 중 핸들러 해제 시 대기 콜백 즉시 실행"), bClearedWhilePlayingFired);
+	TestFalse(TEXT("핸들러 해제 완료 스냅 시 bInterrupted는 false여야 함"), bClearedWhilePlayingInterrupted);
 
 	// 5. 핸들러 미바인딩(헤드리스) 시 즉시 완료 처리 검증
 	bool bHeadlessFired = false;
-	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bHeadlessFired]()
+	SingleTransition->Execute(true, FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bHeadlessFired](bool bInterrupted)
 	{
-		bHeadlessFired = true;
+		bHeadlessFired = (bInterrupted == false);
 	}));
 	TestTrue(TEXT("핸들러 미바인딩 시 즉시 완료 콜백 호출"), bHeadlessFired);
 	TestEqual(TEXT("핸들러 미바인딩 완료 후 Idle 복귀"), SingleTransition->GetState(), EBBMSingleAnimState::Idle);
@@ -957,14 +1047,18 @@ bool FBBMDualAnimTransitionTest::RunTest(const FString& Parameters)
 	// 1. 콜백 실행 시점에 이미 State == Started 및 OnStartedNative 완료가 선행되어 있는지 검증
 	bool bFinishHookBeforeCallback = false;
 	bool bObservedStartedInsideCallback = false;
-	DualTransition->OnStartedNative.AddLambda([&bFinishHookBeforeCallback]()
+	DualTransition->OnStartedNative.AddLambda([&bFinishHookBeforeCallback](bool bInterrupted)
 	{
-		bFinishHookBeforeCallback = true;
+		if (bInterrupted == false)
+		{
+			bFinishHookBeforeCallback = true;
+		}
 	});
 
-	DualTransition->StartWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([DualTransition, &bFinishHookBeforeCallback, &bObservedStartedInsideCallback]()
+	DualTransition->StartWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([DualTransition, &bFinishHookBeforeCallback, &bObservedStartedInsideCallback](bool bInterrupted)
 	{
-		bObservedStartedInsideCallback = (bFinishHookBeforeCallback == true)
+		bObservedStartedInsideCallback = (bInterrupted == false)
+			&& (bFinishHookBeforeCallback == true)
 			&& (DualTransition->GetState() == EBBMDualAnimState::Started)
 			&& (DualTransition->IsStarted() == true);
 	}));
@@ -972,11 +1066,18 @@ bool FBBMDualAnimTransitionTest::RunTest(const FString& Parameters)
 	DualTransition->NotifyStartTransitionFinished();
 	TestTrue(TEXT("콜백 실행 시점에는 OnStartedNative 및 Started 상태 확정이 완료되어 있어야 함"), bObservedStartedInsideCallback);
 
-	// 2. Ending 도중 Start 전환 요청 시 End 대기 콜백이 취소되는지 검증
-	bool bCanceledEndFired = false;
-	DualTransition->EndWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bCanceledEndFired]()
+	// 2. Ending 도중 Start 전환 요청 시 End 훅/대기 콜백에 bInterrupted == true로 통지되는지 검증
+	int32 CanceledEndCallCount = 0;
+	bool bCanceledEndInterrupted = false;
+	bool bEndedHookInterrupted = false;
+	DualTransition->OnEndedNative.AddLambda([&bEndedHookInterrupted](bool bInterrupted)
 	{
-		bCanceledEndFired = true;
+		bEndedHookInterrupted = bInterrupted;
+	});
+	DualTransition->EndWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&CanceledEndCallCount, &bCanceledEndInterrupted](bool bInterrupted)
+	{
+		++CanceledEndCallCount;
+		bCanceledEndInterrupted = bInterrupted;
 	}));
 	TestEqual(TEXT("Ending 진입 확인"), DualTransition->GetState(), EBBMDualAnimState::Ending);
 	TestFalse(TEXT("Ending 중 IsStarted는 false"), DualTransition->IsStarted());
@@ -984,8 +1085,11 @@ bool FBBMDualAnimTransitionTest::RunTest(const FString& Parameters)
 
 	DualTransition->Start();
 	TestEqual(TEXT("Ending 중 즉시 Start 시 Started 상태 확정"), DualTransition->GetState(), EBBMDualAnimState::Started);
+	TestTrue(TEXT("반대 전환으로 중단 시 OnEndedNative(true)가 호출되어야 함"), bEndedHookInterrupted);
+	TestEqual(TEXT("반대 전환으로 중단된 End 콜백이 1회 호출되어야 함"), CanceledEndCallCount, 1);
+	TestTrue(TEXT("반대 전환으로 중단된 End 콜백 bInterrupted는 true여야 함"), bCanceledEndInterrupted);
 	DualTransition->NotifyEndTransitionFinished();
-	TestFalse(TEXT("Start로 전환되며 취소된 End 콜백은 추후 실행되면 안 됨"), bCanceledEndFired);
+	TestEqual(TEXT("중단된 End의 추가 완료 통지 시 중복 호출되면 안 됨"), CanceledEndCallCount, 1);
 
 	// 3. Clear 호출 시 양방향 초기화 검증
 	DualTransition->Clear();
@@ -994,9 +1098,9 @@ bool FBBMDualAnimTransitionTest::RunTest(const FString& Parameters)
 
 	// 4. Starting/Ending 중 ClearPresentationHandlers 호출 시 완료 확정 및 Started 안정 상태 보존 검증
 	bool bSnapStartedByClear = false;
-	DualTransition->StartWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bSnapStartedByClear]()
+	DualTransition->StartWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bSnapStartedByClear](bool bInterrupted)
 	{
-		bSnapStartedByClear = true;
+		bSnapStartedByClear = (bInterrupted == false);
 	}));
 	TestEqual(TEXT("ClearPresentationHandlers 전 Starting 확인"), DualTransition->GetState(), EBBMDualAnimState::Starting);
 	DualTransition->ClearPresentationHandlers(TestWorld.World);
@@ -1014,15 +1118,66 @@ bool FBBMDualAnimTransitionTest::RunTest(const FString& Parameters)
 		FBBMOnPresentationTransitionRequestedSignature::CreateLambda([](bool) {})
 	);
 	bool bSnapEndedByClear = false;
-	DualTransition->EndWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bSnapEndedByClear]()
+	DualTransition->EndWithAnim(FBBMOnWidgetAnimFinishedSignature::CreateLambda([&bSnapEndedByClear](bool bInterrupted)
 	{
-		bSnapEndedByClear = true;
+		bSnapEndedByClear = (bInterrupted == false);
 	}));
 	TestEqual(TEXT("ClearPresentationHandlers 전 Ending 확인"), DualTransition->GetState(), EBBMDualAnimState::Ending);
 	DualTransition->ClearPresentationHandlers(TestWorld.World);
 	TestEqual(TEXT("Ending 중 핸들러 해제 시 Ended 확정"), DualTransition->GetState(), EBBMDualAnimState::Ended);
 	TestTrue(TEXT("Ending 중 핸들러 해제 시 대기 콜백 실행"), bSnapEndedByClear);
 	TestFalse(TEXT("Ending 완료 확정 후 IsActive는 false"), DualTransition->IsActive());
+
+	// 5. OnStartingNative / OnEndingNative 의 bWithAnim 파라미터 전달 정합성 검증
+	TArray<bool> RecordedStartWithAnimArgs;
+	TArray<bool> RecordedEndWithAnimArgs;
+	DualTransition->OnStartingNative.AddLambda([&RecordedStartWithAnimArgs](bool bWithAnim)
+	{
+		RecordedStartWithAnimArgs.Add(bWithAnim);
+	});
+	DualTransition->OnEndingNative.AddLambda([&RecordedEndWithAnimArgs](bool bWithAnim)
+	{
+		RecordedEndWithAnimArgs.Add(bWithAnim);
+	});
+
+	DualTransition->BindPresentationHandlers(
+		TestWorld.World,
+		FBBMOnPresentationTransitionRequestedSignature::CreateLambda([DualTransition](bool bWithAnim)
+		{
+			if (bWithAnim == false)
+			{
+				DualTransition->NotifyStartTransitionFinished();
+			}
+		}),
+		FBBMOnPresentationTransitionRequestedSignature::CreateLambda([DualTransition](bool bWithAnim)
+		{
+			if (bWithAnim == false)
+			{
+				DualTransition->NotifyEndTransitionFinished();
+			}
+		})
+	);
+
+	DualTransition->StartWithAnim();
+	DualTransition->NotifyStartTransitionFinished();
+	DualTransition->EndWithAnim();
+	DualTransition->NotifyEndTransitionFinished();
+	DualTransition->Start();
+	DualTransition->End();
+
+	TestEqual(TEXT("OnStartingNative 호출 횟수는 2회여야 함"), RecordedStartWithAnimArgs.Num(), 2);
+	if (RecordedStartWithAnimArgs.Num() == 2)
+	{
+		TestTrue(TEXT("StartWithAnim 시 OnStartingNative(true) 전달"), RecordedStartWithAnimArgs[0]);
+		TestFalse(TEXT("Start 시 OnStartingNative(false) 전달"), RecordedStartWithAnimArgs[1]);
+	}
+
+	TestEqual(TEXT("OnEndingNative 호출 횟수는 2회여야 함"), RecordedEndWithAnimArgs.Num(), 2);
+	if (RecordedEndWithAnimArgs.Num() == 2)
+	{
+		TestTrue(TEXT("EndWithAnim 시 OnEndingNative(true) 전달"), RecordedEndWithAnimArgs[0]);
+		TestFalse(TEXT("End 시 OnEndingNative(false) 전달"), RecordedEndWithAnimArgs[1]);
+	}
 
 	return true;
 }
@@ -1094,33 +1249,96 @@ bool FBBMWidgetAnimConfigCacheTest::RunTest(const FString& Parameters)
 
 	// 1. 빈 이름 / nullptr / 비-WBGC 위젯 방어 검증
 	TestNull(TEXT("AnimationName이 NAME_None이면 nullptr 반환"), Config.GetAnimation(ParentWidgetA));
+	TestNull(TEXT("AnimationName이 NAME_None이면 GetOwnerWidget도 nullptr 반환"), Config.GetOwnerWidget(ParentWidgetA));
 	Config.AnimationName = FName(TEXT("ParentFade"));
 	TestNull(TEXT("nullptr 위젯 전달 시 nullptr 반환"), Config.GetAnimation(nullptr));
+	TestNull(TEXT("nullptr 위젯 전달 시 GetOwnerWidget은 nullptr 반환"), Config.GetOwnerWidget(nullptr));
 	TestNull(TEXT("비-WBGC 네이티브 위젯 전달 시 nullptr 반환"), Config.GetAnimation(NativeWidget));
 
-	// 2. 최초 탐색 및 동일 WBGC·상속 ChildWBGC 캐시 히트 검증
+	// 2. 최초 탐색 및 동일 TargetWidget 캐시 히트 / 타 인스턴스 캐시 미스 검증
 	TestEqual(TEXT("최초 조회 시 ParentFadeAnim 탐색 성공"), Config.GetAnimation(ParentWidgetA), ParentFadeAnim);
+	TestEqual(TEXT("최초 조회 시 OwnerWidget은 ParentWidgetA"), Config.GetOwnerWidget(ParentWidgetA), static_cast<UUserWidget*>(ParentWidgetA));
 
-	// WBGC->Animations를 임시로 비워 캐시 히트 여부를 직접 검증
+	// WBGC->Animations를 임시로 비워 TargetWidget 기준 캐시 히트/미스 여부를 직접 검증
 	TArray<TObjectPtr<UWidgetAnimation>> SavedParentAnims = ParentWBGC->Animations;
 	ParentWBGC->Animations.Empty();
 
-	TestEqual(TEXT("동일 위젯 재호출 시 캐시 히트 유지"), Config.GetAnimation(ParentWidgetA), ParentFadeAnim);
-	TestEqual(TEXT("같은 WBGC 다른 위젯 인스턴스도 캐시 히트 유지"), Config.GetAnimation(ParentWidgetB), ParentFadeAnim);
-	TestEqual(TEXT("부모 WBGC 애님 캐시는 자식 WBGC 위젯에서도 IsChildOf로 캐시 히트"), Config.GetAnimation(ChildWidget), ParentFadeAnim);
+	TestEqual(TEXT("동일 TargetWidget(ParentWidgetA) 재호출 시 캐시 히트 유지"), Config.GetAnimation(ParentWidgetA), ParentFadeAnim);
+	TestEqual(TEXT("동일 TargetWidget 재호출 시 OwnerWidget 캐시 히트 유지"), Config.GetOwnerWidget(ParentWidgetA), static_cast<UUserWidget*>(ParentWidgetA));
+	TestNull(TEXT("다른 위젯 인스턴스(ParentWidgetB)는 TargetWidget 불일치로 캐시 미스 발생"), Config.GetAnimation(ParentWidgetB));
+
+	ParentWBGC->Animations = MoveTemp(SavedParentAnims);
+	TestEqual(TEXT("복구 후 ParentWidgetB 재탐색 성공"), Config.GetAnimation(ParentWidgetB), ParentFadeAnim);
+	TestEqual(TEXT("ParentWidgetB 탐색 시 OwnerWidget은 ParentWidgetB"), Config.GetOwnerWidget(ParentWidgetB), static_cast<UUserWidget*>(ParentWidgetB));
 
 	// 3. 캐시 무효화 후 ChildWidget에서 GetSuperClass() 순회로 부모 애님 탐색 검증
 	Config.InvalidateCachedAnimation();
-	ParentWBGC->Animations = MoveTemp(SavedParentAnims);
 	TestEqual(TEXT("캐시 무효화 후 ChildWidget에서 부모 WBGC 애님 계층 탐색 성공"), Config.GetAnimation(ChildWidget), ParentFadeAnim);
+	TestEqual(TEXT("ChildWidget 탐색 시 OwnerWidget은 ChildWidget"), Config.GetOwnerWidget(ChildWidget), static_cast<UUserWidget*>(ChildWidget));
 
-	// 4. 전혀 다른 WBGC 위젯 진입 시 Outer 계층 불일치를 감지해 재탐색·재캐싱 검증
+	// 4. 타 WBGC 위젯 진입 시 재탐색·재캐싱 검증
 	TestEqual(TEXT("타 WBGC 위젯 전달 시 OtherFadeAnim으로 재캐싱되어야 함"), Config.GetAnimation(OtherWidget), OtherFadeAnim);
+	TestEqual(TEXT("타 WBGC 위젯 탐색 시 OwnerWidget은 OtherWidget"), Config.GetOwnerWidget(OtherWidget), static_cast<UUserWidget*>(OtherWidget));
 
 	// 5. AnimationName 변경 시 MovieScene 이름 불일치로 재탐색 검증
 	Config.AnimationName = FName(TEXT("ParentAlt"));
 	TestNull(TEXT("OtherWidget에는 ParentAlt 애님이 없으므로 nullptr 반환"), Config.GetAnimation(OtherWidget));
 	TestEqual(TEXT("ParentWidgetA에서 변경된 이름 ParentAlt 탐색 성공"), Config.GetAnimation(ParentWidgetA), ParentAltAnim);
+
+	// 6. 하위 위젯 트리(일반 자식 + NamedSlot) 내 다른 UUserWidget 애님 탐색 및 CachedTargetWidget/CachedOwnerWidget 검증
+	UWidgetBlueprintGeneratedClass* FrameWBGC = CreateTestWBGC(UBBMUserWidgetBase::StaticClass(), TEXT("BBMTestFrameWBGC"));
+	UWidgetBlueprintGeneratedClass* SlotInnerWBGC = CreateTestWBGC(UBBMUserWidgetBase::StaticClass(), TEXT("BBMTestSlotInnerWBGC"));
+	UWidgetAnimation* FrameOpenAnim = CreateTestWidgetAnim(FrameWBGC, FName(TEXT("FrameOpen")));
+	UWidgetAnimation* SlotInnerAnim = CreateTestWidgetAnim(SlotInnerWBGC, FName(TEXT("SlotInnerPulse")));
+
+	UBBMUserWidgetBase* HostWidget = NewObject<UBBMUserWidgetBase>(TestWorld.World, OtherWBGC);
+	UBBMUserWidgetBase* FrameWidget = NewObject<UBBMUserWidgetBase>(HostWidget, FrameWBGC);
+	UBBMUserWidgetBase* SlotInnerWidget = NewObject<UBBMUserWidgetBase>(HostWidget, SlotInnerWBGC);
+	KeepAliveObjects.Emplace(HostWidget);
+	KeepAliveObjects.Emplace(FrameWidget);
+	KeepAliveObjects.Emplace(SlotInnerWidget);
+
+	HostWidget->WidgetTree = NewObject<UWidgetTree>(HostWidget, TEXT("HostWidgetTree"));
+	UCanvasPanel* HostRoot = HostWidget->WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("HostRoot"));
+	HostWidget->WidgetTree->RootWidget = HostRoot;
+	HostRoot->AddChild(FrameWidget);
+
+	FrameWidget->WidgetTree = NewObject<UWidgetTree>(FrameWidget, TEXT("FrameWidgetTree"));
+	UCanvasPanel* FrameRoot = FrameWidget->WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("FrameRoot"));
+	UNamedSlot* FrameNamedSlot = FrameWidget->WidgetTree->ConstructWidget<UNamedSlot>(UNamedSlot::StaticClass(), TEXT("ContentSlot"));
+	FrameWidget->WidgetTree->RootWidget = FrameRoot;
+	FrameRoot->AddChild(FrameNamedSlot);
+	FrameWidget->SetContentForSlot(FName(TEXT("ContentSlot")), SlotInnerWidget);
+
+	// 6-1. FrameWidget 소유 애님 탐색 및 캐시 히트 검증
+	FBBMWidgetAnimConfig TreeConfig;
+	TreeConfig.AnimationName = FName(TEXT("FrameOpen"));
+	TestEqual(TEXT("호스트 위젯 기준 탐색 시 자식 FrameWidget의 FrameOpen 애님을 찾아야 함"), TreeConfig.GetAnimation(HostWidget), FrameOpenAnim);
+	TestEqual(TEXT("자식 애님의 GetOwnerWidget은 호스트가 아닌 실제 소유자 FrameWidget이어야 함"), TreeConfig.GetOwnerWidget(HostWidget), static_cast<UUserWidget*>(FrameWidget));
+
+	TArray<TObjectPtr<UWidgetAnimation>> SavedFrameAnims = FrameWBGC->Animations;
+	FrameWBGC->Animations.Empty();
+	TestEqual(TEXT("TargetWidget(HostWidget) 일치 시 하위 애님·OwnerWidget도 캐시 히트 유지"), TreeConfig.GetAnimation(HostWidget), FrameOpenAnim);
+	TestEqual(TEXT("캐시 히트 상태에서 GetOwnerWidget도 FrameWidget 유지"), TreeConfig.GetOwnerWidget(HostWidget), static_cast<UUserWidget*>(FrameWidget));
+	FrameWBGC->Animations = MoveTemp(SavedFrameAnims);
+
+	// 6-2. NamedSlot 내부에 배치된 하위 UUserWidget 애님 탐색 및 StopAllAnimations 트리 정지 검증
+	TreeConfig.AnimationName = FName(TEXT("SlotInnerPulse"));
+	TestEqual(TEXT("NamedSlot 내부 위젯(SlotInnerWidget)의 SlotInnerPulse 애님까지 재귀 탐색 성공"), TreeConfig.GetAnimation(HostWidget), SlotInnerAnim);
+	TestEqual(TEXT("NamedSlot 내부 애님의 GetOwnerWidget은 SlotInnerWidget이어야 함"), TreeConfig.GetOwnerWidget(HostWidget), static_cast<UUserWidget*>(SlotInnerWidget));
+
+	// SlotInnerWidget과 HostWidget 모두에서 ViewModel 주입 해제 시 하위 트리 애니메이션 정지 검증
+	UBBMTitleViewModel* DummyVM = NewObject<UBBMTitleViewModel>(TestWorld.World);
+	KeepAliveObjects.Emplace(DummyVM);
+	HostWidget->SetViewModelInstance(DummyVM);
+	FrameWidget->PlayAnimation(FrameOpenAnim, 0.0f, 0, EUMGSequencePlayMode::Forward, 1.0f);
+	SlotInnerWidget->PlayAnimation(SlotInnerAnim, 0.0f, 0, EUMGSequencePlayMode::Forward, 1.0f);
+	TestTrue(TEXT("정지 전 FrameWidget 애니메이션이 재생/활성 상태여야 함"), FrameWidget->IsAnimationPlaying(FrameOpenAnim));
+	TestTrue(TEXT("정지 전 SlotInnerWidget 애니메이션이 재생/활성 상태여야 함"), SlotInnerWidget->IsAnimationPlaying(SlotInnerAnim));
+
+	HostWidget->SetViewModelInstance(nullptr);
+	TestFalse(TEXT("뷰모델 해제 후 StopAllAnimationsInWidgetTree에 의해 FrameWidget 애님도 정지되어야 함"), FrameWidget->IsAnimationPlaying(FrameOpenAnim));
+	TestFalse(TEXT("뷰모델 해제 후 StopAllAnimationsInWidgetTree에 의해 SlotInnerWidget 애님도 정지되어야 함"), SlotInnerWidget->IsAnimationPlaying(SlotInnerAnim));
 
 	return true;
 }
@@ -1226,6 +1444,8 @@ bool FBBMWorldUILayerManagementTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
+	PrepareTitleSubViewModels(TestWorld.World, VMA);
+	PrepareTitleSubViewModels(TestWorld.World, VMB);
 	VMA->FinishInitialization();
 	VMB->FinishInitialization();
 	PopupA->SetViewModelInstance(VMA);

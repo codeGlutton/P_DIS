@@ -39,7 +39,6 @@ void UBBMUserWidgetBase::BeginDestroy()
 	{
 		ClearViewModelPresentationHandlers(CurrentVM);
 		ViewModel.Reset();
-		StopAllAnimations();
 	}
 
 	Super::BeginDestroy();
@@ -57,7 +56,6 @@ void UBBMUserWidgetBase::SetViewModelInstance(UBBMViewModelBase* InViewModel)
 	{
 		ClearViewModelPresentationHandlers(OldVM);
 		ViewModel.Reset();
-		StopAllAnimations();
 	}
 
 	ViewModel = InViewModel;
@@ -117,8 +115,11 @@ void UBBMUserWidgetBase::ClearViewModelPresentationHandlers(UBBMViewModelBase* I
 
 	if (UBBMDualAnimTransition* DualTransition = InViewModel->GetOpenCloseTransition())
 	{
-		UnbindAllFromAnimationFinished(OpenAnimConfig.GetAnimation(this));
-		UnbindAllFromAnimationFinished(CloseAnimConfig.GetAnimation(this));
+		UnbindAllFromAnimationFinishedByConfig(OpenAnimConfig);
+		UnbindAllFromAnimationFinishedByConfig(CloseAnimConfig);
+		StopAnimationByConfig(OpenAnimConfig);
+		StopAnimationByConfig(CloseAnimConfig);
+
 		DualTransition->ClearPresentationHandlers(this);
 	}
 }
@@ -129,29 +130,23 @@ void UBBMUserWidgetBase::HandleSingleTransitionRequested(
 	const FBBMWidgetAnimConfig& InConfig
 )
 {
-	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
-	if (Anim != nullptr)
-	{
-		UnbindAllFromAnimationFinished(Anim);
-	}
+	UnbindAllFromAnimationFinishedByConfig(InConfig);
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (Anim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true)
+		&& (IsInLayer() == true)
+		&& (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
 		FinishedDelegate.BindDynamic(InTransition, &UBBMSingleAnimTransition::NotifyAnimFinished);
-		BindToAnimationFinished(Anim, FinishedDelegate);
 
+		BindToAnimationFinishedByConfig(InConfig, FinishedDelegate);
 		PlayAnimationByConfig(InConfig);
 	}
 	else
 	{
-		if (Anim != nullptr)
-		{
-			StopAnimation(Anim);
-		}
-
+		StopAnimationByConfig(InConfig);
 		if (InTransition != nullptr)
 		{
 			InTransition->NotifyAnimFinished();
@@ -166,35 +161,25 @@ void UBBMUserWidgetBase::HandleDualTransitionStartRequested(
 	const FBBMWidgetAnimConfig& InEndConfig
 )
 {
-	UWidgetAnimation* EndAnim = InEndConfig.GetAnimation(this);
-	if (EndAnim != nullptr)
-	{
-		UnbindAllFromAnimationFinished(EndAnim);
-		StopAnimation(EndAnim);
-	}
-	UWidgetAnimation* StartAnim = InStartConfig.GetAnimation(this);
-	if (StartAnim != nullptr)
-	{
-		UnbindAllFromAnimationFinished(StartAnim);
-	}
+	UnbindAllFromAnimationFinishedByConfig(InEndConfig);
+	UnbindAllFromAnimationFinishedByConfig(InStartConfig);
+	StopAnimationByConfig(InEndConfig);
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (StartAnim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true)
+		&& (IsInLayer() == true)
+		&& (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
 		FinishedDelegate.BindDynamic(InDualTransition, &UBBMDualAnimTransition::NotifyStartTransitionFinished);
-		BindToAnimationFinished(StartAnim, FinishedDelegate);
 
+		BindToAnimationFinishedByConfig(InStartConfig, FinishedDelegate);
 		PlayAnimationByConfig(InStartConfig);
 	}
 	else
 	{
-		if (StartAnim != nullptr)
-		{
-			StopAnimation(StartAnim);
-		}
-
+		StopAnimationByConfig(InStartConfig);
 		if (InDualTransition != nullptr)
 		{
 			InDualTransition->NotifyStartTransitionFinished();
@@ -209,35 +194,25 @@ void UBBMUserWidgetBase::HandleDualTransitionEndRequested(
 	const FBBMWidgetAnimConfig& InEndConfig
 )
 {
-	UWidgetAnimation* StartAnim = InStartConfig.GetAnimation(this);
-	if (StartAnim != nullptr)
-	{
-		UnbindAllFromAnimationFinished(StartAnim);
-		StopAnimation(StartAnim);
-	}
-	UWidgetAnimation* EndAnim = InEndConfig.GetAnimation(this);
-	if (EndAnim != nullptr)
-	{
-		UnbindAllFromAnimationFinished(EndAnim);
-	}
+	UnbindAllFromAnimationFinishedByConfig(InStartConfig);
+	UnbindAllFromAnimationFinishedByConfig(InEndConfig);
+	StopAnimationByConfig(InStartConfig);
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (EndAnim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true)
+		&& (IsInLayer() == true)
+		&& (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
 		FinishedDelegate.BindDynamic(InDualTransition, &UBBMDualAnimTransition::NotifyEndTransitionFinished);
-		BindToAnimationFinished(EndAnim, FinishedDelegate);
 
+		BindToAnimationFinishedByConfig(InEndConfig, FinishedDelegate);
 		PlayAnimationByConfig(InEndConfig);
 	}
 	else
 	{
-		if (EndAnim != nullptr)
-		{
-			StopAnimation(EndAnim);
-		}
-
+		StopAnimationByConfig(InEndConfig);
 		if (InDualTransition != nullptr)
 		{
 			InDualTransition->NotifyEndTransitionFinished();
@@ -247,75 +222,55 @@ void UBBMUserWidgetBase::HandleDualTransitionEndRequested(
 
 void UBBMUserWidgetBase::HandleOpenPresentationRequested(bool bWithAnim)
 {
-	UWidgetAnimation* EndAnim = CloseAnimConfig.GetAnimation(this);
-	if (EndAnim != nullptr)
-	{
-		UnbindAllFromAnimationFinished(EndAnim);
-		StopAnimation(EndAnim);
-	}
-	UWidgetAnimation* StartAnim = OpenAnimConfig.GetAnimation(this);
-	if (StartAnim != nullptr)
-	{
-		UnbindAllFromAnimationFinished(StartAnim);
-	}
+	UnbindAllFromAnimationFinishedByConfig(CloseAnimConfig);
+	UnbindAllFromAnimationFinishedByConfig(OpenAnimConfig);
+	StopAnimationByConfig(CloseAnimConfig);
 
 	ApplyOpenViewportPresentation();
 
 	OnOpened();
 	BP_OnOpened();
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (StartAnim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true)
+		&& (IsInLayer() == true)
+		&& (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
 		FinishedDelegate.BindDynamic(this, &UBBMUserWidgetBase::HandleOpenAnimationFinished);
-		BindToAnimationFinished(StartAnim, FinishedDelegate);
-
+		
+		BindToAnimationFinishedByConfig(OpenAnimConfig, FinishedDelegate);
 		PlayAnimationByConfig(OpenAnimConfig);
 	}
 	else
 	{
-		if (StartAnim != nullptr)
-		{
-			StopAnimation(StartAnim);
-		}
-
+		StopAnimationByConfig(OpenAnimConfig);
 		HandleOpenAnimationFinished();
 	}
 }
 
 void UBBMUserWidgetBase::HandleClosePresentationRequested(bool bWithAnim)
 {
-	UWidgetAnimation* StartAnim = OpenAnimConfig.GetAnimation(this);
-	if (StartAnim != nullptr)
-	{
-		UnbindAllFromAnimationFinished(StartAnim);
-		StopAnimation(StartAnim);
-	}
-	UWidgetAnimation* EndAnim = CloseAnimConfig.GetAnimation(this);
-	if (EndAnim != nullptr)
-	{
-		UnbindAllFromAnimationFinished(EndAnim);
-	}
+	UnbindAllFromAnimationFinishedByConfig(OpenAnimConfig);
+	UnbindAllFromAnimationFinishedByConfig(CloseAnimConfig);
+	StopAnimationByConfig(OpenAnimConfig);
 
-	const bool bCanPlayAnim = (bWithAnim == true) && (EndAnim != nullptr) && (IsInLayer() == true) && (IsVisible() == true);
+	const bool bCanPlayAnim = (bWithAnim == true)
+		&& (IsInLayer() == true)
+		&& (IsVisible() == true);
 
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
 		FinishedDelegate.BindDynamic(this, &UBBMUserWidgetBase::HandleCloseAnimationFinished);
-		BindToAnimationFinished(EndAnim, FinishedDelegate);
 
+		BindToAnimationFinishedByConfig(CloseAnimConfig, FinishedDelegate);
 		PlayAnimationByConfig(CloseAnimConfig);
 	}
 	else
 	{
-		if (EndAnim != nullptr)
-		{
-			StopAnimation(EndAnim);
-		}
-
+		StopAnimationByConfig(CloseAnimConfig);
 		HandleCloseAnimationFinished();
 	}
 }
@@ -429,7 +384,8 @@ void UBBMUserWidgetBase::ApplyCloseViewportPresentation()
 void UBBMUserWidgetBase::PlayAnimationByConfig(const FBBMWidgetAnimConfig& InConfig)
 {
 	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
-	if (Anim == nullptr)
+	UUserWidget* OwnerWidget = InConfig.GetOwnerWidget(this);
+	if (Anim == nullptr || OwnerWidget == nullptr)
 	{
 		return;
 	}
@@ -439,23 +395,60 @@ void UBBMUserWidgetBase::PlayAnimationByConfig(const FBBMWidgetAnimConfig& InCon
 	switch (InConfig.PlayMode)
 	{
 	case EBBMWidgetAnimPlayMode::RelativeForward:
-		PlayAnimationForward(Anim, InConfig.PlaybackSpeed);
+		OwnerWidget->PlayAnimationForward(Anim, InConfig.PlaybackSpeed);
 		break;
 
 	case EBBMWidgetAnimPlayMode::RelativeReverse:
-		PlayAnimationReverse(Anim, InConfig.PlaybackSpeed);
+		OwnerWidget->PlayAnimationReverse(Anim, InConfig.PlaybackSpeed);
 		break;
 
 	case EBBMWidgetAnimPlayMode::Forward:
-		PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::Forward, InConfig.PlaybackSpeed);
+		OwnerWidget->PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::Forward, InConfig.PlaybackSpeed);
 		break;
 
 	case EBBMWidgetAnimPlayMode::Reverse:
-		PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::Reverse, InConfig.PlaybackSpeed);
+		OwnerWidget->PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::Reverse, InConfig.PlaybackSpeed);
 		break;
 
 	case EBBMWidgetAnimPlayMode::PingPong:
-		PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::PingPong, InConfig.PlaybackSpeed);
+		OwnerWidget->PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::PingPong, InConfig.PlaybackSpeed);
 		break;
 	}
 }
+
+void UBBMUserWidgetBase::StopAnimationByConfig(const FBBMWidgetAnimConfig& InConfig)
+{
+	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
+	UUserWidget* OwnerWidget = InConfig.GetOwnerWidget(this);
+	if (Anim == nullptr || OwnerWidget == nullptr)
+	{
+		return;
+	}
+
+	OwnerWidget->StopAnimation(Anim);
+}
+
+void UBBMUserWidgetBase::BindToAnimationFinishedByConfig(const FBBMWidgetAnimConfig& InConfig, const FWidgetAnimationDynamicEvent& InFinishedDelegate)
+{
+	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
+	UUserWidget* OwnerWidget = InConfig.GetOwnerWidget(this);
+	if (Anim == nullptr || OwnerWidget == nullptr)
+	{
+		return;
+	}
+
+	OwnerWidget->BindToAnimationFinished(Anim, InFinishedDelegate);
+}
+
+void UBBMUserWidgetBase::UnbindAllFromAnimationFinishedByConfig(const FBBMWidgetAnimConfig& InConfig)
+{
+	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
+	UUserWidget* OwnerWidget = InConfig.GetOwnerWidget(this);
+	if (Anim == nullptr || OwnerWidget == nullptr)
+	{
+		return;
+	}
+
+	OwnerWidget->UnbindAllFromAnimationFinished(Anim);
+}
+

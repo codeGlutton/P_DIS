@@ -79,6 +79,8 @@ void UBBMDualAnimTransition::EndWithAnim(FBBMOnWidgetAnimFinishedSignature OnCom
 
 void UBBMDualAnimTransition::Clear()
 {
+	SetState(EBBMDualAnimState::Ended);
+
 	if (StartTransition != nullptr)
 	{
 		StartTransition->Clear();
@@ -88,8 +90,6 @@ void UBBMDualAnimTransition::Clear()
 	{
 		EndTransition->Clear();
 	}
-
-	SetState(EBBMDualAnimState::Ended);
 }
 
 void UBBMDualAnimTransition::ClearPendingCallbacks()
@@ -192,7 +192,7 @@ void UBBMDualAnimTransition::ExecuteDirectionalTransition(
 	UBBMSingleAnimTransition* OppositeSlot,
 	EBBMDualAnimState CompletedState,
 	EBBMDualAnimState TransitioningState,
-	FSimpleMulticastDelegate& OnTransitioningNative,
+	FBBMOnAnimTransitionStartedNativeSignature& OnTransitioningNative,
 	bool bWithAnim,
 	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
 	FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
@@ -204,13 +204,10 @@ void UBBMDualAnimTransition::ExecuteDirectionalTransition(
 		return;
 	}
 
-	// 반대 방향 전환의 대기 콜백 및 재생 상태를 선제 정리
-	OppositeSlot->Clear();
-
 	// 이미 목표 완료 상태면 재실행 없이 전달된 콜백만 즉시 처리
 	if (State == CompletedState)
 	{
-		UBBMSingleAnimTransition::InvokeCallbacksImmediate(MoveTemp(InNativeComplete), MoveTemp(InDynamicComplete));
+		UBBMSingleAnimTransition::InvokeCallbacksImmediate(MoveTemp(InNativeComplete), MoveTemp(InDynamicComplete), false);
 		return;
 	}
 
@@ -221,11 +218,13 @@ void UBBMDualAnimTransition::ExecuteDirectionalTransition(
 		return;
 	}
 
-	// 신규 전환 진입 시 세부 상태 선반영 및 시작 훅 발송
+	// 신규 전환 진입 시 세부 상태 선반영 후 반대 방향 슬롯을 중단(Clear) 처리하고 시작 훅 발송
 	SetState(TransitioningState);
-	OnTransitioningNative.Broadcast();
-	if (TransitioningState == EBBMDualAnimState::Starting) { OnStarting.Broadcast(); }
-	else if (TransitioningState == EBBMDualAnimState::Ending) { OnEnding.Broadcast(); }
+	OppositeSlot->Clear();
+
+	OnTransitioningNative.Broadcast(bWithAnim);
+	if (TransitioningState == EBBMDualAnimState::Starting) { OnStarting.Broadcast(bWithAnim); }
+	else if (TransitioningState == EBBMDualAnimState::Ending) { OnEnding.Broadcast(bWithAnim); }
 
 	// 시작 훅 실행 중 상태가 재변경되었으면 프레젠테이션 실행 중단
 	if (State != TransitioningState)
@@ -236,28 +235,42 @@ void UBBMDualAnimTransition::ExecuteDirectionalTransition(
 	TargetSlot->ExecuteInternal(bWithAnim, MoveTemp(InNativeComplete), MoveTemp(InDynamicComplete));
 }
 
-void UBBMDualAnimTransition::HandleStartSlotFinishedBeforeCallbacks()
+void UBBMDualAnimTransition::HandleStartSlotFinishedBeforeCallbacks(bool bInterrupted)
 {
+	if (bInterrupted == true)
+	{
+		OnStartedNative.Broadcast(true);
+		OnStarted.Broadcast(true);
+		return;
+	}
+
 	if (State != EBBMDualAnimState::Starting)
 	{
 		return;
 	}
 
 	SetState(EBBMDualAnimState::Started);
-	OnStartedNative.Broadcast();
-	OnStarted.Broadcast();
+	OnStartedNative.Broadcast(false);
+	OnStarted.Broadcast(false);
 }
 
-void UBBMDualAnimTransition::HandleEndSlotFinishedBeforeCallbacks()
+void UBBMDualAnimTransition::HandleEndSlotFinishedBeforeCallbacks(bool bInterrupted)
 {
+	if (bInterrupted == true)
+	{
+		OnEndedNative.Broadcast(true);
+		OnEnded.Broadcast(true);
+		return;
+	}
+
 	if (State != EBBMDualAnimState::Ending)
 	{
 		return;
 	}
 
 	SetState(EBBMDualAnimState::Ended);
-	OnEndedNative.Broadcast();
-	OnEnded.Broadcast();
+	OnEndedNative.Broadcast(false);
+	OnEnded.Broadcast(false);
 }
 
 void UBBMDualAnimTransition::SetState(EBBMDualAnimState InNewState)

@@ -15,6 +15,9 @@
 
 /* 델리게이트 선언 */
 DECLARE_DYNAMIC_DELEGATE_OneParam(FBBMAsyncSaveCompleteDynamicDelegate, bool, bSuccess);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FBBMSaveStartSignature);
+DECLARE_MULTICAST_DELEGATE(FBBMSaveStartNativeSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBBMSaveCompleteSignature, bool, bSuccess);
 DECLARE_MULTICAST_DELEGATE_OneParam(FBBMSaveOperationEvent, bool /* bSuccess */);
 DECLARE_MULTICAST_DELEGATE_OneParam(FBBMOnUserSettingsChanged, const FBBMUserSettingsData& /* NewSettings */);
 
@@ -58,10 +61,6 @@ public:
 
 	/* 세이브 데이터 로드 보장 및 런 초기화 / 복원 */
 public:
-	/* 유저 세이브 및 런 세이브 객체가 인메모리에 로드/생성되어 있는지 보장 */
-	UFUNCTION(Category = "BBM|Save", BlueprintCallable)
-	bool EnsureSaveDataLoaded();
-
 	/* 새로운 런 시작을 위해 플레이어 캐릭터 정의를 바탕으로 런 세이브 데이터 초기화 */
 	UFUNCTION(Category = "BBM|Save", BlueprintCallable)
 	void ResetAndInitializeNewRun(const UBBMPlayerCharacterDefinition* PlayerDef);
@@ -203,6 +202,22 @@ protected:
 	 * @param OnComplete 비동기 로드 완료 시 메인 스레드에서 호출될 콜백
 	 */
 	void LoadGameAsyncInternal(const FString& InSlotName, int32 InUserIndex, TFunction<void(USaveGame*, bool)> OnComplete);
+
+	/* 비동기 세이브 시작 및 완료 이벤트 대리자 */
+public:
+	/* 비동기 세이브 시작 시 호출되는 대리자 (블루프린트 바인딩용) */
+	UPROPERTY(Category = "BBM|Save|Event", BlueprintAssignable)
+	FBBMSaveStartSignature OnSaveStarted;
+
+	/* 비동기 세이브 시작 시 호출되는 대리자 (C++ 네이티브 바인딩용) */
+	FBBMSaveStartNativeSignature OnSaveStartedNative;
+
+	/* 비동기 세이브 완료 시 호출되는 대리자 (블루프린트 바인딩용) */
+	UPROPERTY(Category = "BBM|Save|Event", BlueprintAssignable)
+	FBBMSaveCompleteSignature OnSaveCompleted;
+
+	/* 비동기 세이브 완료 시 호출되는 대리자 (C++ 네이티브 바인딩용) */
+	FBBMSaveOperationEvent OnSaveCompletedNative;
 
 	/* 멤버 프로퍼티 */
 protected:

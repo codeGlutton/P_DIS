@@ -1,64 +1,163 @@
 #include "UI/BBMWorldWidgetTypes.h"
 #include "Animation/WidgetAnimation.h"
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
+#include "Blueprint/WidgetTree.h"
 #include "MovieScene.h"
 
-UWidgetAnimation* FBBMWidgetAnimConfig::GetAnimation(const UUserWidget* InWidget) const
+namespace
 {
-	if (InWidget == nullptr || AnimationName == NAME_None)
+	UWidgetAnimation* FindAnimationInWidgetClass(const UUserWidget* InWidget, const FName& InAnimationName)
 	{
-		return nullptr;
-	}
-
-	const UClass* TargetClass = InWidget->GetClass();
-	if (TargetClass == nullptr)
-	{
-		return nullptr;
-	}
-
-	// 캐시된 애니메이션의 소유 클래스(Outer)가 현재 위젯 계층에 속하고 이름도 동일하면 재탐색 생략
-	UWidgetAnimation* CachedPtr = CachedAnimation.Get();
-	if (CachedPtr != nullptr)
-	{
-		const UClass* CachedOwnerClass = Cast<UClass>(CachedPtr->GetOuter());
-		const UMovieScene* CachedMovieScene = CachedPtr->GetMovieScene();
-		if (CachedOwnerClass != nullptr
-			&& TargetClass->IsChildOf(CachedOwnerClass) == true
-			&& CachedMovieScene != nullptr
-			&& CachedMovieScene->GetFName() == AnimationName)
+		if (InWidget == nullptr || InAnimationName == NAME_None)
 		{
-			return CachedPtr;
+			return nullptr;
 		}
-	}
 
-	// 자식 위젯 클래스부터 부모 WBGC 체인을 순회하며 이름이 일치하는 애니메이션 탐색
-	UWidgetAnimation* FoundAnim = nullptr;
-	const UClass* CurrentClass = TargetClass;
-	while (const UWidgetBlueprintGeneratedClass* WBGC = Cast<UWidgetBlueprintGeneratedClass>(CurrentClass))
-	{
-		for (UWidgetAnimation* Anim : WBGC->Animations)
+		const UClass* CurrentClass = InWidget->GetClass();
+		while (const UWidgetBlueprintGeneratedClass* WBGC = Cast<UWidgetBlueprintGeneratedClass>(CurrentClass))
 		{
-			if (Anim != nullptr && Anim->GetMovieScene() != nullptr && Anim->GetMovieScene()->GetFName() == AnimationName)
+			for (UWidgetAnimation* Anim : WBGC->Animations)
 			{
-				FoundAnim = Anim;
-				break;
+				if (Anim != nullptr && Anim->GetMovieScene() != nullptr && Anim->GetMovieScene()->GetFName() == InAnimationName)
+				{
+					return Anim;
+				}
 			}
+
+			CurrentClass = CurrentClass->GetSuperClass();
 		}
 
-		if (FoundAnim != nullptr)
-		{
-			break;
-		}
-
-		CurrentClass = CurrentClass->GetSuperClass();
+		return nullptr;
 	}
 
-	CachedAnimation = FoundAnim;
-	return FoundAnim;
+	bool FindAnimationRecursive(
+		UUserWidget* InCurrentWidget,
+		const FName& InAnimationName,
+		TSet<const UUserWidget*>& InOutVisitedWidgets,
+		UWidgetAnimation*& OutAnimation,
+		UUserWidget*& OutOwnerWidget
+	)
+	{
+		if (InCurrentWidget == nullptr || InOutVisitedWidgets.Contains(InCurrentWidget) == true)
+		{
+			return false;
+		}
+
+		InOutVisitedWidgets.Add(InCurrentWidget);
+
+		// 1. 현재 위젯(자신)의 WBGC 상속 계층에서 먼저 탐색
+		UWidgetAnimation* DirectAnim = FindAnimationInWidgetClass(InCurrentWidget, InAnimationName);
+		if (DirectAnim != nullptr)
+		{
+			OutAnimation = DirectAnim;
+			OutOwnerWidget = InCurrentWidget;
+			return true;
+		}
+
+		// 2. 자신에게 없으면 위젯 트리의 하위 UUserWidget들을 재귀 탐색
+		if (InCurrentWidget->WidgetTree == nullptr || InCurrentWidget->WidgetTree->RootWidget == nullptr)
+		{
+			return false;
+		}
+
+		UWidget* RootWidget = InCurrentWidget->WidgetTree->RootWidget;
+
+		// ForEachWidgetAndChildrenUntil 규격: 계속 탐색하려면 true, 탐색 성공으로 즉시 중단(Early-Out)하려면 false 반환
+		const auto ShouldContinueSearch = [&](UWidget* InTargetWidget) -> bool
+		{
+			UUserWidget* ChildUserWidget = Cast<UUserWidget>(InTargetWidget);
+			if (ChildUserWidget != nullptr)
+			{
+				if (FindAnimationRecursive(ChildUserWidget, InAnimationName, InOutVisitedWidgets, OutAnimation, OutOwnerWidget) == true)
+				{
+					return false;
+				}
+			}
+
+			return true;
+		};
+
+		// 2-1. 직속 하위 위젯인 RootWidget 자체가 또 다른 UserWidget인 경우 내부의 WidgetTree를 검사
+		if (ShouldContinueSearch(RootWidget) == false)
+		{
+			return true;
+		}
+
+		// 2-2. 하위 자식 및 NamedSlot 위젯들을 조기 종료 순회
+		if (UWidgetTree::ForEachWidgetAndChildrenUntil(RootWidget, ShouldContinueSearch) == false)
+		{
+			return true;
+		}
+
+		return false;
+	}
+}
+
+UWidgetAnimation* FBBMWidgetAnimConfig::GetAnimation(UUserWidget* InWidget) const
+{
+	if (ResolveAnimation(InWidget) == false)
+	{
+		return nullptr;
+	}
+
+	return CachedAnimation.Get();
+}
+
+UUserWidget* FBBMWidgetAnimConfig::GetOwnerWidget(UUserWidget* InWidget) const
+{
+	if (ResolveAnimation(InWidget) == false)
+	{
+		return nullptr;
+	}
+
+	return CachedOwnerWidget.Get();
 }
 
 void FBBMWidgetAnimConfig::InvalidateCachedAnimation() const
 {
+	CachedTargetWidget.Reset();
+	CachedOwnerWidget.Reset();
 	CachedAnimation.Reset();
+}
+
+bool FBBMWidgetAnimConfig::ResolveAnimation(UUserWidget* InWidget) const
+{
+	if (InWidget == nullptr || AnimationName == NAME_None)
+	{
+		return false;
+	}
+
+	// 탐색 대상(TargetWidget)과 소유 위젯·애니메이션·이름이 모두 유효하고 일치하면 캐시 히트
+	UUserWidget* CachedTargetPtr = CachedTargetWidget.Get();
+	UUserWidget* CachedOwnerPtr = CachedOwnerWidget.Get();
+	UWidgetAnimation* CachedAnimPtr = CachedAnimation.Get();
+	if (CachedTargetPtr != nullptr
+		&& CachedTargetPtr == InWidget
+		&& CachedOwnerPtr != nullptr
+		&& CachedAnimPtr != nullptr)
+	{
+		const UMovieScene* CachedMovieScene = CachedAnimPtr->GetMovieScene();
+		if (CachedMovieScene != nullptr && CachedMovieScene->GetFName() == AnimationName)
+		{
+			return true;
+		}
+	}
+
+	// TargetWidget이 다르거나 캐시가 무효하면 자기 자신 및 하위 위젯 트리를 재귀 탐색
+	TSet<const UUserWidget*> VisitedWidgets;
+	UWidgetAnimation* FoundAnim = nullptr;
+	UUserWidget* FoundOwner = nullptr;
+	if (FindAnimationRecursive(InWidget, AnimationName, VisitedWidgets, FoundAnim, FoundOwner) == true
+		&& FoundAnim != nullptr
+		&& FoundOwner != nullptr)
+	{
+		CachedTargetWidget = InWidget;
+		CachedOwnerWidget = FoundOwner;
+		CachedAnimation = FoundAnim;
+		return true;
+	}
+
+	InvalidateCachedAnimation();
+	return false;
 }
 

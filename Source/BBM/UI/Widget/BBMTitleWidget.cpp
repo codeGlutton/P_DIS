@@ -76,14 +76,19 @@ void UBBMTitleWidget::ClearViewModelPresentationHandlers(UBBMViewModelBase* InVi
 	{
 		if (UBBMSingleAnimTransition* ShiningTransition = TitleVM->GetShiningTransition())
 		{
-			UnbindAllFromAnimationFinished(ShiningAnimConfig.GetAnimation(this));
+			UnbindAllFromAnimationFinishedByConfig(ShiningAnimConfig);
+			StopAnimationByConfig(ShiningAnimConfig);
+
 			ShiningTransition->ClearPresentationHandler(this);
 		}
 
 		if (UBBMDualAnimTransition* BlockingTransition = TitleVM->GetBlockingTransition())
 		{
-			UnbindAllFromAnimationFinished(BlockingStartAnimConfig.GetAnimation(this));
-			UnbindAllFromAnimationFinished(BlockingEndAnimConfig.GetAnimation(this));
+			UnbindAllFromAnimationFinishedByConfig(BlockingStartAnimConfig);
+			UnbindAllFromAnimationFinishedByConfig(BlockingEndAnimConfig);
+			StopAnimationByConfig(BlockingStartAnimConfig);
+			StopAnimationByConfig(BlockingEndAnimConfig);
+
 			BlockingTransition->ClearPresentationHandlers(this);
 		}
 	}

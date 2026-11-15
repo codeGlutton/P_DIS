@@ -17,6 +17,7 @@
 class UBBMSettingsViewModel;
 class UBBMCharacterSelectViewModel;
 class UBBMCreditsViewModel;
+class UBBMGameDataSubsystem;
 
 /**
  * BBM 타이틀 화면 전용 MVVM 뷰모델
@@ -32,8 +33,10 @@ public:
 	UBBMTitleViewModel();
 
 protected:
+	virtual void BeginViewModel() override;
+	virtual void EndViewModel() override;
 	virtual void OnOpen() override;
-	virtual void OnFinishOpenAnim() override;
+	virtual void OnFinishOpenAnim(bool bInterrupted) override;
 	virtual void OnClosed() override;
 
 	/* 필드 노티파이 프로퍼티 (Getter / Setter) */
@@ -53,6 +56,14 @@ public:
 	/* 현재 진행 중인 런의 조우 인덱스 설정 */
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
 	void SetActiveRunEncounterIndex(int32 InEncounterIndex);
+
+	/* 블로킹 패널 가시성 반환 */
+	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
+	ESlateVisibility GetBlockingPanelVisibility() const { return BlockingPanelVisibility; }
+
+	/* 블로킹 패널 가시성 설정 */
+	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
+	void SetBlockingPanelVisibility(ESlateVisibility InVisibility);
 
 	/* 서브 ViewModel 접근자 */
 public:
@@ -120,6 +131,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Title")
 	void QuitGame();
 
+	/* 내부 대리자 콜백 및 바인딩 헬퍼 */
+private:
+	/* GameDataSubsystem::OnSaveStartedNative 수신 시 타이틀 이어하기 상태 갱신 */
+	void HandleSaveStarted();
+
+	/* BlockingTransition 시작/종료 시 블로킹 패널 가시성 전환 */
+	void HandleBlockingTransitionStarting(bool bWithAnim);
+	void HandleBlockingTransitionEnded(bool bInterrupted);
+
+	/* 서브 패널 OpenClose 전환 시작/종료 카운팅 및 블로킹 전환 구동 */
+	void HandleSubPanelStarting(bool bWithAnim);
+	void HandleSubPanelEnded(bool bInterrupted);
+
+	/* 서브 ViewModel의 OpenCloseTransition 훅 바인딩·해제 헬퍼 */
+	void BindSubViewModelOpenClose(UBBMViewModelBase* InSubViewModel);
+	void UnbindSubViewModelOpenClose();
+
 	/* 내부 프로퍼티 */
 private:
 	/* 서브 ViewModel 컴포지션 */
@@ -147,5 +175,28 @@ private:
 	/* 진행 중인 런의 현재 조우 인덱스 (활성 런 미존재 시 0, UI 텍스트 포맷 바인딩용) */
 	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetActiveRunEncounterIndex, Getter = GetActiveRunEncounterIndex, meta = (AllowPrivateAccess = "true"))
 	int32 ActiveRunEncounterIndex = 0;
+
+	/* 타이틀 블로킹 오버레이 패널 가시성 (애니메이션 시작 시 Visible, 종료 완료 시 Collapsed) */
+	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetBlockingPanelVisibility, Getter = GetBlockingPanelVisibility, meta = (AllowPrivateAccess = "true"))
+	ESlateVisibility BlockingPanelVisibility = ESlateVisibility::Collapsed;
+
+	/* OnSaveStartedNative 대리자 등록 핸들 */
+	FDelegateHandle SaveStartedHandle;
+
+	/* BlockingTransition 시작/종료 대리자 등록 핸들 */
+	FDelegateHandle BlockingStartingHandle;
+	FDelegateHandle BlockingEndedHandle;
+
+	/* 서브 패널 전환 훅 바인딩 정보 보관 (GC 순서와 무관한 안전 언바인딩용) */
+	struct FSubPanelHookBinding
+	{
+		TWeakObjectPtr<UBBMDualAnimTransition> Transition;
+		FDelegateHandle StartingHandle;
+		FDelegateHandle EndedHandle;
+	};
+	TArray<FSubPanelHookBinding> SubPanelHookBindings;
+
+	/* 현재 열려 있거나 열림 전환 중인 서브 패널 개수 */
+	int32 OpenSubPanelCount = 0;
 };
 

@@ -150,47 +150,47 @@ private:
 		UBBMSingleAnimTransition* OppositeSlot,
 		EBBMDualAnimState CompletedState,
 		EBBMDualAnimState TransitioningState,
-		FSimpleMulticastDelegate& OnTransitioningNative,
+		FBBMOnAnimTransitionStartedNativeSignature& OnTransitioningNative,
 		bool bWithAnim,
 		FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
 		FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
 	);
 
-	void HandleStartSlotFinishedBeforeCallbacks();
-	void HandleEndSlotFinishedBeforeCallbacks();
+	void HandleStartSlotFinishedBeforeCallbacks(bool bInterrupted);
+	void HandleEndSlotFinishedBeforeCallbacks(bool bInterrupted);
 	void SetState(EBBMDualAnimState InNewState);
 
 	/* 상위 ViewModel 연동용 수명 주기 C++ 훅 */
 public:
 	/* Starting 진입 직후 발송되는 시작 훅 */
-	FSimpleMulticastDelegate OnStartingNative;
+	FBBMOnAnimTransitionStartedNativeSignature OnStartingNative;
 
 	/* Ending 진입 직후 발송되는 종료 시작 훅 */
-	FSimpleMulticastDelegate OnEndingNative;
+	FBBMOnAnimTransitionStartedNativeSignature OnEndingNative;
 
-	/* Started 상태 확정 직후, 대기 콜백 실행 직전에 발송되는 완료 훅 */
-	FSimpleMulticastDelegate OnStartedNative;
+	/* Started 상태 확정(또는 중단) 직후, 대기 콜백 실행 직전에 발송되는 완료 훅 */
+	FBBMOnAnimTransitionFinishedNativeSignature OnStartedNative;
 
-	/* Ended 상태 확정 직후, 대기 콜백 실행 직전에 발송되는 완료 훅 */
-	FSimpleMulticastDelegate OnEndedNative;
+	/* Ended 상태 확정(또는 중단) 직후, 대기 콜백 실행 직전에 발송되는 완료 훅 */
+	FBBMOnAnimTransitionFinishedNativeSignature OnEndedNative;
 
 	/* 블루프린트 연동용 동적 멀티캐스트 대리자 */
 public:
 	/* Starting 진입 직후 발송되는 시작 블루프린트 이벤트 */
 	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|MVVM|Event")
-	FBBMOnTransitionEventDynamicSignature OnStarting;
+	FBBMOnTransitionStartedDynamicSignature OnStarting;
 
 	/* Ending 진입 직후 발송되는 종료 시작 블루프린트 이벤트 */
 	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|MVVM|Event")
-	FBBMOnTransitionEventDynamicSignature OnEnding;
+	FBBMOnTransitionStartedDynamicSignature OnEnding;
 
-	/* Started 상태 확정 직후, 대기 콜백 실행 직전에 발송되는 완료 블루프린트 이벤트 */
+	/* Started 상태 확정(또는 중단) 직후, 대기 콜백 실행 직전에 발송되는 완료 블루프린트 이벤트 */
 	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|MVVM|Event")
-	FBBMOnTransitionEventDynamicSignature OnStarted;
+	FBBMOnTransitionFinishedDynamicSignature OnStarted;
 
-	/* Ended 상태 확정 직후, 대기 콜백 실행 직전에 발송되는 완료 블루프린트 이벤트 */
+	/* Ended 상태 확정(또는 중단) 직후, 대기 콜백 실행 직전에 발송되는 완료 블루프린트 이벤트 */
 	UPROPERTY(BlueprintAssignable, Category = "BBM|UI|MVVM|Event")
-	FBBMOnTransitionEventDynamicSignature OnEnded;
+	FBBMOnTransitionFinishedDynamicSignature OnEnded;
 
 	/* 멤버 변수 */
 private:

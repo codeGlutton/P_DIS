@@ -134,32 +134,32 @@ void UBBMViewModelBase::OnClosed()
 {
 }
 
-void UBBMViewModelBase::OnFinishOpenAnim()
+void UBBMViewModelBase::OnFinishOpenAnim(bool /*bInterrupted*/)
 {
 }
 
-void UBBMViewModelBase::OnFinishCloseAnim()
+void UBBMViewModelBase::OnFinishCloseAnim(bool /*bInterrupted*/)
 {
 }
 
-void UBBMViewModelBase::HandleTransitionOpenStarted()
+void UBBMViewModelBase::HandleTransitionOpenStarted(bool /*bWithAnim*/)
 {
 	OnOpen();
 }
 
-void UBBMViewModelBase::HandleTransitionCloseStarted()
+void UBBMViewModelBase::HandleTransitionCloseStarted(bool /*bWithAnim*/)
 {
 	OnClosed();
 }
 
-void UBBMViewModelBase::HandleTransitionOpenFinished()
+void UBBMViewModelBase::HandleTransitionOpenFinished(bool bInterrupted)
 {
-	OnFinishOpenAnim();
+	OnFinishOpenAnim(bInterrupted);
 }
 
-void UBBMViewModelBase::HandleTransitionCloseFinished()
+void UBBMViewModelBase::HandleTransitionCloseFinished(bool bInterrupted)
 {
-	OnFinishCloseAnim();
+	OnFinishCloseAnim(bInterrupted);
 }
 
 void UBBMViewModelBase::HandleTransitionStateChanged(UObject* InObject, UE::FieldNotification::FFieldId InFieldId)

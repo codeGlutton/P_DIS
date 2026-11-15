@@ -13,12 +13,14 @@
 
 /* 애니메이션 전환 요청 및 완료 대리자 선언 */
 DECLARE_DELEGATE_OneParam(FBBMOnPresentationTransitionRequestedSignature, bool /*bWithAnim*/);
-DECLARE_DYNAMIC_DELEGATE(FBBMOnWidgetAnimFinishedDynamicSignature);
-DECLARE_DELEGATE(FBBMOnWidgetAnimFinishedSignature);
+DECLARE_DYNAMIC_DELEGATE_OneParam(FBBMOnWidgetAnimFinishedDynamicSignature, bool, bInterrupted);
+DECLARE_DELEGATE_OneParam(FBBMOnWidgetAnimFinishedSignature, bool /*bInterrupted*/);
 
-/* 애니메이션 전환 라이프사이클 브로드캐스트 동적 대리자 */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBBMOnSingleAnimTransitionStartedDynamicSignature, bool, bWithAnim);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FBBMOnTransitionEventDynamicSignature);
+/* 애니메이션 전환 라이프사이클 브로드캐스트 네이티브·동적 대리자 */
+DECLARE_MULTICAST_DELEGATE_OneParam(FBBMOnAnimTransitionStartedNativeSignature, bool /*bWithAnim*/);
+DECLARE_MULTICAST_DELEGATE_OneParam(FBBMOnAnimTransitionFinishedNativeSignature, bool /*bInterrupted*/);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBBMOnTransitionStartedDynamicSignature, bool, bWithAnim);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBBMOnTransitionFinishedDynamicSignature, bool, bInterrupted);
 
 /* 독립 전방 선언 */
 class UBBMUserWidgetBase;
@@ -99,11 +101,18 @@ struct BBM_API FBBMWidgetAnimConfig
 	GENERATED_BODY()
 
 public:
-	/* 대상 위젯의 WBGC 상속 계층에서 애니메이션을 조회·캐싱하여 반환 */
-	UWidgetAnimation* GetAnimation(const UUserWidget* InWidget) const;
+	/* 대상 위젯 자신 및 하위 위젯 트리를 순회하며 애니메이션과 소유 위젯을 조회·캐싱하여 반환 */
+	UWidgetAnimation* GetAnimation(UUserWidget* InWidget) const;
 
-	/* 캐싱된 애니메이션 참조 초기화 */
+	/* 캐싱된(또는 탐색된) 애니메이션의 실제 소유 위젯 인스턴스를 반환 */
+	UUserWidget* GetOwnerWidget(UUserWidget* InWidget) const;
+
+	/* 캐싱된 애니메이션·대상·소유 위젯 참조 초기화 */
 	void InvalidateCachedAnimation() const;
+
+private:
+	/* TargetWidget 일치 시 캐시 히트, 불일치 시 자기 자신 및 하위 위젯 트리를 재귀 탐색해 캐시 갱신 */
+	bool ResolveAnimation(UUserWidget* InWidget) const;
 
 public:
 	/* 재생할 위젯 애니메이션 이름 (UMG 에디터 애니메이션 MovieScene 이름) */
@@ -123,7 +132,13 @@ public:
 	int32 LoopCount = 1;
 
 private:
-	/* 마지막으로 탐색된 애니메이션 약참조 캐시 (Outer WBGC 상속 검사로 타 위젯 혼용 방지) */
+	/* 캐시 적중 판별용 루트 탐색 대상 위젯 약참조 */
+	mutable TWeakObjectPtr<UUserWidget> CachedTargetWidget;
+
+	/* 마지막으로 탐색된 애니메이션을 실제로 소유한 위젯 인스턴스 약참조 */
+	mutable TWeakObjectPtr<UUserWidget> CachedOwnerWidget;
+
+	/* 마지막으로 탐색된 애니메이션 약참조 캐시 */
 	mutable TWeakObjectPtr<UWidgetAnimation> CachedAnimation;
 };
 

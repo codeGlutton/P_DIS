@@ -18,6 +18,7 @@
 #include "UI/ViewModel/BBMViewModelBase.h"
 #include "UI/ViewModel/BBMTitleViewModel.h"
 #include "UI/ViewModel/BBMSettingsViewModel.h"
+#include "UI/ViewModel/BBMCharacterSelectViewModel.h"
 #include "UI/ViewModel/BBMCreditsViewModel.h"
 #include "UI/ViewModel/BBMCreditEntryViewModel.h"
 #include "UI/ViewModel/BBMSingleAnimTransition.h"
@@ -73,6 +74,32 @@ struct FBBMMVVMScopedTestWorld
 	}
 };
 
+namespace
+{
+	/**
+	 * TitleViewModel 필수 서브 뷰모델 3종을 생성·초기화하여 TitleVM에 주입하는 테스트 헬퍼
+	 */
+	void AssignDefaultSubViewModels(UObject* Outer, UBBMTitleViewModel* TitleVM)
+	{
+		if (Outer == nullptr || TitleVM == nullptr)
+		{
+			return;
+		}
+
+		UBBMSettingsViewModel* SettingsVM = NewObject<UBBMSettingsViewModel>(Outer);
+		UBBMCharacterSelectViewModel* CharacterSelectVM = NewObject<UBBMCharacterSelectViewModel>(Outer);
+		UBBMCreditsViewModel* CreditsVM = NewObject<UBBMCreditsViewModel>(Outer);
+
+		SettingsVM->FinishInitialization();
+		CharacterSelectVM->FinishInitialization();
+		CreditsVM->FinishInitialization();
+
+		TitleVM->SetSettingsViewModel(SettingsVM);
+		TitleVM->SetCharacterSelectViewModel(CharacterSelectVM);
+		TitleVM->SetCreditsViewModel(CreditsVM);
+	}
+}
+
 // 1. UBBMWorldUISubsystem의 독립 위젯/ViewModel 생성 및 위젯 수동 연결 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMWorldWidgetViewModelInjectionTest,
@@ -127,6 +154,7 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 
 	if (TitleWidget != nullptr && TitleVM != nullptr)
 	{
+		AssignDefaultSubViewModels(TestWorld.World, TitleVM);
 		TitleVM->FinishInitialization();
 
 		// 수동 연결 전에는 위젯 내부 단일 ViewModel이 비어 있어야 함
@@ -154,6 +182,7 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 
 	if (OpenedWidget != nullptr && DelayedTitleVM != nullptr)
 	{
+		AssignDefaultSubViewModels(TestWorld.World, DelayedTitleVM);
 		DelayedTitleVM->FinishInitialization();
 
 		// 위젯 연결 전 ViewModel->Open() 호출 시 논리 상태 및 OnOpen/OnFinishOpenAnim이 즉시 반영됨
@@ -207,17 +236,17 @@ bool FBBMTitleViewModelSaveContinueVisibilityTest::RunTest(const FString& Parame
 		return false;
 	}
 
-	// 뷰모델 생성
+	// 뷰모델 생성 및 필수 서브 뷰모델 주입
 	UBBMTitleViewModel* TitleVM = NewObject<UBBMTitleViewModel>(TestWorld.World);
 	TestNotNull(TEXT("UBBMTitleViewModel 생성 성공"), TitleVM);
 	if (TitleVM == nullptr)
 	{
 		return false;
 	}
+	AssignDefaultSubViewModels(TestWorld.World, TitleVM);
 	TitleVM->FinishInitialization();
 
 	// 2-1. 초기 상태: 활성 런 세이브가 없을 때 -> ContinueVisibility == Hidden, bCanContinue == false
-	GameDataSS->EnsureSaveDataLoaded();
 	UBBMRunSaveGame* RunData = GameDataSS->GetCurrentRunData();
 	if (RunData != nullptr)
 	{
@@ -266,6 +295,7 @@ bool FBBMTitleViewModelTransitionsTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+	AssignDefaultSubViewModels(TestWorld.World, TitleVM);
 	TitleVM->FinishInitialization();
 
 	UBBMSingleAnimTransition* ShiningTransition = TitleVM->GetShiningTransition();
@@ -308,7 +338,7 @@ bool FBBMTitleViewModelTransitionsTest::RunTest(const FString& Parameters)
 			++ShiningStartCount;
 		}
 	});
-	ShiningTransition->OnFinishedBeforeCallbacksNative.AddLambda([&ShiningFinishCount]()
+	ShiningTransition->OnFinishedBeforeCallbacksNative.AddLambda([&ShiningFinishCount](bool /*bInterrupted*/)
 	{
 		++ShiningFinishCount;
 	});
@@ -807,6 +837,341 @@ bool FBBMCreditsViewModelTest::RunTest(const FString& Parameters)
 
 	// CDO 원본 데이터 복원
 	MutableSettings->CreditCategories = SavedCreditCategories;
+
+	return true;
+}
+
+// 7. UBBMGameDataSubsystem 세이브 시작/완료 대리자 및 UBBMTitleViewModel Begin/EndViewModel 수명 주기 바인딩 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMTitleViewModelSaveDelegateBindingTest,
+	"DIS.BBM.UI.TitleViewModelSaveDelegateBinding",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMTitleViewModelSaveDelegateBindingTest::RunTest(const FString& Parameters)
+{
+	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+	const FString SavPath = UBBMGameDataSubsystem::GetSaveFilePath(UBBMRunSaveGame::SlotName);
+	const FString BakPath = UBBMGameDataSubsystem::GetBackupFilePath(UBBMRunSaveGame::SlotName);
+
+	const bool bHadSav = PlatformFile.FileExists(*SavPath);
+	const bool bHadBak = PlatformFile.FileExists(*BakPath);
+	TArray<uint8> PrevSavBytes;
+	TArray<uint8> PrevBakBytes;
+	if (bHadSav == true)
+	{
+		FFileHelper::LoadFileToArray(PrevSavBytes, *SavPath);
+	}
+	if (bHadBak == true)
+	{
+		FFileHelper::LoadFileToArray(PrevBakBytes, *BakPath);
+	}
+
+	ON_SCOPE_EXIT
+	{
+		if (bHadSav == true)
+		{
+			FFileHelper::SaveArrayToFile(PrevSavBytes, *SavPath);
+		}
+		else if (PlatformFile.FileExists(*SavPath) == true)
+		{
+			PlatformFile.DeleteFile(*SavPath);
+		}
+
+		if (bHadBak == true)
+		{
+			FFileHelper::SaveArrayToFile(PrevBakBytes, *BakPath);
+		}
+		else if (PlatformFile.FileExists(*BakPath) == true)
+		{
+			PlatformFile.DeleteFile(*BakPath);
+		}
+	};
+
+	FBBMMVVMScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드 유효 검증"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	UBBMGameDataSubsystem* GameDataSS = (TestWorld.GameInstance != nullptr)
+		? TestWorld.GameInstance->GetSubsystem<UBBMGameDataSubsystem>()
+		: nullptr;
+	TestNotNull(TEXT("UBBMGameDataSubsystem 획득 검증"), GameDataSS);
+	if (GameDataSS == nullptr)
+	{
+		return false;
+	}
+
+	// 블루프린트 바인딩용 동적 멀티캐스트 대리자 프로퍼티 노출 확인
+	FMulticastDelegateProperty* SaveStartedProp = FindFProperty<FMulticastDelegateProperty>(UBBMGameDataSubsystem::StaticClass(), TEXT("OnSaveStarted"));
+	FMulticastDelegateProperty* SaveCompletedProp = FindFProperty<FMulticastDelegateProperty>(UBBMGameDataSubsystem::StaticClass(), TEXT("OnSaveCompleted"));
+	TestNotNull(TEXT("OnSaveStarted 블루프린트 멀티캐스트 대리자 프로퍼티 존재"), SaveStartedProp);
+	TestNotNull(TEXT("OnSaveCompleted 블루프린트 멀티캐스트 대리자 프로퍼티 존재"), SaveCompletedProp);
+
+	UBBMTitleViewModel* TitleVM = NewObject<UBBMTitleViewModel>(TestWorld.World);
+	TestNotNull(TEXT("UBBMTitleViewModel 생성 성공"), TitleVM);
+	if (TitleVM == nullptr)
+	{
+		return false;
+	}
+
+	// BeginViewModel()에서 OnSaveStartedNative 바인딩 수행
+	AssignDefaultSubViewModels(TestWorld.World, TitleVM);
+	TitleVM->FinishInitialization();
+	TestTrue(TEXT("BeginViewModel() 이후 OnSaveStartedNative에 바인딩되어야 함"), GameDataSS->OnSaveStartedNative.IsBound());
+
+	UBBMRunSaveGame* RunData = GameDataSS->GetCurrentRunData();
+	TestNotNull(TEXT("CurrentRunData 유효 검증"), RunData);
+	if (RunData == nullptr)
+	{
+		return false;
+	}
+
+	// 7-1. OnSaveStartedNative 직접 브로드캐스트 시 HandleSaveStarted -> RefreshTitleState() 연동 검증
+	RunData->bHasActiveRun = true;
+	RunData->CurrentEncounterIndex = 5;
+	GameDataSS->OnSaveStartedNative.Broadcast();
+	TestTrue(TEXT("OnSaveStartedNative 브로드캐스트 시 bCanContinue가 true로 갱신되어야 함"), TitleVM->GetCanContinue());
+	TestEqual(TEXT("OnSaveStartedNative 브로드캐스트 시 ActiveRunEncounterIndex가 5로 갱신되어야 함"), TitleVM->GetActiveRunEncounterIndex(), 5);
+
+	// 7-2. 실제 SaveCurrentRunAsync 호출 시 세이브 시작/완료 대리자 순서 및 TitleViewModel 상태 자동 동기화 검증
+	TArray<FString> EventSequence;
+	bool bObservedSaveSuccess = false;
+	const FDelegateHandle StartHandle = GameDataSS->OnSaveStartedNative.AddLambda([&EventSequence]()
+	{
+		EventSequence.Add(TEXT("Started"));
+	});
+	const FDelegateHandle CompleteHandle = GameDataSS->OnSaveCompletedNative.AddLambda([&EventSequence, &bObservedSaveSuccess](bool bSuccess)
+	{
+		bObservedSaveSuccess = bSuccess;
+		EventSequence.Add(TEXT("Completed"));
+	});
+
+	RunData->bHasActiveRun = true;
+	RunData->CurrentEncounterIndex = 7;
+	GameDataSS->SaveCurrentRunAsync(FSimpleDelegate());
+
+	const double WaitStartTime = FPlatformTime::Seconds();
+	while (GameDataSS->IsAsyncOperationInProgress() == true && (FPlatformTime::Seconds() - WaitStartTime) < 2.0)
+	{
+		FTaskGraphInterface::Get().ProcessThreadUntilIdle(ENamedThreads::GameThread);
+		FPlatformProcess::Sleep(0.01f);
+	}
+	FTaskGraphInterface::Get().ProcessThreadUntilIdle(ENamedThreads::GameThread);
+
+	GameDataSS->OnSaveStartedNative.Remove(StartHandle);
+	GameDataSS->OnSaveCompletedNative.Remove(CompleteHandle);
+
+	TestEqual(TEXT("비동기 세이브 1회당 시작/완료 이벤트 총 2건 발생"), EventSequence.Num(), 2);
+	if (EventSequence.Num() == 2)
+	{
+		TestEqual(TEXT("첫 번째 이벤트는 Started여야 함"), EventSequence[0], FString(TEXT("Started")));
+		TestEqual(TEXT("두 번째 이벤트는 Completed여야 함"), EventSequence[1], FString(TEXT("Completed")));
+	}
+	TestTrue(TEXT("OnSaveCompletedNative 성공 여부가 true여야 함"), bObservedSaveSuccess);
+	TestTrue(TEXT("비동기 세이브 완료 후 IsAsyncOperationInProgress()는 false여야 함"), GameDataSS->IsAsyncOperationInProgress() == false);
+	TestTrue(TEXT("SaveCurrentRunAsync 시작 대리자를 통해 TitleVM bCanContinue가 true여야 함"), TitleVM->GetCanContinue());
+	TestEqual(TEXT("SaveCurrentRunAsync 시작 대리자를 통해 TitleVM 조우 인덱스가 7로 갱신되어야 함"), TitleVM->GetActiveRunEncounterIndex(), 7);
+
+	// 7-3. EndViewModel() 호출(BeginDestroy 경로) 시 OnSaveStartedNative 언바인딩 검증
+	TitleVM->ConditionalBeginDestroy();
+	TestFalse(TEXT("EndViewModel() 호출 이후 OnSaveStartedNative 바인딩이 해제되어야 함"), GameDataSS->OnSaveStartedNative.IsBound());
+
+	// 언바인딩 이후 브로드캐스트 재호출 시 크래시 없이 안전 동작 검증
+	RunData->bHasActiveRun = false;
+	RunData->CurrentEncounterIndex = 0;
+	GameDataSS->OnSaveStartedNative.Broadcast();
+
+	return true;
+}
+
+// 8. UBBMTitleViewModel BlockingTransition 가시성, 3대 서브 패널 카운팅, Interrupt 파라미터 및 미할당 에러 차단 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMTitleViewModelBlockingPanelControlTest,
+	"DIS.BBM.UI.TitleViewModelBlockingPanelControl",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMTitleViewModelBlockingPanelControlTest::RunTest(const FString& Parameters)
+{
+	FBBMMVVMScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드 유효 검증"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	// 8-1. 필수 서브 뷰모델 미할당 상태에서 FinishInitialization 호출 시 에러 로그 발생 및 훅 미바인딩 검증
+	{
+		AddExpectedError(TEXT("필수 서브 뷰모델이 할당되지 않음"), EAutomationExpectedErrorFlags::Contains, 1);
+
+		UBBMTitleViewModel* IncompleteTitleVM = NewObject<UBBMTitleViewModel>(TestWorld.World);
+		TestNotNull(TEXT("미완성 TitleVM 생성 성공"), IncompleteTitleVM);
+		if (IncompleteTitleVM != nullptr)
+		{
+			IncompleteTitleVM->FinishInitialization();
+			TestFalse(
+				TEXT("미할당 차단 시 BlockingTransition OnStartingNative 바인딩이 수행되지 않아야 함"),
+				IncompleteTitleVM->GetBlockingTransition()->OnStartingNative.IsBound()
+			);
+			TestFalse(
+				TEXT("미할당 차단 시 BlockingTransition OnEndedNative 바인딩이 수행되지 않아야 함"),
+				IncompleteTitleVM->GetBlockingTransition()->OnEndedNative.IsBound()
+			);
+		}
+	}
+
+	// 8-2. 3종 서브 뷰모델 사전 할당 후 BlockingPanelVisibility 및 다중 서브 패널 카운팅 연동 검증
+	UBBMTitleViewModel* TitleVM = NewObject<UBBMTitleViewModel>(TestWorld.World);
+	TestNotNull(TEXT("UBBMTitleViewModel 생성 성공"), TitleVM);
+	if (TitleVM == nullptr)
+	{
+		return false;
+	}
+
+	AssignDefaultSubViewModels(TestWorld.World, TitleVM);
+	TitleVM->FinishInitialization();
+
+	UBBMSettingsViewModel* SettingsVM = TitleVM->GetSettingsViewModel();
+	UBBMCharacterSelectViewModel* CharacterSelectVM = TitleVM->GetCharacterSelectViewModel();
+	UBBMCreditsViewModel* CreditsVM = TitleVM->GetCreditsViewModel();
+	UBBMDualAnimTransition* BlockingTransition = TitleVM->GetBlockingTransition();
+	UBBMSingleAnimTransition* ShiningTransition = TitleVM->GetShiningTransition();
+	TestNotNull(TEXT("SettingsVM 유효"), SettingsVM);
+	TestNotNull(TEXT("CharacterSelectVM 유효"), CharacterSelectVM);
+	TestNotNull(TEXT("CreditsVM 유효"), CreditsVM);
+	TestNotNull(TEXT("BlockingTransition 유효"), BlockingTransition);
+	TestNotNull(TEXT("ShiningTransition 유효"), ShiningTransition);
+	if (SettingsVM == nullptr || CharacterSelectVM == nullptr || CreditsVM == nullptr || BlockingTransition == nullptr || ShiningTransition == nullptr)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("초기 BlockingPanelVisibility는 Collapsed여야 함"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Collapsed);
+	TestTrue(TEXT("BeginViewModel() 이후 BlockingTransition OnStartingNative 바인딩 확인"), BlockingTransition->OnStartingNative.IsBound());
+	TestTrue(TEXT("BeginViewModel() 이후 BlockingTransition OnEndedNative 바인딩 확인"), BlockingTransition->OnEndedNative.IsBound());
+
+	// 프레젠테이션 핸들러를 모의 연결해 Starting/Ending 비동기 상태를 수동 완료 가능하게 구성
+	auto BindManualHandlers = [Outer = TestWorld.World](UBBMDualAnimTransition* Transition)
+	{
+		Transition->BindPresentationHandlers(
+			Outer,
+			FBBMOnPresentationTransitionRequestedSignature::CreateLambda([Transition](bool bWithAnim)
+			{
+				if (bWithAnim == false)
+				{
+					Transition->NotifyStartTransitionFinished();
+				}
+			}),
+			FBBMOnPresentationTransitionRequestedSignature::CreateLambda([Transition](bool bWithAnim)
+			{
+				if (bWithAnim == false)
+				{
+					Transition->NotifyEndTransitionFinished();
+				}
+			})
+		);
+	};
+
+	BindManualHandlers(BlockingTransition);
+	BindManualHandlers(SettingsVM->GetOpenCloseTransition());
+	BindManualHandlers(CharacterSelectVM->GetOpenCloseTransition());
+	BindManualHandlers(CreditsVM->GetOpenCloseTransition());
+
+	int32 BlockingVisibilityNotifyCount = 0;
+	const FDelegateHandle VisibilityNotifyHandle = TitleVM->AddFieldValueChangedDelegate(
+		UBBMTitleViewModel::FFieldNotificationClassDescriptor::BlockingPanelVisibility,
+		INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([&BlockingVisibilityNotifyCount](UObject* /*InObject*/, UE::FieldNotification::FFieldId /*InFieldId*/)
+		{
+			++BlockingVisibilityNotifyCount;
+		})
+	);
+
+	// TitleVM 오픈 중단(bInterrupted=true) 시 OnFinishOpenAnim(true)가 ShiningTransition을 실행하지 않는지 검증
+	int32 TitleShiningStartCount = 0;
+	ShiningTransition->OnTransitionStartedNative.AddLambda([&TitleShiningStartCount](bool bWithAnim)
+	{
+		// OnClosed()의 정지 호출(Execute(false))은 제외하고 오픈 완료 루프 시작(Execute(true))만 집계
+		if (bWithAnim == true)
+		{
+			++TitleShiningStartCount;
+		}
+	});
+	BindManualHandlers(TitleVM->GetOpenCloseTransition());
+	TitleVM->OpenWithAnim();
+	TitleVM->Close();
+	TestEqual(TEXT("오픈 중단(bInterrupted=true) 시 ShiningTransition이 시작되면 안 됨"), TitleShiningStartCount, 0);
+	TitleVM->Open();
+	TestEqual(TEXT("정상 오픈 완료(bInterrupted=false) 시 ShiningTransition이 1회 시작되어야 함"), TitleShiningStartCount, 1);
+
+	// 1) Settings 열기 (0 -> 1) -> BlockingTransition StartWithAnim 시작 및 즉시 Visible 전환
+	SettingsVM->OpenWithAnim();
+	TestEqual(TEXT("첫 서브 패널 시작 시 BlockingTransition은 Starting이어야 함"), BlockingTransition->GetState(), EBBMDualAnimState::Starting);
+	TestEqual(TEXT("BlockingTransition 시작 시 BlockingPanelVisibility는 Visible이어야 함"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Visible);
+	TestEqual(TEXT("BlockingPanelVisibility FieldNotify 1회 발송"), BlockingVisibilityNotifyCount, 1);
+
+	SettingsVM->GetOpenCloseTransition()->NotifyStartTransitionFinished();
+	BlockingTransition->NotifyStartTransitionFinished();
+	TestEqual(TEXT("Blocking 시작 완료 후 Started 상태 유지"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+	TestEqual(TEXT("Blocking Started 상태에서 Visible 유지"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Visible);
+
+	// 2) Credits 추가 열기 (1 -> 2) -> Blocking 유지 및 1개 닫기(2 -> 1) 시 Collapsed 전환 안 됨 검증
+	CreditsVM->OpenWithAnim();
+	CreditsVM->GetOpenCloseTransition()->NotifyStartTransitionFinished();
+	TestEqual(TEXT("2개 패널 열림 중에도 Blocking Started 유지"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+
+	CreditsVM->CloseWithAnim();
+	CreditsVM->GetOpenCloseTransition()->NotifyEndTransitionFinished();
+	TestEqual(TEXT("1개 패널만 닫혀도(2->1) Blocking은 Started 유지"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+	TestEqual(TEXT("잔여 패널 존재 시 BlockingPanelVisibility는 Visible 유지"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Visible);
+
+	// 3) Settings 닫기 (1 -> 0) -> BlockingTransition EndWithAnim 시작 후 종료 완료 시 Collapsed 복귀
+	SettingsVM->CloseWithAnim();
+	TestEqual(TEXT("Settings Ending 중 아직 OnEndedNative 전이므로 Blocking Started 유지"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+	SettingsVM->GetOpenCloseTransition()->NotifyEndTransitionFinished();
+	TestEqual(TEXT("마지막 서브 패널 종료 시 BlockingTransition은 Ending이어야 함"), BlockingTransition->GetState(), EBBMDualAnimState::Ending);
+	TestEqual(TEXT("Blocking Ending 중에는 아직 Visible 유지"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Visible);
+
+	BlockingTransition->NotifyEndTransitionFinished();
+	TestEqual(TEXT("Blocking 종료 완료 후 Ended 상태"), BlockingTransition->GetState(), EBBMDualAnimState::Ended);
+	TestEqual(TEXT("Blocking 종료 완료 후 BlockingPanelVisibility는 Collapsed여야 함"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("BlockingPanelVisibility FieldNotify 2회 누적"), BlockingVisibilityNotifyCount, 2);
+
+	// 4) 닫힘 중 재오픈(Ending -> Starting) 인터럽트 시 OnEndedNative(true) -> OnStartingNative 순서 및 카운팅 정합성 검증
+	bool bObservedInterruptedOnReopen = false;
+	const FDelegateHandle SettingsEndedTrackHandle = SettingsVM->GetOpenCloseTransition()->OnEndedNative.AddLambda([&bObservedInterruptedOnReopen](bool bInterrupted)
+	{
+		bObservedInterruptedOnReopen = bInterrupted;
+	});
+	SettingsVM->OpenWithAnim();
+	SettingsVM->GetOpenCloseTransition()->NotifyStartTransitionFinished();
+	BlockingTransition->NotifyStartTransitionFinished();
+	SettingsVM->CloseWithAnim();
+	SettingsVM->OpenWithAnim();
+	TestTrue(TEXT("닫힘 도중 재오픈 인터럽트 시 OnEndedNative(true)가 통지되어야 함"), bObservedInterruptedOnReopen);
+	TestEqual(TEXT("재오픈 후 BlockingTransition은 Starting/Started(Visible)를 유지해야 함"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Visible);
+	SettingsVM->GetOpenCloseTransition()->OnEndedNative.Remove(SettingsEndedTrackHandle);
+
+	// 재오픈된 Settings 정상 닫기(1 -> 0) 후 Collapsed 최종 복귀 확인
+	SettingsVM->GetOpenCloseTransition()->NotifyStartTransitionFinished();
+	BlockingTransition->NotifyStartTransitionFinished();
+	SettingsVM->CloseWithAnim();
+	SettingsVM->GetOpenCloseTransition()->NotifyEndTransitionFinished();
+	BlockingTransition->NotifyEndTransitionFinished();
+	TestEqual(TEXT("재오픈 인터럽트 후 정상 닫기 시 Collapsed 복귀"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Collapsed);
+
+	TitleVM->RemoveFieldValueChangedDelegate(UBBMTitleViewModel::FFieldNotificationClassDescriptor::BlockingPanelVisibility, VisibilityNotifyHandle);
+
+	// 8-3. EndViewModel() 호출(BeginDestroy 경로) 후 훅 전부 언바인딩 확인
+	TitleVM->ConditionalBeginDestroy();
+	TestFalse(TEXT("EndViewModel() 후 BlockingTransition OnStartingNative 해제"), BlockingTransition->OnStartingNative.IsBound());
+	TestFalse(TEXT("EndViewModel() 후 BlockingTransition OnEndedNative 해제"), BlockingTransition->OnEndedNative.IsBound());
+
+	// 언바인딩 후 서브 패널을 열어도 BlockingTransition이 반응하지 않아야 함
+	CharacterSelectVM->OpenWithAnim();
+	TestEqual(TEXT("EndViewModel() 후 서브 패널 열림 시 BlockingTransition은 Ended를 유지해야 함"), BlockingTransition->GetState(), EBBMDualAnimState::Ended);
 
 	return true;
 }

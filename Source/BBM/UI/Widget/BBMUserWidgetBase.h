@@ -172,6 +172,18 @@ protected:
 		const FBBMWidgetAnimConfig& InEndConfig
 	);
 
+	/* 애니메이션 설정(EBBMWidgetAnimPlayMode, 속도, 반복 횟수)에 따른 UMG 분기 재생 헬퍼 */
+	void PlayAnimationByConfig(const FBBMWidgetAnimConfig& InConfig);
+
+	/* 지정 설정이 가리키는 소유 위젯의 애니메이션 정지 헬퍼 */
+	void StopAnimationByConfig(const FBBMWidgetAnimConfig& InConfig);
+
+	/* 지정 설정이 가리키는 소유 위젯의 애니메이션 완료 바인딩 */
+	void BindToAnimationFinishedByConfig(const FBBMWidgetAnimConfig& InConfig, const FWidgetAnimationDynamicEvent& InFinishedDelegate);
+
+	/* 지정 설정이 가리키는 소유 위젯의 애니메이션 완료 바인딩 해제 */
+	void UnbindAllFromAnimationFinishedByConfig(const FBBMWidgetAnimConfig& InConfig);
+
 	/* 오픈/클로즈 프레젠테이션 요청 핸들러 및 완료 훅 */
 private:
 	/* ViewModel의 오픈 요청 수신 핸들러 (기본: 가시성 켜기 + HandleDualTransitionStartRequested) */
@@ -198,9 +210,6 @@ private:
 
 	/* 수명 주기 정책에 따른 레이어 분리 또는 가시성 숨김 적용 */
 	void ApplyCloseViewportPresentation();
-
-	/* 애니메이션 설정(EBBMWidgetAnimPlayMode, 속도, 반복 횟수)에 따른 UMG 분기 재생 헬퍼 */
-	void PlayAnimationByConfig(const FBBMWidgetAnimConfig& InConfig);
 
 	/* 설정 및 연결 멤버 변수 */
 protected:

@@ -31,6 +31,12 @@ void UBBMSingleAnimTransition::Execute(bool bWithAnim, FBBMOnWidgetAnimFinishedS
 
 void UBBMSingleAnimTransition::Clear()
 {
+	if (State == EBBMSingleAnimState::Playing)
+	{
+		FinishTransitionInternal(true);
+		return;
+	}
+
 	ClearPendingCallbacks();
 	SetState(EBBMSingleAnimState::Idle);
 }
@@ -43,18 +49,7 @@ void UBBMSingleAnimTransition::ClearPendingCallbacks()
 
 void UBBMSingleAnimTransition::NotifyAnimFinished()
 {
-	if (State != EBBMSingleAnimState::Playing)
-	{
-		return;
-	}
-
-	SetState(EBBMSingleAnimState::Idle);
-
-	// 상위 모듈이 최종 상태를 먼저 확정한 뒤 사용자 콜백이 상태를 조회할 수 있도록 선행 브로드캐스트
-	OnFinishedBeforeCallbacksNative.Broadcast();
-	OnTransitionFinished.Broadcast();
-
-	ExecutePendingCallbacks();
+	FinishTransitionInternal(false);
 }
 
 void UBBMSingleAnimTransition::BindPresentationHandler(
@@ -97,17 +92,18 @@ void UBBMSingleAnimTransition::ClearPresentationHandler(const UObject* InOwner)
 
 void UBBMSingleAnimTransition::InvokeCallbacksImmediate(
 	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
-	FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
+	FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete,
+	bool bInterrupted
 )
 {
 	if (InDynamicComplete.IsBound() == true)
 	{
-		InDynamicComplete.Execute();
+		InDynamicComplete.Execute(bInterrupted);
 	}
 
 	if (InNativeComplete.IsBound() == true)
 	{
-		InNativeComplete.Execute();
+		InNativeComplete.Execute(bInterrupted);
 	}
 }
 
@@ -159,6 +155,22 @@ void UBBMSingleAnimTransition::ExecuteInternal(
 	}
 }
 
+void UBBMSingleAnimTransition::FinishTransitionInternal(bool bInterrupted)
+{
+	if (State != EBBMSingleAnimState::Playing)
+	{
+		return;
+	}
+
+	SetState(EBBMSingleAnimState::Idle);
+
+	// 상위 모듈이 최종 상태를 먼저 확정한 뒤 사용자 콜백이 상태를 조회할 수 있도록 선행 브로드캐스트
+	OnFinishedBeforeCallbacksNative.Broadcast(bInterrupted);
+	OnTransitionFinished.Broadcast(bInterrupted);
+
+	ExecutePendingCallbacks(bInterrupted);
+}
+
 void UBBMSingleAnimTransition::EnqueuePendingCallbacks(
 	FBBMOnWidgetAnimFinishedSignature&& InNativeComplete,
 	FBBMOnWidgetAnimFinishedDynamicSignature&& InDynamicComplete
@@ -175,7 +187,7 @@ void UBBMSingleAnimTransition::EnqueuePendingCallbacks(
 	}
 }
 
-void UBBMSingleAnimTransition::ExecutePendingCallbacks()
+void UBBMSingleAnimTransition::ExecutePendingCallbacks(bool bInterrupted)
 {
 	// 콜백 재진입 시 안전을 위해 로컬 배열로 이동 후 순차 실행
 	TArray<FBBMOnWidgetAnimFinishedDynamicSignature> DynamicCallbacks = MoveTemp(PendingDynamicCallbacks);
@@ -187,7 +199,7 @@ void UBBMSingleAnimTransition::ExecutePendingCallbacks()
 	{
 		if (DynamicCallback.IsBound() == true)
 		{
-			DynamicCallback.Execute();
+			DynamicCallback.Execute(bInterrupted);
 		}
 	}
 
@@ -195,7 +207,7 @@ void UBBMSingleAnimTransition::ExecutePendingCallbacks()
 	{
 		if (NativeCallback.IsBound() == true)
 		{
-			NativeCallback.Execute();
+			NativeCallback.Execute(bInterrupted);
 		}
 	}
 }

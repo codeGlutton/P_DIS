@@ -21,6 +21,86 @@ UBBMTitleViewModel::UBBMTitleViewModel()
 	BlockingTransition = CreateDefaultSubobject<UBBMDualAnimTransition>(TEXT("BlockingTransition"));
 }
 
+void UBBMTitleViewModel::BeginViewModel()
+{
+	Super::BeginViewModel();
+
+	// 필수 서브 뷰모델 3종이 사전 할당되지 않은 경우 에러 로그를 발생시키고 초기 바인딩을 차단
+	if (SettingsViewModel == nullptr || CharacterSelectViewModel == nullptr || CreditsViewModel == nullptr)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[UBBMTitleViewModel::BeginViewModel] 필수 서브 뷰모델이 할당되지 않음 (Settings=%s, CharacterSelect=%s, Credits=%s)."),
+			SettingsViewModel != nullptr ? TEXT("Valid") : TEXT("Null"),
+			CharacterSelectViewModel != nullptr ? TEXT("Valid") : TEXT("Null"),
+			CreditsViewModel != nullptr ? TEXT("Valid") : TEXT("Null")
+		);
+		return;
+	}
+
+	if (BlockingTransition != nullptr)
+	{
+		BlockingStartingHandle = BlockingTransition->OnStartingNative.AddUObject(
+			this,
+			&UBBMTitleViewModel::HandleBlockingTransitionStarting
+		);
+		BlockingEndedHandle = BlockingTransition->OnEndedNative.AddUObject(
+			this,
+			&UBBMTitleViewModel::HandleBlockingTransitionEnded
+		);
+	}
+
+	BindSubViewModelOpenClose(SettingsViewModel);
+	BindSubViewModelOpenClose(CharacterSelectViewModel);
+	BindSubViewModelOpenClose(CreditsViewModel);
+
+	UWorld* World = GetWorld();
+	UGameInstance* GI = (World != nullptr) ? World->GetGameInstance() : nullptr;
+	UBBMGameDataSubsystem* GameDataSS = (GI != nullptr) ? GI->GetSubsystem<UBBMGameDataSubsystem>() : nullptr;
+	if (GameDataSS == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMTitleViewModel::BeginViewModel] UBBMGameDataSubsystem을 조회할 수 없어 세이브 시작 대리자 바인딩을 생략함"));
+		return;
+	}
+
+	SaveStartedHandle = GameDataSS->OnSaveStartedNative.AddUObject(
+		this,
+		&UBBMTitleViewModel::HandleSaveStarted
+	);
+}
+
+void UBBMTitleViewModel::EndViewModel()
+{
+	UnbindSubViewModelOpenClose();
+	OpenSubPanelCount = 0;
+
+	if (BlockingTransition != nullptr)
+	{
+		if (BlockingStartingHandle.IsValid() == true)
+		{
+			BlockingTransition->OnStartingNative.Remove(BlockingStartingHandle);
+		}
+		if (BlockingEndedHandle.IsValid() == true)
+		{
+			BlockingTransition->OnEndedNative.Remove(BlockingEndedHandle);
+		}
+	}
+	BlockingStartingHandle.Reset();
+	BlockingEndedHandle.Reset();
+
+	UWorld* World = GetWorld();
+	UGameInstance* GI = (World != nullptr) ? World->GetGameInstance() : nullptr;
+	UBBMGameDataSubsystem* GameDataSS = (GI != nullptr) ? GI->GetSubsystem<UBBMGameDataSubsystem>() : nullptr;
+	if (GameDataSS != nullptr && SaveStartedHandle.IsValid() == true)
+	{
+		GameDataSS->OnSaveStartedNative.Remove(SaveStartedHandle);
+	}
+	SaveStartedHandle.Reset();
+
+	Super::EndViewModel();
+}
+
 void UBBMTitleViewModel::OnOpen()
 {
 	Super::OnOpen();
@@ -29,11 +109,11 @@ void UBBMTitleViewModel::OnOpen()
 	RefreshTitleState();
 }
 
-void UBBMTitleViewModel::OnFinishOpenAnim()
+void UBBMTitleViewModel::OnFinishOpenAnim(bool bInterrupted)
 {
-	Super::OnFinishOpenAnim();
+	Super::OnFinishOpenAnim(bInterrupted);
 
-	if (ShiningTransition != nullptr)
+	if (bInterrupted == false && ShiningTransition != nullptr)
 	{
 		ShiningTransition->Execute(true);
 	}
@@ -58,6 +138,11 @@ void UBBMTitleViewModel::SetCanContinue(bool bInCanContinue)
 void UBBMTitleViewModel::SetActiveRunEncounterIndex(int32 InEncounterIndex)
 {
 	UE_MVVM_SET_PROPERTY_VALUE(ActiveRunEncounterIndex, InEncounterIndex);
+}
+
+void UBBMTitleViewModel::SetBlockingPanelVisibility(ESlateVisibility InVisibility)
+{
+	UE_MVVM_SET_PROPERTY_VALUE(BlockingPanelVisibility, InVisibility);
 }
 
 void UBBMTitleViewModel::SetSettingsViewModel(UBBMSettingsViewModel* InSettingsViewModel)
@@ -87,14 +172,98 @@ void UBBMTitleViewModel::RefreshTitleState()
 		return;
 	}
 
-	// 영속 세이브 데이터 로드 보장
-	GameDataSS->EnsureSaveDataLoaded();
-
 	const bool bHasRun = GameDataSS->HasActiveRun();
 	SetCanContinue(bHasRun);
 
 	const UBBMRunSaveGame* RunData = (bHasRun == true) ? GameDataSS->GetCurrentRunData() : nullptr;
 	SetActiveRunEncounterIndex(RunData != nullptr ? RunData->CurrentEncounterIndex : 0);
+}
+
+void UBBMTitleViewModel::HandleSaveStarted()
+{
+	RefreshTitleState();
+}
+
+void UBBMTitleViewModel::HandleBlockingTransitionStarting(bool /*bWithAnim*/)
+{
+	SetBlockingPanelVisibility(ESlateVisibility::Visible);
+}
+
+void UBBMTitleViewModel::HandleBlockingTransitionEnded(bool /*bInterrupted*/)
+{
+	SetBlockingPanelVisibility(ESlateVisibility::Collapsed);
+}
+
+void UBBMTitleViewModel::HandleSubPanelStarting(bool /*bWithAnim*/)
+{
+	++OpenSubPanelCount;
+	if (OpenSubPanelCount == 1 && BlockingTransition != nullptr)
+	{
+		BlockingTransition->StartWithAnim();
+	}
+}
+
+void UBBMTitleViewModel::HandleSubPanelEnded(bool /*bInterrupted*/)
+{
+	if (OpenSubPanelCount <= 0)
+	{
+		return;
+	}
+
+	--OpenSubPanelCount;
+	if (OpenSubPanelCount == 0 && BlockingTransition != nullptr)
+	{
+		BlockingTransition->EndWithAnim();
+	}
+}
+
+void UBBMTitleViewModel::BindSubViewModelOpenClose(UBBMViewModelBase* InSubViewModel)
+{
+	if (InSubViewModel == nullptr)
+	{
+		return;
+	}
+
+	UBBMDualAnimTransition* OpenClose = InSubViewModel->GetOpenCloseTransition();
+	if (OpenClose == nullptr)
+	{
+		return;
+	}
+
+	FSubPanelHookBinding Binding;
+	Binding.Transition = OpenClose;
+	Binding.StartingHandle = OpenClose->OnStartingNative.AddUObject(
+		this,
+		&UBBMTitleViewModel::HandleSubPanelStarting
+	);
+	Binding.EndedHandle = OpenClose->OnEndedNative.AddUObject(
+		this,
+		&UBBMTitleViewModel::HandleSubPanelEnded
+	);
+	SubPanelHookBindings.Add(MoveTemp(Binding));
+}
+
+void UBBMTitleViewModel::UnbindSubViewModelOpenClose()
+{
+	for (FSubPanelHookBinding& Binding : SubPanelHookBindings)
+	{
+		if (Binding.Transition.IsValid() == false)
+		{
+			continue;
+		}
+
+		UBBMDualAnimTransition* Transition = Binding.Transition.Get();
+		if (Binding.StartingHandle.IsValid() == true)
+		{
+			Transition->OnStartingNative.Remove(Binding.StartingHandle);
+		}
+		if (Binding.EndedHandle.IsValid() == true)
+		{
+			Transition->OnEndedNative.Remove(Binding.EndedHandle);
+		}
+	}
+
+	SubPanelHookBindings.Reset();
 }
 
 void UBBMTitleViewModel::ContinueGame()

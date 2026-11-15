@@ -234,3 +234,52 @@ public:
 	FBBMWorldViewModelConfig ViewModelConfig;
 };
 
+/**
+ * 크레딧 화면의 단일 카테고리 및 소속 인물·팀 목록 정의 구조체
+ */
+USTRUCT(BlueprintType)
+struct BBM_API FBBMCreditCategory
+{
+	GENERATED_BODY()
+
+	/* 비교 연산자 */
+public:
+	bool operator==(const FBBMCreditCategory& Other) const
+	{
+		if (CategoryName.EqualTo(Other.CategoryName) == false)
+		{
+			return false;
+		}
+
+		if (Entries.Num() != Other.Entries.Num())
+		{
+			return false;
+		}
+
+		for (int32 Index = 0; Index < Entries.Num(); ++Index)
+		{
+			if (Entries[Index].EqualTo(Other.Entries[Index]) == false)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	bool operator!=(const FBBMCreditCategory& Other) const
+	{
+		return (*this == Other) == false;
+	}
+
+	/* 프로퍼티 */
+public:
+	/* 크레딧 카테고리 이름 (예: 디렉터, 프로그래밍, 아트, 폰트 라이선스 등) */
+	UPROPERTY(Category = "BBM|Credits", EditAnywhere, BlueprintReadWrite)
+	FText CategoryName;
+
+	/* 해당 카테고리에 표시할 연관 인물, 팀명 또는 라이선스 문구 배열 */
+	UPROPERTY(Category = "BBM|Credits", EditAnywhere, BlueprintReadWrite, meta = (MultiLine = true))
+	TArray<FText> Entries;
+};
+

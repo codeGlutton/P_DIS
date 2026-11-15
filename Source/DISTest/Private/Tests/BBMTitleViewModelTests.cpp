@@ -19,9 +19,10 @@
 #include "UI/ViewModel/BBMTitleViewModel.h"
 #include "UI/ViewModel/BBMSettingsViewModel.h"
 #include "UI/ViewModel/BBMCreditsViewModel.h"
+#include "UI/ViewModel/BBMCreditEntryViewModel.h"
 #include "UI/ViewModel/BBMSingleAnimTransition.h"
 #include "UI/ViewModel/BBMDualAnimTransition.h"
-#include "Audio/BBMAudioSettings.h"
+#include "Global/BBMGlobalSettings.h"
 #include "Save/BBMGameDataSubsystem.h"
 #include "Save/BBMRunSaveGame.h"
 #include "Save/BBMUserSaveGame.h"
@@ -380,9 +381,14 @@ bool FBBMSettingsAndCreditsWidgetsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("GetSettingsViewModel()은 바인딩된 SettingsViewModel을 반환해야 함"), SettingsWidget->GetSettingsViewModel() == SettingsVM);
 	TestTrue(TEXT("GetCreditsViewModel()은 바인딩된 CreditsViewModel을 반환해야 함"), CreditsWidget->GetCreditsViewModel() == CreditsVM);
 
-	// UBBMAudioSettings 기본 객체 접근 검증
-	const UBBMAudioSettings* AudioSettings = GetDefault<UBBMAudioSettings>();
-	TestNotNull(TEXT("UBBMAudioSettings CDO 조회 성공"), AudioSettings);
+	// UBBMGlobalSettings 기본 객체 및 통합 설정 검증
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	TestNotNull(TEXT("UBBMGlobalSettings CDO 조회 성공"), GlobalSettings);
+	if (GlobalSettings != nullptr)
+	{
+		TestEqual(TEXT("UBBMGlobalSettings 섹션명은 BBM Global Settings여야 함"), GlobalSettings->GetSectionName(), FName(TEXT("BBM Global Settings")));
+		TestTrue(TEXT("DefaultGame.ini에서 TeamRelations가 정상 로드되어야 함"), GlobalSettings->TeamRelations.Num() > 0);
+	}
 
 	return true;
 }
@@ -659,6 +665,148 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("Initialize() 시 디스크에 저장된 BeatVisualAssist(false)가 자동 로드·복원되어야 함"), SecondSS->GetUserSettingsData().bEnableBeatVisualAssist, false);
 		}
 	}
+
+	return true;
+}
+
+/**
+ * 테스트 케이스 6: UBBMCreditEntryViewModel 및 UBBMCreditsViewModel 초기화/FieldNotify 검증
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMCreditsViewModelTest,
+	"DIS.BBM.UI.CreditsViewModel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
+)
+
+bool FBBMCreditsViewModelTest::RunTest(const FString& Parameters)
+{
+	FBBMMVVMScopedTestWorld TestWorld;
+	TestNotNull(TEXT("테스트 월드 생성 성공"), TestWorld.World);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	// 6-1. UBBMCreditEntryViewModel 단독 동작 및 FieldNotify 검증
+	UBBMCreditEntryViewModel* EntryVM = NewObject<UBBMCreditEntryViewModel>(TestWorld.World);
+	TestNotNull(TEXT("UBBMCreditEntryViewModel 생성 성공"), EntryVM);
+	if (EntryVM == nullptr)
+	{
+		return false;
+	}
+
+	int32 CategoryNameNotifyCount = 0;
+	int32 EntriesTextNotifyCount = 0;
+	int32 StructNotifyCount = 0;
+
+	EntryVM->AddFieldValueChangedDelegate(
+		UBBMCreditEntryViewModel::FFieldNotificationClassDescriptor::GetCategoryName,
+		INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([&CategoryNameNotifyCount](UObject* /*InObject*/, UE::FieldNotification::FFieldId /*InFieldId*/)
+		{
+			++CategoryNameNotifyCount;
+		})
+	);
+	EntryVM->AddFieldValueChangedDelegate(
+		UBBMCreditEntryViewModel::FFieldNotificationClassDescriptor::GetEntriesText,
+		INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([&EntriesTextNotifyCount](UObject* /*InObject*/, UE::FieldNotification::FFieldId /*InFieldId*/)
+		{
+			++EntriesTextNotifyCount;
+		})
+	);
+	EntryVM->AddFieldValueChangedDelegate(
+		UBBMCreditEntryViewModel::FFieldNotificationClassDescriptor::CreditCategory,
+		INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([&StructNotifyCount](UObject* /*InObject*/, UE::FieldNotification::FFieldId /*InFieldId*/)
+		{
+			++StructNotifyCount;
+		})
+	);
+
+	FBBMCreditCategory SampleCategory;
+	SampleCategory.CategoryName = FText::FromString(TEXT("Programming"));
+	SampleCategory.Entries.Add(FText::FromString(TEXT("Alice")));
+	SampleCategory.Entries.Add(FText::FromString(TEXT("Bob")));
+
+	EntryVM->SetCreditCategory(SampleCategory);
+
+	TestTrue(TEXT("GetCategoryName()은 설정한 카테고리 이름을 반환해야 함"), EntryVM->GetCategoryName().EqualTo(FText::FromString(TEXT("Programming"))));
+	TestTrue(TEXT("GetEntriesText()는 각 항목을 개행(\\n)으로 결합해 반환해야 함"), EntryVM->GetEntriesText().EqualTo(FText::FromString(TEXT("Alice\nBob"))));
+	TestEqual(TEXT("SetCreditCategory 최초 변경 시 GetCategoryName FieldNotify 1회 발송"), CategoryNameNotifyCount, 1);
+	TestEqual(TEXT("SetCreditCategory 최초 변경 시 GetEntriesText FieldNotify 1회 발송"), EntriesTextNotifyCount, 1);
+	TestEqual(TEXT("SetCreditCategory 최초 변경 시 CreditCategory FieldNotify 1회 발송"), StructNotifyCount, 1);
+
+	// 동일 값 재설정 시 중복 FieldNotify가 발송되지 않아야 함
+	EntryVM->SetCreditCategory(SampleCategory);
+	TestEqual(TEXT("동일 구조체 재설정 시 GetCategoryName FieldNotify 미발송"), CategoryNameNotifyCount, 1);
+	TestEqual(TEXT("동일 구조체 재설정 시 GetEntriesText FieldNotify 미발송"), EntriesTextNotifyCount, 1);
+
+	// 빈 Entries 설정 시 빈 FText 반환 검증
+	FBBMCreditCategory EmptyEntriesCategory;
+	EmptyEntriesCategory.CategoryName = FText::FromString(TEXT("Empty"));
+	EntryVM->SetCreditCategory(EmptyEntriesCategory);
+	TestTrue(TEXT("빈 Entries 설정 시 GetEntriesText()는 빈 텍스트여야 함"), EntryVM->GetEntriesText().IsEmpty());
+
+	// 6-2. UBBMCreditsViewModel::BeginViewModel()의 UBBMGlobalSettings 연동 검증
+	UBBMGlobalSettings* MutableSettings = GetMutableDefault<UBBMGlobalSettings>();
+	TestNotNull(TEXT("UBBMGlobalSettings CDO 조회 성공"), MutableSettings);
+	if (MutableSettings == nullptr)
+	{
+		return false;
+	}
+
+	const TArray<FBBMCreditCategory> SavedCreditCategories = MutableSettings->CreditCategories;
+
+	FBBMCreditCategory CategoryOne;
+	CategoryOne.CategoryName = FText::FromString(TEXT("Director"));
+	CategoryOne.Entries.Add(FText::FromString(TEXT("Lead Dev")));
+
+	FBBMCreditCategory CategoryTwo;
+	CategoryTwo.CategoryName = FText::FromString(TEXT("Fonts"));
+	CategoryTwo.Entries.Add(FText::FromString(TEXT("Pretendard Bold")));
+	CategoryTwo.Entries.Add(FText::FromString(TEXT("Pretendard Regular")));
+
+	MutableSettings->CreditCategories = { CategoryOne, CategoryTwo };
+
+	UBBMCreditsViewModel* CreditsVM = NewObject<UBBMCreditsViewModel>(TestWorld.World);
+	TestNotNull(TEXT("UBBMCreditsViewModel 생성 성공"), CreditsVM);
+	if (CreditsVM != nullptr)
+	{
+		int32 CreditEntriesNotifyCount = 0;
+		CreditsVM->AddFieldValueChangedDelegate(
+			UBBMCreditsViewModel::FFieldNotificationClassDescriptor::CreditEntries,
+			INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([&CreditEntriesNotifyCount](UObject* /*InObject*/, UE::FieldNotification::FFieldId /*InFieldId*/)
+			{
+				++CreditEntriesNotifyCount;
+			})
+		);
+
+		CreditsVM->FinishInitialization();
+
+		const TArray<TObjectPtr<UBBMCreditEntryViewModel>>& Entries = CreditsVM->GetCreditEntries();
+		TestEqual(TEXT("BeginViewModel() 후 CreditEntries 개수가 Settings와 일치해야 함"), Entries.Num(), 2);
+		TestEqual(TEXT("BeginViewModel() 후 CreditEntries FieldNotify 1회 발송"), CreditEntriesNotifyCount, 1);
+
+		if (Entries.Num() == 2)
+		{
+			TestNotNull(TEXT("첫 번째 CreditEntryViewModel 유효"), Entries[0].Get());
+			TestNotNull(TEXT("두 번째 CreditEntryViewModel 유효"), Entries[1].Get());
+			if (Entries[0] != nullptr && Entries[1] != nullptr)
+			{
+				TestTrue(TEXT("엔트리 VM Outer는 CreditsVM이어야 함"), Entries[0]->GetOuter() == CreditsVM);
+				TestTrue(TEXT("첫 번째 카테고리 이름 일치"), Entries[0]->GetCategoryName().EqualTo(FText::FromString(TEXT("Director"))));
+				TestTrue(TEXT("첫 번째 항목 텍스트 일치"), Entries[0]->GetEntriesText().EqualTo(FText::FromString(TEXT("Lead Dev"))));
+				TestTrue(TEXT("두 번째 카테고리 이름 일치"), Entries[1]->GetCategoryName().EqualTo(FText::FromString(TEXT("Fonts"))));
+				TestTrue(TEXT("두 번째 항목 개행 결합 텍스트 일치"), Entries[1]->GetEntriesText().EqualTo(FText::FromString(TEXT("Pretendard Bold\nPretendard Regular"))));
+			}
+		}
+
+		// SetCreditCategories 수동 재호출 시 교체 및 FieldNotify 재발송 검증
+		CreditsVM->SetCreditCategories({ CategoryTwo });
+		TestEqual(TEXT("SetCreditCategories 재호출 시 개수가 1로 갱신되어야 함"), CreditsVM->GetCreditEntries().Num(), 1);
+		TestEqual(TEXT("SetCreditCategories 재호출 시 CreditEntries FieldNotify 추가 발송"), CreditEntriesNotifyCount, 2);
+	}
+
+	// CDO 원본 데이터 복원
+	MutableSettings->CreditCategories = SavedCreditCategories;
 
 	return true;
 }

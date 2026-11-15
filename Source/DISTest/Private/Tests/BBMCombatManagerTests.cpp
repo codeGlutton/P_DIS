@@ -25,7 +25,7 @@
 #include "Combat/Pawn/BBMAICombatantDefinition.h"
 #include "Combat/Pawn/BBMPlayerCharacterDefinition.h"
 #include "Combat/Team/BBMTeamTypes.h"
-#include "Combat/Team/BBMCombatSettings.h"
+#include "Global/BBMGlobalSettings.h"
 #include "Inventory/BBMInventoryComponent.h"
 #include "Inventory/BBMInventoryDefinition.h"
 #include "Inventory/BBMInventory.h"

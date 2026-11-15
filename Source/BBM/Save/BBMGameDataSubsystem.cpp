@@ -25,7 +25,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/App.h"
 #include "Async/Async.h"
-#include "Audio/BBMAudioSettings.h"
+#include "Global/BBMGlobalSettings.h"
 #include "AudioDevice.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
@@ -404,13 +404,13 @@ void UBBMGameDataSubsystem::ApplyAudioSettingsInternal(const FBBMUserSettingsDat
 		return;
 	}
 
-	const UBBMAudioSettings* AudioSettings = GetDefault<UBBMAudioSettings>();
-	if (AudioSettings == nullptr)
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	if (GlobalSettings == nullptr)
 	{
 		return;
 	}
 
-	USoundMix* SoundMix = AudioSettings->UserSettingsSoundMix.LoadSynchronous();
+	USoundMix* SoundMix = GlobalSettings->UserSettingsSoundMix.LoadSynchronous();
 	if (SoundMix == nullptr)
 	{
 		return;
@@ -427,10 +427,10 @@ void UBBMGameDataSubsystem::ApplyAudioSettingsInternal(const FBBMUserSettingsDat
 
 	const TPair<const TSoftObjectPtr<USoundClass>*, float> ClassVolumePairs[] =
 	{
-		{ &AudioSettings->MasterSoundClass, InSettings.MasterVolume },
-		{ &AudioSettings->BGMSoundClass, InSettings.BGMVolume },
-		{ &AudioSettings->SFXSoundClass, InSettings.SFXVolume },
-		{ &AudioSettings->DialogueSoundClass, InSettings.DialogueVolume }
+		{ &GlobalSettings->MasterSoundClass, InSettings.MasterVolume },
+		{ &GlobalSettings->BGMSoundClass, InSettings.BGMVolume },
+		{ &GlobalSettings->SFXSoundClass, InSettings.SFXVolume },
+		{ &GlobalSettings->DialogueSoundClass, InSettings.DialogueVolume }
 	};
 
 	for (const TPair<const TSoftObjectPtr<USoundClass>*, float>& Pair : ClassVolumePairs)

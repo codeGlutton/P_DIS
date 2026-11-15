@@ -83,6 +83,10 @@
 		{
 			"Name": "AssetLinter",
 			"Enabled": true
+		},
+		{
+			"Name": "ExtensionWidget",
+			"Enabled": true
 		}
 	]
 }

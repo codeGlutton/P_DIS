@@ -20,6 +20,10 @@ public class DISTest : ModuleRules
 			"AIModule",
 			"DISRuntime",
 			"BBM",
+			"ExtensionWidget",
+			"InputCore",
+			"Slate",
+			"SlateCore",
 			"UMG",
 			"ModelViewViewModel"
 		});

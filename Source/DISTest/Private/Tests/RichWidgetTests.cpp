@@ -3,9 +3,12 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "Blueprint/WidgetTree.h"
+#include "Brushes/SlateColorBrush.h"
+#include "Brushes/SlateNoResource.h"
 #include "Components/RichHorizontalBox.h"
 #include "Components/RichListView.h"
 #include "Components/RichScrollBar.h"
+#include "Components/RichSlider.h"
 #include "Components/RichVerticalBox.h"
 #include "Components/Spacer.h"
 #include "Engine/Blueprint.h"
@@ -18,6 +21,7 @@
 #include "Rendering/DrawElements.h"
 #include "Types/PaintArgs.h"
 #include "Types/RichScrollBarTypes.h"
+#include "Types/RichSliderTypes.h"
 #include "UI/Widget/BBMCreditEntryWidget.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
@@ -27,6 +31,7 @@
 #include "Widgets/SRichScrollBar.h"
 #include "Widgets/SRichScrollBarBridge.h"
 #include "Widgets/SRichScrollTrack.h"
+#include "Widgets/SRichSlider.h"
 #include "Widgets/SRichVerticalBox.h"
 #include "Widgets/SWindow.h"
 
@@ -700,6 +705,187 @@ bool FRichBoxReversePaintAndHitTest::RunTest(const FString& Parameters)
 		UMGHorizontalBox->ReleaseSlateResources(true);
 		TestFalse(TEXT("URichVerticalBox releases Slate widget cleanly"), UMGVerticalBox->GetSlateRichVerticalBox().IsValid());
 		TestFalse(TEXT("URichHorizontalBox releases Slate widget cleanly"), UMGHorizontalBox->GetSlateRichHorizontalBox().IsValid());
+	}
+
+	return true;
+}
+
+/**
+ * SRichSlider / URichSlider 채움 트랙 핸들 정중앙 클리핑·무폴백 상태 브러시·UMG 동기화 검증 테스트
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FRichSliderWidgetTest,
+	"DIS.ExtensionWidget.RichSlider",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FRichSliderWidgetTest::RunTest(const FString& Parameters)
+{
+	// 1. FRichSliderStyle 기본값 및 GetFillBarImage() 무폴백 상태 선택 검증
+	FSliderStyle BaseStyle;
+	BaseStyle.BarThickness = 14.0f;
+	BaseStyle.NormalBarImage = FSlateColorBrush(FLinearColor::Black);
+	BaseStyle.HoveredBarImage = FSlateColorBrush(FLinearColor::Gray);
+	BaseStyle.DisabledBarImage = FSlateColorBrush(FLinearColor(0.2f, 0.2f, 0.2f, 1.0f));
+	BaseStyle.NormalThumbImage = FSlateColorBrush(FLinearColor::White);
+	BaseStyle.NormalThumbImage.ImageSize = FVector2D(24.0f, 24.0f);
+	BaseStyle.HoveredThumbImage = BaseStyle.NormalThumbImage;
+	BaseStyle.DisabledThumbImage = BaseStyle.NormalThumbImage;
+
+	FRichSliderStyle RichStyle;
+	RichStyle.NormalFillBarImage = FSlateColorBrush(FLinearColor::Yellow);
+	RichStyle.HoveredFillBarImage = FSlateColorBrush(FLinearColor::Green);
+	RichStyle.DisabledFillBarImage = FSlateNoResource();
+
+	TSharedRef<SRichSlider> RichSlider = SNew(SRichSlider)
+		.Style(&BaseStyle)
+		.RichStyle(&RichStyle)
+		.IndentHandle(true)
+		.Value(0.5f);
+
+	TestTrue(TEXT("Normal FillBar returns NormalFillBarImage"), RichSlider->GetFillBarImage() == &RichStyle.NormalFillBarImage);
+
+	RichSlider->SetLocked(true);
+	TestTrue(TEXT("Locked FillBar returns DisabledFillBarImage directly without fallback"), RichSlider->GetFillBarImage() == &RichStyle.DisabledFillBarImage);
+
+	// 2. OnPaint 3레이어 및 핸들 정중앙 클리핑(FSlateClippingZone) 검증
+	const FGeometry HorizontalGeometry = FGeometry::MakeRoot(FVector2D(320.0f, 32.0f), FSlateLayoutTransform());
+	TSharedRef<SWindow> DummyWindow = SNew(SWindow).ClientSize(FVector2D(320.0f, 320.0f));
+	TSharedRef<FHittestGrid> HittestGrid = MakeShared<FHittestGrid>();
+	HittestGrid->SetHittestArea(FVector2f::ZeroVector, FVector2f(320.0f, 320.0f), FVector2f::ZeroVector);
+	const FPaintArgs PaintArgs(nullptr, HittestGrid.Get(), HittestGrid.Get(), FVector2f::ZeroVector, 0.0, 0.0f);
+	const FSlateRect CullingRect(0.0f, 0.0f, 320.0f, 320.0f);
+
+	// NoDrawType으로 설정된 DisabledFillBarImage는 폴백 없이 비표시 처리됨
+	{
+		FSlateWindowElementList DrawElements(DummyWindow);
+		RichSlider->OnPaint(PaintArgs, HorizontalGeometry, CullingRect, DrawElements, 0, FWidgetStyle(), true);
+
+		const auto& BoxElements = DrawElements.GetUncachedDrawElements().Get<static_cast<uint8>(EElementType::ET_Box)>();
+		TestEqual(TEXT("Disabled NoDrawType FillBar omits fill rendering without fallback (2 boxes)"), BoxElements.Num(), 2);
+		TestEqual(TEXT("Disabled NoDrawType FillBar pushes 0 clipping states"), DrawElements.GetClippingManager().GetClippingStates().Num(), 0);
+	}
+	RichSlider->SetLocked(false);
+
+	// 2-1. 0%: 채움 바 생략 -> Box 2개(BackgroundBar, Thumb), ClippingState 0개
+	{
+		RichSlider->SetValue(0.0f);
+		FSlateWindowElementList DrawElements(DummyWindow);
+		RichSlider->OnPaint(PaintArgs, HorizontalGeometry, CullingRect, DrawElements, 0, FWidgetStyle(), true);
+
+		const auto& BoxElements = DrawElements.GetUncachedDrawElements().Get<static_cast<uint8>(EElementType::ET_Box)>();
+		TestEqual(TEXT("At 0% Value, SRichSlider paints 2 boxes (Background + Thumb)"), BoxElements.Num(), 2);
+		TestEqual(TEXT("At 0% Value, SRichSlider pushes 0 clipping states"), DrawElements.GetClippingManager().GetClippingStates().Num(), 0);
+	}
+
+	// 2-2. 50% (IndentHandle=true): HandleCenterX = 0.5 * (320 - 48) + 24 = 160
+	{
+		RichSlider->SetValue(0.5f);
+		FSlateWindowElementList DrawElements(DummyWindow);
+		RichSlider->OnPaint(PaintArgs, HorizontalGeometry, CullingRect, DrawElements, 0, FWidgetStyle(), true);
+
+		const auto& BoxElements = DrawElements.GetUncachedDrawElements().Get<static_cast<uint8>(EElementType::ET_Box)>();
+		const TArray<FSlateClippingState>& ClipStates = DrawElements.GetClippingManager().GetClippingStates();
+		TestEqual(TEXT("At 50% Value, SRichSlider paints 3 boxes (Background + Fill + Thumb)"), BoxElements.Num(), 3);
+		TestEqual(TEXT("At 50% Value, SRichSlider pushes 1 clipping state"), ClipStates.Num(), 1);
+		if (ClipStates.Num() == 1 && ClipStates[0].ScissorRect.IsSet() == true)
+		{
+			TestEqual(TEXT("Fill clip starts at BarLeft (12.0)"), static_cast<float>(ClipStates[0].ScissorRect->TopLeft.X), 12.0f, 0.05f);
+			TestEqual(TEXT("Fill clip ends at HandleCenterX (160.0)"), static_cast<float>(ClipStates[0].ScissorRect->TopRight.X), 160.0f, 0.05f);
+		}
+	}
+
+	// 2-3. 100% (IndentHandle=true): HandleCenterX = 272 + 24 = 296 (BarRight=308보다 앞선 핸들 정중앙에서 정확히 정지)
+	{
+		RichSlider->SetValue(1.0f);
+		FSlateWindowElementList DrawElements(DummyWindow);
+		RichSlider->OnPaint(PaintArgs, HorizontalGeometry, CullingRect, DrawElements, 0, FWidgetStyle(), true);
+
+		const TArray<FSlateClippingState>& ClipStates = DrawElements.GetClippingManager().GetClippingStates();
+		TestEqual(TEXT("At 100% Value, SRichSlider pushes 1 clipping state"), ClipStates.Num(), 1);
+		if (ClipStates.Num() == 1 && ClipStates[0].ScissorRect.IsSet() == true)
+		{
+			TestEqual(TEXT("At 100% IndentHandle=true, Fill clip stops at HandleCenterX (296.0)"), static_cast<float>(ClipStates[0].ScissorRect->TopRight.X), 296.0f, 0.05f);
+		}
+	}
+
+	// 2-4. 수직(Orient_Vertical) OnPaint 검증
+	{
+		TSharedRef<SRichSlider> VerticalSlider = SNew(SRichSlider)
+			.Style(&BaseStyle)
+			.RichStyle(&RichStyle)
+			.Orientation(Orient_Vertical)
+			.Value(0.5f);
+		const FGeometry VerticalGeometry = FGeometry::MakeRoot(FVector2D(32.0f, 320.0f), FSlateLayoutTransform());
+		FSlateWindowElementList DrawElements(DummyWindow);
+		VerticalSlider->OnPaint(PaintArgs, VerticalGeometry, CullingRect, DrawElements, 0, FWidgetStyle(), true);
+
+		const auto& BoxElements = DrawElements.GetUncachedDrawElements().Get<static_cast<uint8>(EElementType::ET_Box)>();
+		TestEqual(TEXT("Vertical SRichSlider paints 3 boxes (Background + Fill + Thumb)"), BoxElements.Num(), 3);
+		TestEqual(TEXT("Vertical SRichSlider pushes 1 clipping state"), DrawElements.GetClippingManager().GetClippingStates().Num(), 1);
+	}
+
+	// 3. UMG URichSlider 파생 프로퍼티 동기화, USlider FieldNotify 계승 및 리소스 해제 검증
+	{
+		FExtensionWidgetTestWorldScope WorldScope;
+		TestNotNull(TEXT("Test world valid for URichSlider"), WorldScope.World);
+		if (WorldScope.World == nullptr)
+		{
+			return false;
+		}
+
+		// UWidget FieldNotify는 UUserWidget 소유 UWidgetTree 내 위젯에서만 확장 객체가 생성됨
+		UUserWidget* HostUserWidget = CreateWidget<UBBMCreditEntryWidget>(WorldScope.World);
+		TestNotNull(TEXT("Host UUserWidget created for URichSlider"), HostUserWidget);
+		if (HostUserWidget == nullptr)
+		{
+			return false;
+		}
+		if (HostUserWidget->WidgetTree == nullptr)
+		{
+			HostUserWidget->WidgetTree = NewObject<UWidgetTree>(HostUserWidget);
+		}
+
+		URichSlider* UMGRichSlider = HostUserWidget->WidgetTree->ConstructWidget<URichSlider>(URichSlider::StaticClass());
+		TestNotNull(TEXT("URichSlider created"), UMGRichSlider);
+		if (UMGRichSlider == nullptr)
+		{
+			return false;
+		}
+		HostUserWidget->WidgetTree->RootWidget = UMGRichSlider;
+
+		int32 ValueNotifyCount = 0;
+		const FDelegateHandle NotifyHandle = UMGRichSlider->AddFieldValueChangedDelegate(
+			USlider::FFieldNotificationClassDescriptor::Value,
+			INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([&ValueNotifyCount](UObject* /*InObj*/, UE::FieldNotification::FFieldId /*InId*/)
+			{
+				++ValueNotifyCount;
+			})
+		);
+		TestTrue(TEXT("FieldNotify delegate handle valid inside WidgetTree"), NotifyHandle.IsValid());
+
+		UMGRichSlider->SetWidgetStyle(BaseStyle);
+		UMGRichSlider->SetRichStyle(RichStyle);
+		UMGRichSlider->SetSliderFillBarColor(FLinearColor::Green);
+		UMGRichSlider->SetMinValue(0.0f);
+		UMGRichSlider->SetMaxValue(10.0f);
+		UMGRichSlider->SetValue(5.0f);
+
+		UMGRichSlider->TakeWidget();
+		UMGRichSlider->SynchronizeProperties();
+
+		const TSharedPtr<SRichSlider> SlateSlider = UMGRichSlider->GetSlateRichSlider();
+		TestTrue(TEXT("URichSlider builds SRichSlider"), SlateSlider.IsValid());
+		if (SlateSlider.IsValid() == true)
+		{
+			TestEqual(TEXT("URichSlider SynchronizeProperties forwards NormalizedValue 0.5"), SlateSlider->GetNormalizedValue(), 0.5f, 0.001f);
+			TestTrue(TEXT("URichSlider forwards NormalFillBarImage after SynchronizeProperties"), SlateSlider->GetFillBarImage() == &UMGRichSlider->RichStyle.NormalFillBarImage);
+		}
+		TestEqual(TEXT("URichSlider inherits USlider FieldNotify for Value"), ValueNotifyCount, 1);
+
+		UMGRichSlider->RemoveFieldValueChangedDelegate(USlider::FFieldNotificationClassDescriptor::Value, NotifyHandle);
+		UMGRichSlider->ReleaseSlateResources(true);
+		TestFalse(TEXT("URichSlider releases Slate widget cleanly"), UMGRichSlider->GetSlateRichSlider().IsValid());
 	}
 
 	return true;

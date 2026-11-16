@@ -15,7 +15,7 @@
 #include "UI/ViewModel/BBMCreditsViewModel.h"
 #include "UI/ViewModel/BBMCharacterSelectViewModel.h"
 
-#include "UI/BBMWorldUISubsystem.h"
+#include "WorldUISubsystem.h"
 #include "Engine/World.h"
 
 ABBMTitleGameMode::ABBMTitleGameMode()
@@ -68,7 +68,7 @@ void ABBMTitleGameMode::InitializeLevelSpecificGameMode()
 	// 타이틀 화면 진입 시 타이틀 ViewModel을 통해 UI 자동 오픈
 	if (UWorld* World = GetWorld())
 	{
-		if (UBBMWorldUISubsystem* UISS = World->GetSubsystem<UBBMWorldUISubsystem>())
+		if (UWorldUISubsystem* UISS = World->GetSubsystem<UWorldUISubsystem>())
 		{
 			UBBMSettingsViewModel* SettingsVM = UISS->GetViewModelAs<UBBMSettingsViewModel>(TEXT("Settings"));
 			if (SettingsVM != nullptr)

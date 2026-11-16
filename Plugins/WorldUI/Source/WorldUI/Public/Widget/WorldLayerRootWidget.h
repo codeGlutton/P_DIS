@@ -1,16 +1,16 @@
 /*****************************************************************//**
- * @file   BBMLayerRootWidget.h
- * @brief  BBM(비트 배낭 상인) UI 레이어 루트 컨테이너 위젯 클래스 정의
- * @details 뷰포트에 단 하나만 등록되어 EBBMWidgetZOrder별 UCanvasPanel 레이어 계층, ZOrder 증감 및 자동 정규화를 총괄함
- * @date   2026-11-14
+ * @file   WorldLayerRootWidget.h
+ * @brief  월드 UI 레이어 루트 컨테이너 위젯 클래스 정의
+ * @details 뷰포트에 단 하나만 등록되어 EWorldWidgetZOrder별 UCanvasPanel 레이어 계층, ZOrder 증감 및 자동 정규화를 총괄함
+ * @date   2026-11-16
  *********************************************************************/
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "UI/BBMWorldWidgetTypes.h"
-#include "BBMLayerRootWidget.generated.h"
+#include "WorldUITypes.h"
+#include "WorldLayerRootWidget.generated.h"
 
 /* 독립 전방 선언 */
 class UCanvasPanel;
@@ -21,12 +21,13 @@ class UWidget;
  * 레이어 캔버스별 ZOrder 할당 상태 구조체
  */
 USTRUCT()
-struct FBBMUILayerState
+struct FWorldUILayerState
 {
 	GENERATED_BODY()
 
+	/* 프로퍼티 */
 public:
-	/* 해당 EBBMWidgetZOrder 레이어에 대응하는 캔버스 패널 */
+	/* 해당 EWorldWidgetZOrder 레이어에 대응하는 캔버스 패널 */
 	UPROPERTY(Transient)
 	TObjectPtr<UCanvasPanel> LayerCanvas = nullptr;
 
@@ -36,17 +37,17 @@ public:
 };
 
 /**
- * BBM 루트 UI 레이어 컨테이너 위젯
- * EBBMWidgetZOrder 열거형 항목마다 독립된 UCanvasPanel과 ZOrder 카운터를 유지하여 레이어 정렬과 자동 정규화를 수행함
+ * 루트 UI 레이어 컨테이너 위젯
+ * EWorldWidgetZOrder 열거형 항목마다 독립된 UCanvasPanel과 ZOrder 카운터를 유지하여 레이어 정렬과 자동 정규화를 수행함
  */
-UCLASS(NotBlueprintable, Transient, meta = (DisplayName = "BBM Layer Root Widget"))
-class BBM_API UBBMLayerRootWidget : public UUserWidget
+UCLASS(NotBlueprintable, Transient, meta = (DisplayName = "World Layer Root Widget"))
+class WORLDUI_API UWorldLayerRootWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
 	/* 생성자 및 UUserWidget 오버라이드 */
 public:
-	UBBMLayerRootWidget(const FObjectInitializer& ObjectInitializer);
+	UWorldLayerRootWidget(const FObjectInitializer& ObjectInitializer);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -54,7 +55,7 @@ protected:
 	/* 레이어 구축 및 위젯 배치·정렬 인터페이스 */
 public:
 	/**
-	 * 루트 UCanvasPanel과 EBBMWidgetZOrder별 자식 UCanvasPanel 계층 및 초기 상태를 1회 구축함
+	 * 루트 UCanvasPanel과 EWorldWidgetZOrder별 자식 UCanvasPanel 계층 및 초기 상태를 1회 구축함
 	 */
 	void InitializeLayerStructure();
 
@@ -65,7 +66,7 @@ public:
 	 * @param InLayer 배치할 대상 ZOrder 레이어
 	 * @return 레이어 추가 성공 여부
 	 */
-	bool AddWidgetToLayer(UUserWidget* InWidget, EBBMWidgetZOrder InLayer);
+	bool AddWidgetToLayer(UUserWidget* InWidget, EWorldWidgetZOrder InLayer);
 
 	/**
 	 * 이미 레이어에 올라가 있는 위젯의 슬롯 ZOrder를 해당 레이어 최상단으로 승격함
@@ -82,7 +83,7 @@ public:
 	/**
 	 * 지정 위젯이 소속된 레이어 열거형을 탐색해 반환함
 	 */
-	bool TryGetWidgetLayer(const UWidget* InWidget, EBBMWidgetZOrder& OutLayer) const;
+	bool TryGetWidgetLayer(const UWidget* InWidget, EWorldWidgetZOrder& OutLayer) const;
 
 #if WITH_EDITOR
 	/**
@@ -94,10 +95,10 @@ public:
 	/* 내부 정규화 및 슬롯 헬퍼 */
 private:
 	/* 필요 시 ZOrder를 정규화한 뒤 다음 정수 ZOrder 값을 발급하고 카운터를 증가시킴 */
-	int32 AllocateNextLayerZOrder(EBBMWidgetZOrder InLayer, FBBMUILayerState& InOutLayerState);
+	int32 AllocateNextLayerZOrder(EWorldWidgetZOrder InLayer, FWorldUILayerState& InOutLayerState);
 
 	/* 지정 레이어 내 모든 위젯 슬롯의 ZOrder 순서를 유지한 채 0부터 재할당(정규화)함 */
-	void NormalizeLayerZOrders(EBBMWidgetZOrder InLayer);
+	void NormalizeLayerZOrders(EWorldWidgetZOrder InLayer);
 
 	/* 캔버스 슬롯을 AddToViewport 기본값과 동일한 전체 화면 스트레치 레이아웃으로 설정함 */
 	static void ConfigureFullScreenCanvasSlot(UCanvasPanelSlot* InSlot, int32 InZOrder);
@@ -108,9 +109,9 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCanvasPanel> RootCanvas;
 
-	/* EBBMWidgetZOrder별 캔버스 및 다음 ZOrder 정수 카운터 상태 맵 */
+	/* EWorldWidgetZOrder별 캔버스 및 다음 ZOrder 정수 카운터 상태 맵 */
 	UPROPERTY(Transient)
-	TMap<EBBMWidgetZOrder, FBBMUILayerState> LayerStates;
+	TMap<EWorldWidgetZOrder, FWorldUILayerState> LayerStates;
 
 	/* 자동 ZOrder 정규화가 발동되는 정수 카운터 상한 임계치 (float 정확 정수 범위 내) */
 	int32 MaxLayerZOrderThreshold;

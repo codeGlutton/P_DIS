@@ -8,7 +8,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/Widget/BBMUserWidgetBase.h"
+#include "Widget/WorldUserWidgetBase.h"
 #include "BBMCreditsWidget.generated.h"
 
 /* 독립 전방 선언 (상단에 단독 배치) */
@@ -18,7 +18,7 @@ class UBBMCreditsViewModel;
  * BBM 크레딧 화면 UMG C++ 베이스 클래스
  */
 UCLASS(BlueprintType, Blueprintable, meta = (DisplayName = "BBM Credits Widget"))
-class BBM_API UBBMCreditsWidget : public UBBMUserWidgetBase
+class BBM_API UBBMCreditsWidget : public UWorldUserWidgetBase
 {
 	GENERATED_BODY()
 

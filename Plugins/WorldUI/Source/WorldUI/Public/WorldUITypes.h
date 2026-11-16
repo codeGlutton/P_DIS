@@ -1,38 +1,38 @@
 /*****************************************************************//**
- * @file   BBMWorldWidgetTypes.h
- * @brief  BBM(비트 배낭 상인) 월드 위젯 및 UI 공용 타입 정의
- * @details ZOrder 레이어, 수명 주기 정책, 애니메이션 설정 및 위젯 자동 생성 구조체 선언
- * @date   2026-11-06
+ * @file   WorldUITypes.h
+ * @brief  월드 위젯 및 MVVM 전환 프레임워크 공용 타입 정의
+ * @details ZOrder 레이어, 수명 주기 정책, 애니메이션 설정/재생 모드, 전환 상태 및 생성 설정 구조체 선언
+ * @date   2026-11-16
  *********************************************************************/
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "BBMWorldWidgetTypes.generated.h"
+#include "WorldUITypes.generated.h"
 
 /* 애니메이션 전환 요청 및 완료 대리자 선언 */
-DECLARE_DELEGATE_OneParam(FBBMOnPresentationTransitionRequestedSignature, bool /*bWithAnim*/);
-DECLARE_DYNAMIC_DELEGATE_OneParam(FBBMOnWidgetAnimFinishedDynamicSignature, bool, bInterrupted);
-DECLARE_DELEGATE_OneParam(FBBMOnWidgetAnimFinishedSignature, bool /*bInterrupted*/);
+DECLARE_DELEGATE_OneParam(FWorldUIOnPresentationTransitionRequestedSignature, bool /*bWithAnim*/);
+DECLARE_DYNAMIC_DELEGATE_OneParam(FWorldUIOnWidgetAnimFinishedDynamicSignature, bool, bInterrupted);
+DECLARE_DELEGATE_OneParam(FWorldUIOnWidgetAnimFinishedSignature, bool /*bInterrupted*/);
 
 /* 애니메이션 전환 라이프사이클 브로드캐스트 네이티브·동적 대리자 */
-DECLARE_MULTICAST_DELEGATE_OneParam(FBBMOnAnimTransitionStartedNativeSignature, bool /*bWithAnim*/);
-DECLARE_MULTICAST_DELEGATE_OneParam(FBBMOnAnimTransitionFinishedNativeSignature, bool /*bInterrupted*/);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBBMOnTransitionStartedDynamicSignature, bool, bWithAnim);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FBBMOnTransitionFinishedDynamicSignature, bool, bInterrupted);
+DECLARE_MULTICAST_DELEGATE_OneParam(FWorldUIOnAnimTransitionStartedNativeSignature, bool /*bWithAnim*/);
+DECLARE_MULTICAST_DELEGATE_OneParam(FWorldUIOnAnimTransitionFinishedNativeSignature, bool /*bInterrupted*/);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWorldUIOnTransitionStartedDynamicSignature, bool, bWithAnim);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWorldUIOnTransitionFinishedDynamicSignature, bool, bInterrupted);
 
 /* 독립 전방 선언 */
-class UBBMUserWidgetBase;
-class UBBMViewModelBase;
+class UWorldUserWidgetBase;
+class UWorldViewModelBase;
 class UUserWidget;
 class UWidgetAnimation;
 
 /**
- * BBM UI 위젯 ZOrder 레이어 구분 열거형 (순차 0~6 레이어)
+ * 월드 UI 위젯 ZOrder 레이어 구분 열거형 (순차 0~6 레이어)
  */
 UENUM(BlueprintType)
-enum class EBBMWidgetZOrder : uint8
+enum class EWorldWidgetZOrder : uint8
 {
 	/* 최하단 배경 아트 및 맵 오버레이 (0) */
 	Background   = 0  UMETA(DisplayName = "Background (0)"),
@@ -57,10 +57,10 @@ enum class EBBMWidgetZOrder : uint8
 };
 
 /**
- * BBM 위젯 수명 주기 및 최적화 방식 정책 열거형
+ * 위젯 수명 주기 및 최적화 방식 정책 열거형
  */
 UENUM(BlueprintType)
-enum class EBBMWidgetLifecyclePolicy : uint8
+enum class EWorldWidgetLifecyclePolicy : uint8
 {
 	/* 상시 레이어 유지 (최초 Open 시 AddToLayer, 이후 Open/Close 시 Visibility 및 최상단 ZOrder 전환) */
 	PersistentViewport UMETA(DisplayName = "Persistent Viewport (Visibility Toggle)"),
@@ -70,11 +70,11 @@ enum class EBBMWidgetLifecyclePolicy : uint8
 };
 
 /**
- * BBM 위젯 애니메이션 재생 모드 열거형
+ * 위젯 애니메이션 재생 모드 열거형
  * (EUMGSequencePlayMode 절대 시작 3종 + 현재 진행 상태 기반 상대 재생 2종)
  */
 UENUM(BlueprintType)
-enum class EBBMWidgetAnimPlayMode : uint8
+enum class EWorldWidgetAnimPlayMode : uint8
 {
 	/* 0.0초(시작점)부터 정방향 재생 [PlayAnimation] */
 	Forward          UMETA(DisplayName = "Forward (From Start)"),
@@ -93,13 +93,14 @@ enum class EBBMWidgetAnimPlayMode : uint8
 };
 
 /**
- * BBM 위젯 애니메이션 재생 설정 구조체
+ * 위젯 애니메이션 재생 설정 구조체
  */
 USTRUCT(BlueprintType)
-struct BBM_API FBBMWidgetAnimConfig
+struct WORLDUI_API FWorldWidgetAnimConfig
 {
 	GENERATED_BODY()
 
+	/* 애니메이션 조회 및 캐시 제어 */
 public:
 	/* 대상 위젯 자신 및 하위 위젯 트리를 순회하며 애니메이션과 소유 위젯을 조회·캐싱하여 반환 */
 	UWidgetAnimation* GetAnimation(UUserWidget* InWidget) const;
@@ -110,27 +111,30 @@ public:
 	/* 캐싱된 애니메이션·대상·소유 위젯 참조 초기화 */
 	void InvalidateCachedAnimation() const;
 
+	/* 내부 탐색 헬퍼 */
 private:
 	/* TargetWidget 일치 시 캐시 히트, 불일치 시 자기 자신 및 하위 위젯 트리를 재귀 탐색해 캐시 갱신 */
 	bool ResolveAnimation(UUserWidget* InWidget) const;
 
+	/* 설정 프로퍼티 */
 public:
 	/* 재생할 위젯 애니메이션 이름 (UMG 에디터 애니메이션 MovieScene 이름) */
-	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
+	UPROPERTY(Category = "WorldUI|Animation", EditDefaultsOnly, BlueprintReadWrite)
 	FName AnimationName = NAME_None;
 
 	/* 재생 모드 (절대 시작 3종 + 상대적 반전 2종) */
-	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
-	EBBMWidgetAnimPlayMode PlayMode = EBBMWidgetAnimPlayMode::RelativeForward;
+	UPROPERTY(Category = "WorldUI|Animation", EditDefaultsOnly, BlueprintReadWrite)
+	EWorldWidgetAnimPlayMode PlayMode = EWorldWidgetAnimPlayMode::RelativeForward;
 
 	/* 재생 속도 배율 (기본값: 1.0f) */
-	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
+	UPROPERTY(Category = "WorldUI|Animation", EditDefaultsOnly, BlueprintReadWrite)
 	float PlaybackSpeed = 1.0f;
 
 	/* 재생 반복 횟수 (1: 1회 재생, 0: 무한 반복 / Relative 계열은 엔진 미지원으로 에디터 숨김) */
-	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite, meta = (ClampMin = "0", UIMin = "0", EditCondition = "PlayMode != EBBMWidgetAnimPlayMode::RelativeForward && PlayMode != EBBMWidgetAnimPlayMode::RelativeReverse", EditConditionHides))
+	UPROPERTY(Category = "WorldUI|Animation", EditDefaultsOnly, BlueprintReadWrite, meta = (ClampMin = "0", UIMin = "0", EditCondition = "PlayMode != EWorldWidgetAnimPlayMode::RelativeForward && PlayMode != EWorldWidgetAnimPlayMode::RelativeReverse", EditConditionHides))
 	int32 LoopCount = 1;
 
+	/* 캐시 참조 */
 private:
 	/* 캐시 적중 판별용 루트 탐색 대상 위젯 약참조 */
 	mutable TWeakObjectPtr<UUserWidget> CachedTargetWidget;
@@ -146,7 +150,7 @@ private:
  * 단일 UI 애니메이션 전환 상태 열거형
  */
 UENUM(BlueprintType)
-enum class EBBMSingleAnimState : uint8
+enum class ESingleAnimState : uint8
 {
 	/* 대기 및 완료(비재생) 상태 */
 	Idle    UMETA(DisplayName = "Idle"),
@@ -159,7 +163,7 @@ enum class EBBMSingleAnimState : uint8
  * 양방향(Start/End) UI 애니메이션 전환 상태 열거형
  */
 UENUM(BlueprintType)
-enum class EBBMDualAnimState : uint8
+enum class EDualAnimState : uint8
 {
 	/* 완전히 종료된 초기·대기 상태 */
 	Ended    UMETA(DisplayName = "Ended"),
@@ -175,126 +179,39 @@ enum class EBBMDualAnimState : uint8
 };
 
 /**
- * 인카운터 초기화 전/후 UI 생성 타이밍 열거형
- */
-UENUM(BlueprintType)
-enum class EBBMWidgetCreationPhase : uint8
-{
-	/* 인카운터 배치(상인/몬스터 스폰 및 세이브 복원) 전 생성 (예: FadeLoading 위젯) */
-	BeforeEncounter UMETA(DisplayName = "Before Encounter"),
-
-	/* 인카운터 배치 완료 후 생성 (예: 인게임 전투 HUD) */
-	AfterEncounter  UMETA(DisplayName = "After Encounter")
-};
-
-/**
  * 순수 월드 위젯 생성 설정 구조체
  */
 USTRUCT(BlueprintType)
-struct BBM_API FBBMWorldWidgetConfig
+struct WORLDUI_API FWorldWidgetConfig
 {
 	GENERATED_BODY()
 
+	/* 프로퍼티 */
 public:
 	/* 생성할 위젯 클래스 */
-	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
-	TSubclassOf<UBBMUserWidgetBase> WidgetClass = nullptr;
+	UPROPERTY(Category = "WorldUI", EditDefaultsOnly, BlueprintReadOnly)
+	TSubclassOf<UWorldUserWidgetBase> WidgetClass = nullptr;
 
 	/* 뷰포트 ZOrder 레이어 오버라이드 여부 (false일 경우 위젯 클래스 자체의 DefaultZOrderLayer 유지) */
-	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
+	UPROPERTY(Category = "WorldUI", EditDefaultsOnly, BlueprintReadOnly)
 	bool bOverrideZOrder = false;
 
 	/* 오버라이드할 뷰포트 ZOrder 레이어 (bOverrideZOrder가 true일 때만 수정 및 적용) */
-	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly, meta = (EditCondition = "bOverrideZOrder"))
-	EBBMWidgetZOrder ZOrderLayer = EBBMWidgetZOrder::Base;
+	UPROPERTY(Category = "WorldUI", EditDefaultsOnly, BlueprintReadOnly, meta = (EditCondition = "bOverrideZOrder"))
+	EWorldWidgetZOrder ZOrderLayer = EWorldWidgetZOrder::Base;
 };
 
 /**
  * 순수 월드 ViewModel 생성 설정 구조체
  */
 USTRUCT(BlueprintType)
-struct BBM_API FBBMWorldViewModelConfig
+struct WORLDUI_API FWorldViewModelConfig
 {
 	GENERATED_BODY()
-
-public:
-	/* 생성할 MVVM ViewModel 클래스 */
-	UPROPERTY(Category = "BBM|UI|MVVM", EditDefaultsOnly, BlueprintReadOnly)
-	TSubclassOf<UBBMViewModelBase> ViewModelClass = nullptr;
-};
-
-/**
- * 게임모드 자동 등록 및 생성용 통합 UI(위젯 + ViewModel + 타이밍) 설정 구조체
- */
-USTRUCT(BlueprintType)
-struct BBM_API FBBMWorldUIConfig
-{
-	GENERATED_BODY()
-
-public:
-	/* 위젯 및 ViewModel 공용 식별 키 (예: "LoadingScreen", "MainHUD", "TitleMenu") */
-	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
-	FName WidgetKey = NAME_None;
-
-	/* UI 생성 타이밍 */
-	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
-	EBBMWidgetCreationPhase CreationPhase = EBBMWidgetCreationPhase::BeforeEncounter;
-
-	/* 순수 위젯 생성 설정 */
-	UPROPERTY(Category = "BBM|UI", EditDefaultsOnly, BlueprintReadOnly)
-	FBBMWorldWidgetConfig WidgetConfig;
-
-	/* 순수 ViewModel 생성 설정 */
-	UPROPERTY(Category = "BBM|UI|MVVM", EditDefaultsOnly, BlueprintReadOnly)
-	FBBMWorldViewModelConfig ViewModelConfig;
-};
-
-/**
- * 크레딧 화면의 단일 카테고리 및 소속 인물·팀 목록 정의 구조체
- */
-USTRUCT(BlueprintType)
-struct BBM_API FBBMCreditCategory
-{
-	GENERATED_BODY()
-
-	/* 비교 연산자 */
-public:
-	bool operator==(const FBBMCreditCategory& Other) const
-	{
-		if (CategoryName.EqualTo(Other.CategoryName) == false)
-		{
-			return false;
-		}
-
-		if (Entries.Num() != Other.Entries.Num())
-		{
-			return false;
-		}
-
-		for (int32 Index = 0; Index < Entries.Num(); ++Index)
-		{
-			if (Entries[Index].EqualTo(Other.Entries[Index]) == false)
-			{
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	bool operator!=(const FBBMCreditCategory& Other) const
-	{
-		return (*this == Other) == false;
-	}
 
 	/* 프로퍼티 */
 public:
-	/* 크레딧 카테고리 이름 (예: 디렉터, 프로그래밍, 아트, 폰트 라이선스 등) */
-	UPROPERTY(Category = "BBM|Credits", EditAnywhere, BlueprintReadWrite)
-	FText CategoryName;
-
-	/* 해당 카테고리에 표시할 연관 인물, 팀명 또는 라이선스 문구 배열 */
-	UPROPERTY(Category = "BBM|Credits", EditAnywhere, BlueprintReadWrite, meta = (MultiLine = true))
-	TArray<FText> Entries;
+	/* 생성할 MVVM ViewModel 클래스 */
+	UPROPERTY(Category = "WorldUI|MVVM", EditDefaultsOnly, BlueprintReadOnly)
+	TSubclassOf<UWorldViewModelBase> ViewModelClass = nullptr;
 };
-

@@ -8,7 +8,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/Widget/BBMUserWidgetBase.h"
+#include "Widget/WorldUserWidgetBase.h"
 #include "BBMSettingsWidget.generated.h"
 
 /* 독립 전방 선언 (상단에 단독 배치) */
@@ -18,7 +18,7 @@ class UBBMSettingsViewModel;
  * BBM 환경설정 화면 UMG C++ 베이스 클래스
  */
 UCLASS(BlueprintType, Blueprintable, meta = (DisplayName = "BBM Settings Widget"))
-class BBM_API UBBMSettingsWidget : public UBBMUserWidgetBase
+class BBM_API UBBMSettingsWidget : public UWorldUserWidgetBase
 {
 	GENERATED_BODY()
 

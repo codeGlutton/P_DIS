@@ -1,4 +1,4 @@
-#include "UI/Widget/BBMLayerRootWidget.h"
+#include "Widget/WorldLayerRootWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -7,26 +7,26 @@
 namespace
 {
 	/* UCanvasPanelSlot이 내부 float로 무손실 표현 가능한 최대 정수 상한 (2^24 - 1) */
-	constexpr int32 BBMMaxExactFloatZOrder = 16777215;
+	constexpr int32 WorldUIMaxExactFloatZOrder = 16777215;
 
 	/* 실서비스 기본 레이어 ZOrder 자동 정규화 임계치 */
-	constexpr int32 BBMDefaultMaxLayerZOrderThreshold = 1000000;
+	constexpr int32 WorldUIDefaultMaxLayerZOrderThreshold = 1000000;
 }
 
-UBBMLayerRootWidget::UBBMLayerRootWidget(const FObjectInitializer& ObjectInitializer) :
+UWorldLayerRootWidget::UWorldLayerRootWidget(const FObjectInitializer& ObjectInitializer) :
 	Super(ObjectInitializer),
 	RootCanvas(nullptr),
-	MaxLayerZOrderThreshold(BBMDefaultMaxLayerZOrderThreshold)
+	MaxLayerZOrderThreshold(WorldUIDefaultMaxLayerZOrderThreshold)
 {
 }
 
-TSharedRef<SWidget> UBBMLayerRootWidget::RebuildWidget()
+TSharedRef<SWidget> UWorldLayerRootWidget::RebuildWidget()
 {
 	InitializeLayerStructure();
 	return Super::RebuildWidget();
 }
 
-void UBBMLayerRootWidget::InitializeLayerStructure()
+void UWorldLayerRootWidget::InitializeLayerStructure()
 {
 	if (RootCanvas != nullptr)
 	{
@@ -42,16 +42,16 @@ void UBBMLayerRootWidget::InitializeLayerStructure()
 	RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootLayerCanvas"));
 	if (RootCanvas == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UBBMLayerRootWidget::InitializeLayerStructure] Failed to construct RootLayerCanvas."));
+		UE_LOG(LogTemp, Error, TEXT("[UWorldLayerRootWidget::InitializeLayerStructure] Failed to construct RootLayerCanvas."));
 		return;
 	}
 
 	WidgetTree->RootWidget = RootCanvas;
 
-	UEnum* ZOrderEnum = StaticEnum<EBBMWidgetZOrder>();
+	UEnum* ZOrderEnum = StaticEnum<EWorldWidgetZOrder>();
 	if (ZOrderEnum == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UBBMLayerRootWidget::InitializeLayerStructure] Failed to find EBBMWidgetZOrder UEnum."));
+		UE_LOG(LogTemp, Error, TEXT("[UWorldLayerRootWidget::InitializeLayerStructure] Failed to find EWorldWidgetZOrder UEnum."));
 		return;
 	}
 
@@ -62,7 +62,7 @@ void UBBMLayerRootWidget::InitializeLayerStructure()
 	for (int32 EnumIndex = 0; EnumIndex < EnumCount; ++EnumIndex)
 	{
 		const int64 RawEnumValue = ZOrderEnum->GetValueByIndex(EnumIndex);
-		const EBBMWidgetZOrder LayerEnum = static_cast<EBBMWidgetZOrder>(RawEnumValue);
+		const EWorldWidgetZOrder LayerEnum = static_cast<EWorldWidgetZOrder>(RawEnumValue);
 		const FName LayerCanvasName(*FString::Printf(TEXT("LayerCanvas_%s"), *ZOrderEnum->GetNameStringByIndex(EnumIndex)));
 
 		UCanvasPanel* LayerCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), LayerCanvasName);
@@ -74,18 +74,18 @@ void UBBMLayerRootWidget::InitializeLayerStructure()
 		UCanvasPanelSlot* LayerSlot = RootCanvas->AddChildToCanvas(LayerCanvas);
 		ConfigureFullScreenCanvasSlot(LayerSlot, static_cast<int32>(RawEnumValue));
 
-		FBBMUILayerState NewState;
+		FWorldUILayerState NewState;
 		NewState.LayerCanvas = LayerCanvas;
 		NewState.NextZOrder = 0;
 		LayerStates.Add(LayerEnum, MoveTemp(NewState));
 	}
 }
 
-bool UBBMLayerRootWidget::AddWidgetToLayer(UUserWidget* InWidget, EBBMWidgetZOrder InLayer)
+bool UWorldLayerRootWidget::AddWidgetToLayer(UUserWidget* InWidget, EWorldWidgetZOrder InLayer)
 {
 	if (InWidget == nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMLayerRootWidget::AddWidgetToLayer] InWidget is nullptr."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldLayerRootWidget::AddWidgetToLayer] InWidget is nullptr."));
 		return false;
 	}
 
@@ -97,10 +97,10 @@ bool UBBMLayerRootWidget::AddWidgetToLayer(UUserWidget* InWidget, EBBMWidgetZOrd
 		return false;
 	}
 
-	FBBMUILayerState* LayerState = LayerStates.Find(InLayer);
+	FWorldUILayerState* LayerState = LayerStates.Find(InLayer);
 	if (LayerState == nullptr || LayerState->LayerCanvas == nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMLayerRootWidget::AddWidgetToLayer] Target layer canvas was not found."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldLayerRootWidget::AddWidgetToLayer] Target layer canvas was not found."));
 		return false;
 	}
 
@@ -109,7 +109,7 @@ bool UBBMLayerRootWidget::AddWidgetToLayer(UUserWidget* InWidget, EBBMWidgetZOrd
 	UCanvasPanelSlot* NewSlot = LayerState->LayerCanvas->AddChildToCanvas(InWidget);
 	if (NewSlot == nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMLayerRootWidget::AddWidgetToLayer] AddChildToCanvas returned nullptr."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldLayerRootWidget::AddWidgetToLayer] AddChildToCanvas returned nullptr."));
 		return false;
 	}
 
@@ -118,21 +118,21 @@ bool UBBMLayerRootWidget::AddWidgetToLayer(UUserWidget* InWidget, EBBMWidgetZOrd
 	return true;
 }
 
-bool UBBMLayerRootWidget::BringWidgetToLayerTop(UUserWidget* InWidget)
+bool UWorldLayerRootWidget::BringWidgetToLayerTop(UUserWidget* InWidget)
 {
 	if (InWidget == nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMLayerRootWidget::BringWidgetToLayerTop] InWidget is nullptr."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldLayerRootWidget::BringWidgetToLayerTop] InWidget is nullptr."));
 		return false;
 	}
 
-	EBBMWidgetZOrder FoundLayer = EBBMWidgetZOrder::Base;
+	EWorldWidgetZOrder FoundLayer = EWorldWidgetZOrder::Base;
 	if (TryGetWidgetLayer(InWidget, FoundLayer) == false)
 	{
 		return false;
 	}
 
-	FBBMUILayerState* LayerState = LayerStates.Find(FoundLayer);
+	FWorldUILayerState* LayerState = LayerStates.Find(FoundLayer);
 	UCanvasPanelSlot* TargetSlot = Cast<UCanvasPanelSlot>(InWidget->Slot);
 	if (LayerState == nullptr || LayerState->LayerCanvas == nullptr || TargetSlot == nullptr)
 	{
@@ -168,13 +168,13 @@ bool UBBMLayerRootWidget::BringWidgetToLayerTop(UUserWidget* InWidget)
 	return true;
 }
 
-bool UBBMLayerRootWidget::IsWidgetInAnyLayer(const UWidget* InWidget) const
+bool UWorldLayerRootWidget::IsWidgetInAnyLayer(const UWidget* InWidget) const
 {
-	EBBMWidgetZOrder UnusedLayer = EBBMWidgetZOrder::Base;
+	EWorldWidgetZOrder UnusedLayer = EWorldWidgetZOrder::Base;
 	return TryGetWidgetLayer(InWidget, UnusedLayer);
 }
 
-bool UBBMLayerRootWidget::TryGetWidgetLayer(const UWidget* InWidget, EBBMWidgetZOrder& OutLayer) const
+bool UWorldLayerRootWidget::TryGetWidgetLayer(const UWidget* InWidget, EWorldWidgetZOrder& OutLayer) const
 {
 	if (InWidget == nullptr)
 	{
@@ -187,7 +187,7 @@ bool UBBMLayerRootWidget::TryGetWidgetLayer(const UWidget* InWidget, EBBMWidgetZ
 		return false;
 	}
 
-	for (const TPair<EBBMWidgetZOrder, FBBMUILayerState>& Pair : LayerStates)
+	for (const TPair<EWorldWidgetZOrder, FWorldUILayerState>& Pair : LayerStates)
 	{
 		if (Pair.Value.LayerCanvas.Get() == ParentPanel)
 		{
@@ -200,33 +200,33 @@ bool UBBMLayerRootWidget::TryGetWidgetLayer(const UWidget* InWidget, EBBMWidgetZ
 }
 
 #if WITH_EDITOR
-void UBBMLayerRootWidget::SetLayerZOrderMaxThresholdForTesting(int32 InThreshold)
+void UWorldLayerRootWidget::SetLayerZOrderMaxThresholdForTesting(int32 InThreshold)
 {
-	MaxLayerZOrderThreshold = FMath::Clamp(InThreshold, 1, BBMMaxExactFloatZOrder);
+	MaxLayerZOrderThreshold = FMath::Clamp(InThreshold, 1, WorldUIMaxExactFloatZOrder);
 }
 #endif
 
-int32 UBBMLayerRootWidget::AllocateNextLayerZOrder(EBBMWidgetZOrder InLayer, FBBMUILayerState& InOutLayerState)
+int32 UWorldLayerRootWidget::AllocateNextLayerZOrder(EWorldWidgetZOrder InLayer, FWorldUILayerState& InOutLayerState)
 {
 	if (InOutLayerState.NextZOrder >= MaxLayerZOrderThreshold)
 	{
 		NormalizeLayerZOrders(InLayer);
 	}
 
-	const int32 AllocatedZOrder = FMath::Min(InOutLayerState.NextZOrder, BBMMaxExactFloatZOrder);
+	const int32 AllocatedZOrder = FMath::Min(InOutLayerState.NextZOrder, WorldUIMaxExactFloatZOrder);
 	InOutLayerState.NextZOrder = AllocatedZOrder + 1;
 	return AllocatedZOrder;
 }
 
-void UBBMLayerRootWidget::NormalizeLayerZOrders(EBBMWidgetZOrder InLayer)
+void UWorldLayerRootWidget::NormalizeLayerZOrders(EWorldWidgetZOrder InLayer)
 {
-	FBBMUILayerState* LayerState = LayerStates.Find(InLayer);
+	FWorldUILayerState* LayerState = LayerStates.Find(InLayer);
 	if (LayerState == nullptr || LayerState->LayerCanvas == nullptr)
 	{
 		return;
 	}
 
-	struct FBBMSlotZOrderEntry
+	struct FSlotZOrderEntry
 	{
 		UCanvasPanelSlot* CanvasSlot = nullptr;
 		int32 ZOrder = 0;
@@ -234,7 +234,7 @@ void UBBMLayerRootWidget::NormalizeLayerZOrders(EBBMWidgetZOrder InLayer)
 	};
 
 	const TArray<UPanelSlot*>& Slots = LayerState->LayerCanvas->GetSlots();
-	TArray<FBBMSlotZOrderEntry> SortedEntries;
+	TArray<FSlotZOrderEntry> SortedEntries;
 	SortedEntries.Reserve(Slots.Num());
 
 	for (int32 SlotIndex = 0; SlotIndex < Slots.Num(); ++SlotIndex)
@@ -246,7 +246,7 @@ void UBBMLayerRootWidget::NormalizeLayerZOrders(EBBMWidgetZOrder InLayer)
 	}
 
 	// SetZOrder는 UPanelWidget::Slots 순서를 변경하지 않으므로 현재 ZOrder 기준 오름차순으로 안정 정렬함
-	SortedEntries.Sort([](const FBBMSlotZOrderEntry& Left, const FBBMSlotZOrderEntry& Right)
+	SortedEntries.Sort([](const FSlotZOrderEntry& Left, const FSlotZOrderEntry& Right)
 	{
 		if (Left.ZOrder != Right.ZOrder)
 		{
@@ -269,7 +269,7 @@ void UBBMLayerRootWidget::NormalizeLayerZOrders(EBBMWidgetZOrder InLayer)
 	}
 }
 
-void UBBMLayerRootWidget::ConfigureFullScreenCanvasSlot(UCanvasPanelSlot* InSlot, int32 InZOrder)
+void UWorldLayerRootWidget::ConfigureFullScreenCanvasSlot(UCanvasPanelSlot* InSlot, int32 InZOrder)
 {
 	if (InSlot == nullptr)
 	{

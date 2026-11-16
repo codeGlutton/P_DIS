@@ -8,9 +8,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/ViewModel/BBMViewModelBase.h"
-#include "UI/ViewModel/BBMSingleAnimTransition.h"
-#include "UI/ViewModel/BBMDualAnimTransition.h"
+#include "ViewModel/WorldViewModelBase.h"
+#include "ViewModel/SingleAnimTransition.h"
+#include "ViewModel/DualAnimTransition.h"
 #include "Components/SlateWrapperTypes.h"
 #include "BBMTitleViewModel.generated.h"
 
@@ -24,7 +24,7 @@ class UBBMGameDataSubsystem;
  * UMG 위젯과 결합되어 데이터 바인딩 및 사용자 입력 처리를 총괄함
  */
 UCLASS(BlueprintType, Blueprintable, meta = (DisplayName = "BBM Title ViewModel"))
-class BBM_API UBBMTitleViewModel : public UBBMViewModelBase
+class BBM_API UBBMTitleViewModel : public UWorldViewModelBase
 {
 	GENERATED_BODY()
 
@@ -88,10 +88,10 @@ public:
 	/* 타이틀 전환 모듈 접근자 */
 public:
 	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
-	UBBMSingleAnimTransition* GetShiningTransition() const { return ShiningTransition; }
+	USingleAnimTransition* GetShiningTransition() const { return ShiningTransition; }
 
 	UFUNCTION(BlueprintPure, Category = "BBM|UI|Title")
-	UBBMDualAnimTransition* GetBlockingTransition() const { return BlockingTransition; }
+	UDualAnimTransition* GetBlockingTransition() const { return BlockingTransition; }
 
 	/* 비즈니스 로직 및 메뉴 액션 인터페이스 */
 public:
@@ -145,7 +145,7 @@ private:
 	void HandleSubPanelEnded(bool bInterrupted);
 
 	/* 서브 ViewModel의 OpenCloseTransition 훅 바인딩·해제 헬퍼 */
-	void BindSubViewModelOpenClose(UBBMViewModelBase* InSubViewModel);
+	void BindSubViewModelOpenClose(UWorldViewModelBase* InSubViewModel);
 	void UnbindSubViewModelOpenClose();
 
 	/* 내부 프로퍼티 */
@@ -162,11 +162,11 @@ private:
 
 	/* 타이틀 화면 표시 중 무한 반복 재생되는 반짝임 전환 모듈 */
 	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetShiningTransition, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UBBMSingleAnimTransition> ShiningTransition;
+	TObjectPtr<USingleAnimTransition> ShiningTransition;
 
 	/* 타이틀 블로킹 오버레이 시작/종료 전환 모듈 */
 	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadOnly, FieldNotify, Getter = GetBlockingTransition, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UBBMDualAnimTransition> BlockingTransition;
+	TObjectPtr<UDualAnimTransition> BlockingTransition;
 
 	/* 이어하기 가능 여부 */
 	UPROPERTY(Category = "BBM|UI|Title", BlueprintReadWrite, FieldNotify, Setter = SetCanContinue, Getter = GetCanContinue, meta = (AllowPrivateAccess = "true"))
@@ -190,7 +190,7 @@ private:
 	/* 서브 패널 전환 훅 바인딩 정보 보관 (GC 순서와 무관한 안전 언바인딩용) */
 	struct FSubPanelHookBinding
 	{
-		TWeakObjectPtr<UBBMDualAnimTransition> Transition;
+		TWeakObjectPtr<UDualAnimTransition> Transition;
 		FDelegateHandle StartingHandle;
 		FDelegateHandle EndedHandle;
 	};

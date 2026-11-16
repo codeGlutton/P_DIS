@@ -1,14 +1,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/ViewModel/BBMViewModelBase.h"
+#include "ViewModel/WorldViewModelBase.h"
 #include "BBMCharacterSelectViewModel.generated.h"
 
 /**
  * 캐릭터 선택 패널 ViewModel
  */
 UCLASS(BlueprintType, Blueprintable)
-class BBM_API UBBMCharacterSelectViewModel : public UBBMViewModelBase
+class BBM_API UBBMCharacterSelectViewModel : public UWorldViewModelBase
 {
 	GENERATED_BODY()
 

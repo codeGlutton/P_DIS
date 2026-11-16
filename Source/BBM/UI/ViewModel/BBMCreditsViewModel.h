@@ -8,8 +8,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/BBMWorldWidgetTypes.h"
-#include "UI/ViewModel/BBMViewModelBase.h"
+#include "UI/BBMUITypes.h"
+#include "ViewModel/WorldViewModelBase.h"
 #include "BBMCreditsViewModel.generated.h"
 
 /* 독립 전방 선언 */
@@ -19,7 +19,7 @@ class UBBMCreditEntryViewModel;
  * 크레딧 패널 ViewModel
  */
 UCLASS(BlueprintType, Blueprintable)
-class BBM_API UBBMCreditsViewModel : public UBBMViewModelBase
+class BBM_API UBBMCreditsViewModel : public UWorldViewModelBase
 {
 	GENERATED_BODY()
 

@@ -87,6 +87,10 @@
 		{
 			"Name": "ExtensionWidget",
 			"Enabled": true
+		},
+		{
+			"Name": "WorldUI",
+			"Enabled": true
 		}
 	]
 }

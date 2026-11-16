@@ -17,8 +17,8 @@
 
 UBBMTitleViewModel::UBBMTitleViewModel()
 {
-	ShiningTransition = CreateDefaultSubobject<UBBMSingleAnimTransition>(TEXT("ShiningTransition"));
-	BlockingTransition = CreateDefaultSubobject<UBBMDualAnimTransition>(TEXT("BlockingTransition"));
+	ShiningTransition = CreateDefaultSubobject<USingleAnimTransition>(TEXT("ShiningTransition"));
+	BlockingTransition = CreateDefaultSubobject<UDualAnimTransition>(TEXT("BlockingTransition"));
 }
 
 void UBBMTitleViewModel::BeginViewModel()
@@ -217,14 +217,14 @@ void UBBMTitleViewModel::HandleSubPanelEnded(bool /*bInterrupted*/)
 	}
 }
 
-void UBBMTitleViewModel::BindSubViewModelOpenClose(UBBMViewModelBase* InSubViewModel)
+void UBBMTitleViewModel::BindSubViewModelOpenClose(UWorldViewModelBase* InSubViewModel)
 {
 	if (InSubViewModel == nullptr)
 	{
 		return;
 	}
 
-	UBBMDualAnimTransition* OpenClose = InSubViewModel->GetOpenCloseTransition();
+	UDualAnimTransition* OpenClose = InSubViewModel->GetOpenCloseTransition();
 	if (OpenClose == nullptr)
 	{
 		return;
@@ -252,7 +252,7 @@ void UBBMTitleViewModel::UnbindSubViewModelOpenClose()
 			continue;
 		}
 
-		UBBMDualAnimTransition* Transition = Binding.Transition.Get();
+		UDualAnimTransition* Transition = Binding.Transition.Get();
 		if (Binding.StartingHandle.IsValid() == true)
 		{
 			Transition->OnStartingNative.Remove(Binding.StartingHandle);

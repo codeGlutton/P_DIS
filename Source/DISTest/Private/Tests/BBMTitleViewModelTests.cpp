@@ -6,18 +6,20 @@
  *********************************************************************/
 
 #include "Misc/AutomationTest.h"
+#include "Misc/ScopeExit.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
-#include "UI/BBMWorldWidgetTypes.h"
-#include "UI/Widget/BBMUserWidgetBase.h"
+#include "WorldUITypes.h"
+#include "UI/BBMUITypes.h"
+#include "Widget/WorldUserWidgetBase.h"
 #include "UI/Widget/BBMTitleWidget.h"
 #include "UI/Widget/BBMSettingsWidget.h"
 #include "UI/Widget/BBMTabEntryWidget.h"
 #include "UI/Widget/BBMSettingsTabEntryWidget.h"
 #include "UI/Widget/BBMCreditsWidget.h"
-#include "UI/BBMWorldUISubsystem.h"
-#include "UI/ViewModel/BBMViewModelBase.h"
+#include "WorldUISubsystem.h"
+#include "ViewModel/WorldViewModelBase.h"
 #include "UI/ViewModel/BBMTitleViewModel.h"
 #include "UI/ViewModel/BBMSettingsViewModel.h"
 #include "UI/ViewModel/BBMCharacterSelectViewModel.h"
@@ -25,8 +27,8 @@
 #include "UI/ViewModel/BBMCreditEntryViewModel.h"
 #include "UI/ViewModel/BBMTabEntryViewModel.h"
 #include "UI/ViewModel/BBMTabViewModelBase.h"
-#include "UI/ViewModel/BBMSingleAnimTransition.h"
-#include "UI/ViewModel/BBMDualAnimTransition.h"
+#include "ViewModel/SingleAnimTransition.h"
+#include "ViewModel/DualAnimTransition.h"
 #include "Global/BBMGlobalSettings.h"
 #include "Save/BBMGameDataSubsystem.h"
 #include "Save/BBMRunSaveGame.h"
@@ -36,6 +38,10 @@
 #include "HAL/PlatformFileManager.h"
 #include "Misc/FileHelper.h"
 #include "Async/TaskGraphInterfaces.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/Button.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/LocalPlayer.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -104,7 +110,7 @@ namespace
 	}
 }
 
-// 1. UBBMWorldUISubsystem의 독립 위젯/ViewModel 생성 및 위젯 수동 연결 검증
+// 1. UWorldUISubsystem의 독립 위젯/ViewModel 생성 및 위젯 수동 연결 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMWorldWidgetViewModelInjectionTest,
 	"DIS.BBM.UI.WorldWidgetViewModelInjection",
@@ -120,8 +126,8 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	UBBMWorldUISubsystem* UISS = TestWorld.World->GetSubsystem<UBBMWorldUISubsystem>();
-	TestNotNull(TEXT("UBBMWorldUISubsystem 획득 검증"), UISS);
+	UWorldUISubsystem* UISS = TestWorld.World->GetSubsystem<UWorldUISubsystem>();
+	TestNotNull(TEXT("UWorldUISubsystem 획득 검증"), UISS);
 	if (UISS == nullptr)
 	{
 		return false;
@@ -129,9 +135,9 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 
 	// 1-1. 순수 위젯만 등록 시 ViewModel은 생성/연결되지 않아야 함
 	const FName PlainWidgetKey(TEXT("PlainWidget"));
-	FBBMWorldWidgetConfig PlainConfig;
-	PlainConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	UBBMUserWidgetBase* PlainWidget = UISS->CreateAndRegisterWidgetByConfig(PlainWidgetKey, PlainConfig);
+	FWorldWidgetConfig PlainConfig;
+	PlainConfig.WidgetClass = UWorldUserWidgetBase::StaticClass();
+	UWorldUserWidgetBase* PlainWidget = UISS->CreateAndRegisterWidgetByConfig(PlainWidgetKey, PlainConfig);
 	TestNotNull(TEXT("순수 위젯 등록 성공"), PlainWidget);
 	if (PlainWidget != nullptr)
 	{
@@ -141,14 +147,14 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 
 	// 1-2. 위젯과 ViewModel 별도 생성 후 수동 바인딩 주입 검증
 	const FName TitleWidgetKey(TEXT("TitleMenu"));
-	FBBMWorldWidgetConfig TitleWidgetConfig;
+	FWorldWidgetConfig TitleWidgetConfig;
 	TitleWidgetConfig.WidgetClass = UBBMTitleWidget::StaticClass();
-	UBBMUserWidgetBase* TitleUserWidget = UISS->CreateAndRegisterWidgetByConfig(TitleWidgetKey, TitleWidgetConfig);
+	UWorldUserWidgetBase* TitleUserWidget = UISS->CreateAndRegisterWidgetByConfig(TitleWidgetKey, TitleWidgetConfig);
 	TestNotNull(TEXT("타이틀 위젯 등록 성공"), TitleUserWidget);
 
-	FBBMWorldViewModelConfig TitleVMConfig;
+	FWorldViewModelConfig TitleVMConfig;
 	TitleVMConfig.ViewModelClass = UBBMTitleViewModel::StaticClass();
-	UBBMViewModelBase* RegisteredVM = UISS->CreateAndRegisterViewModelByConfig(TitleWidgetKey, TitleVMConfig);
+	UWorldViewModelBase* RegisteredVM = UISS->CreateAndRegisterViewModelByConfig(TitleWidgetKey, TitleVMConfig);
 	TestNotNull(TEXT("서브시스템을 통한 ViewModel 독립 생성 및 등록 검증"), RegisteredVM);
 
 	UBBMTitleWidget* TitleWidget = Cast<UBBMTitleWidget>(TitleUserWidget);
@@ -167,19 +173,19 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 
 		// 수동 연결 이후 단일 ViewModel 및 템플릿 캐스팅 조회가 즉시 동작해야 함
 		TitleWidget->SetViewModelInstance(TitleVM);
-		TestEqual(TEXT("수동 연결 후 GetViewModel 일치"), TitleWidget->GetViewModel(), Cast<UBBMViewModelBase>(TitleVM));
+		TestEqual(TEXT("수동 연결 후 GetViewModel 일치"), TitleWidget->GetViewModel(), Cast<UWorldViewModelBase>(TitleVM));
 		TestEqual(TEXT("수동 연결 후 GetViewModelAs 일치"), TitleWidget->GetViewModelAs<UBBMTitleViewModel>(), TitleVM);
 		TestEqual(TEXT("수동 연결 후 TitleWidget->GetTitleViewModel 일치"), TitleWidget->GetTitleViewModel(), TitleVM);
 	}
 
 	// 1-3. 이미 열린 ViewModel(IsOpen == true)을 위젯에 지연 연결 시 View 프레젠테이션 동기화 검증
 	const FName OpenedWidgetKey(TEXT("OpenedWidget"));
-	FBBMWorldWidgetConfig OpenedWidgetConfig;
-	OpenedWidgetConfig.WidgetClass = UBBMUserWidgetBase::StaticClass();
-	UBBMUserWidgetBase* OpenedWidget = UISS->CreateAndRegisterWidgetByConfig(OpenedWidgetKey, OpenedWidgetConfig);
+	FWorldWidgetConfig OpenedWidgetConfig;
+	OpenedWidgetConfig.WidgetClass = UWorldUserWidgetBase::StaticClass();
+	UWorldUserWidgetBase* OpenedWidget = UISS->CreateAndRegisterWidgetByConfig(OpenedWidgetKey, OpenedWidgetConfig);
 	TestNotNull(TEXT("지연 연결용 위젯 등록 성공"), OpenedWidget);
 
-	FBBMWorldViewModelConfig DelayedVMConfig;
+	FWorldViewModelConfig DelayedVMConfig;
 	DelayedVMConfig.ViewModelClass = UBBMTitleViewModel::StaticClass();
 	UBBMTitleViewModel* DelayedTitleVM = Cast<UBBMTitleViewModel>(UISS->CreateAndRegisterViewModelByConfig(OpenedWidgetKey, DelayedVMConfig));
 	TestNotNull(TEXT("지연 연결용 ViewModel 등록 성공"), DelayedTitleVM);
@@ -193,7 +199,7 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 		OpenedWidget->SetVisibility(ESlateVisibility::Collapsed);
 		DelayedTitleVM->Open();
 		TestTrue(TEXT("ViewModel Open 후 IsOpen은 true"), DelayedTitleVM->IsOpen());
-		TestEqual(TEXT("헤드리스 Open 후 OpenState는 Started"), DelayedTitleVM->GetOpenState(), EBBMDualAnimState::Started);
+		TestEqual(TEXT("헤드리스 Open 후 OpenState는 Started"), DelayedTitleVM->GetOpenState(), EDualAnimState::Started);
 		TestEqual(TEXT("위젯 연결 전에는 아직 숨김 상태 유지"), OpenedWidget->GetVisibility(), ESlateVisibility::Collapsed);
 
 		// 이미 열린 ViewModel에 위젯을 뒤늦게 연결하면 즉시 프레젠테이션 가시성이 동기화됨
@@ -203,7 +209,7 @@ bool FBBMWorldWidgetViewModelInjectionTest::RunTest(const FString& Parameters)
 		// ViewModel->Close() 호출 시 논리 상태와 View 프레젠테이션이 모두 닫힘
 		DelayedTitleVM->Close();
 		TestFalse(TEXT("ViewModel Close 후 IsOpen은 false"), DelayedTitleVM->IsOpen());
-		TestEqual(TEXT("Close 후 OpenState는 Ended"), DelayedTitleVM->GetOpenState(), EBBMDualAnimState::Ended);
+		TestEqual(TEXT("Close 후 OpenState는 Ended"), DelayedTitleVM->GetOpenState(), EDualAnimState::Ended);
 		TestEqual(TEXT("Close 후 위젯 가시성이 Collapsed로 전환되어야 함"), OpenedWidget->GetVisibility(), ESlateVisibility::Collapsed);
 
 		UISS->RemoveUI(OpenedWidgetKey);
@@ -302,8 +308,8 @@ bool FBBMTitleViewModelTransitionsTest::RunTest(const FString& Parameters)
 	AssignDefaultSubViewModels(TestWorld.World, TitleVM);
 	TitleVM->FinishInitialization();
 
-	UBBMSingleAnimTransition* ShiningTransition = TitleVM->GetShiningTransition();
-	UBBMDualAnimTransition* BlockingTransition = TitleVM->GetBlockingTransition();
+	USingleAnimTransition* ShiningTransition = TitleVM->GetShiningTransition();
+	UDualAnimTransition* BlockingTransition = TitleVM->GetBlockingTransition();
 	TestNotNull(TEXT("ShiningTransition 서브오브젝트 유효"), ShiningTransition);
 	TestNotNull(TEXT("BlockingTransition 서브오브젝트 유효"), BlockingTransition);
 	if (ShiningTransition == nullptr || BlockingTransition == nullptr)
@@ -320,13 +326,13 @@ bool FBBMTitleViewModelTransitionsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("BlockingEndAnimConfig 프로퍼티 조회 성공"), BlockingEndProp);
 	if (ShiningConfigProp != nullptr && BlockingStartProp != nullptr && BlockingEndProp != nullptr)
 	{
-		const FBBMWidgetAnimConfig* ShiningConfig = ShiningConfigProp->ContainerPtrToValuePtr<FBBMWidgetAnimConfig>(TitleWidget);
-		const FBBMWidgetAnimConfig* BlockingStartConfig = BlockingStartProp->ContainerPtrToValuePtr<FBBMWidgetAnimConfig>(TitleWidget);
-		const FBBMWidgetAnimConfig* BlockingEndConfig = BlockingEndProp->ContainerPtrToValuePtr<FBBMWidgetAnimConfig>(TitleWidget);
-		TestEqual(TEXT("ShiningAnimConfig 기본 PlayMode는 Forward여야 함"), ShiningConfig->PlayMode, EBBMWidgetAnimPlayMode::Forward);
+		const FWorldWidgetAnimConfig* ShiningConfig = ShiningConfigProp->ContainerPtrToValuePtr<FWorldWidgetAnimConfig>(TitleWidget);
+		const FWorldWidgetAnimConfig* BlockingStartConfig = BlockingStartProp->ContainerPtrToValuePtr<FWorldWidgetAnimConfig>(TitleWidget);
+		const FWorldWidgetAnimConfig* BlockingEndConfig = BlockingEndProp->ContainerPtrToValuePtr<FWorldWidgetAnimConfig>(TitleWidget);
+		TestEqual(TEXT("ShiningAnimConfig 기본 PlayMode는 Forward여야 함"), ShiningConfig->PlayMode, EWorldWidgetAnimPlayMode::Forward);
 		TestEqual(TEXT("ShiningAnimConfig 기본 LoopCount는 무한 반복(0)이어야 함"), ShiningConfig->LoopCount, 0);
-		TestEqual(TEXT("BlockingStartAnimConfig 기본 PlayMode는 RelativeForward여야 함"), BlockingStartConfig->PlayMode, EBBMWidgetAnimPlayMode::RelativeForward);
-		TestEqual(TEXT("BlockingEndAnimConfig 기본 PlayMode는 RelativeReverse여야 함"), BlockingEndConfig->PlayMode, EBBMWidgetAnimPlayMode::RelativeReverse);
+		TestEqual(TEXT("BlockingStartAnimConfig 기본 PlayMode는 RelativeForward여야 함"), BlockingStartConfig->PlayMode, EWorldWidgetAnimPlayMode::RelativeForward);
+		TestEqual(TEXT("BlockingEndAnimConfig 기본 PlayMode는 RelativeReverse여야 함"), BlockingEndConfig->PlayMode, EWorldWidgetAnimPlayMode::RelativeReverse);
 	}
 
 	// 3-2. ViewModel 주입 시 Shining/Blocking 핸들러 바인딩 및 Open/Close 수명 주기 연동 검증
@@ -350,15 +356,15 @@ bool FBBMTitleViewModelTransitionsTest::RunTest(const FString& Parameters)
 	// Open() 호출 시 OnFinishOpenAnim()에서 ShiningTransition->Execute(true) 호출 및 헤드리스 환경 안전 완료 검증
 	TitleVM->Open();
 	TestEqual(TEXT("Open() 시 OnFinishOpenAnim()에서 ShiningTransition 시작 호출이 발생해야 함"), ShiningStartCount, 1);
-	TestEqual(TEXT("헤드리스 애니메이션 미설정 환경에서는 Shining 요청이 고착되지 않고 Idle로 정리되어야 함"), ShiningTransition->GetState(), EBBMSingleAnimState::Idle);
+	TestEqual(TEXT("헤드리스 애니메이션 미설정 환경에서는 Shining 요청이 고착되지 않고 Idle로 정리되어야 함"), ShiningTransition->GetState(), ESingleAnimState::Idle);
 
 	// BlockingTransition 실행 후 Close() 시 OnClosed()에서 ShiningTransition 정리 검증
 	BlockingTransition->Start();
-	TestEqual(TEXT("BlockingTransition Start 후 Started 상태"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+	TestEqual(TEXT("BlockingTransition Start 후 Started 상태"), BlockingTransition->GetState(), EDualAnimState::Started);
 
 	const int32 ShiningFinishCountBeforeClose = ShiningFinishCount;
 	TitleVM->Close();
-	TestEqual(TEXT("Close() 완료 후 ShiningTransition은 Idle 상태 유지"), ShiningTransition->GetState(), EBBMSingleAnimState::Idle);
+	TestEqual(TEXT("Close() 완료 후 ShiningTransition은 Idle 상태 유지"), ShiningTransition->GetState(), ESingleAnimState::Idle);
 	TestTrue(TEXT("OnClosed() 내 Execute(false)로 완료 통지가 추가 수행되어야 함"), ShiningFinishCount > ShiningFinishCountBeforeClose);
 
 	// 3-3. ViewModel 해제 시 핸들러 언바인딩 검증
@@ -393,10 +399,10 @@ bool FBBMSettingsAndCreditsWidgetsTest::RunTest(const FString& Parameters)
 	}
 
 	// PersistentViewport 및 Popup(30) 레이어 확인
-	TestEqual(TEXT("SettingsWidget 수명 주기 정책은 PersistentViewport여야 함"), SettingsWidget->GetLifecyclePolicy(), EBBMWidgetLifecyclePolicy::PersistentViewport);
-	TestEqual(TEXT("SettingsWidget 기본 ZOrder는 Popup이어야 함"), SettingsWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Popup);
-	TestEqual(TEXT("CreditsWidget 수명 주기 정책은 PersistentViewport여야 함"), CreditsWidget->GetLifecyclePolicy(), EBBMWidgetLifecyclePolicy::PersistentViewport);
-	TestEqual(TEXT("CreditsWidget 기본 ZOrder는 Popup이어야 함"), CreditsWidget->GetDefaultZOrderLayer(), EBBMWidgetZOrder::Popup);
+	TestEqual(TEXT("SettingsWidget 수명 주기 정책은 PersistentViewport여야 함"), SettingsWidget->GetLifecyclePolicy(), EWorldWidgetLifecyclePolicy::PersistentViewport);
+	TestEqual(TEXT("SettingsWidget 기본 ZOrder는 Popup이어야 함"), SettingsWidget->GetDefaultZOrderLayer(), EWorldWidgetZOrder::Popup);
+	TestEqual(TEXT("CreditsWidget 수명 주기 정책은 PersistentViewport여야 함"), CreditsWidget->GetLifecyclePolicy(), EWorldWidgetLifecyclePolicy::PersistentViewport);
+	TestEqual(TEXT("CreditsWidget 기본 ZOrder는 Popup이어야 함"), CreditsWidget->GetDefaultZOrderLayer(), EWorldWidgetZOrder::Popup);
 
 	// ViewModel 바인딩 및 타입 접근자 검증
 	UBBMSettingsViewModel* SettingsVM = NewObject<UBBMSettingsViewModel>(TestWorld.World);
@@ -1082,8 +1088,8 @@ bool FBBMTitleViewModelBlockingPanelControlTest::RunTest(const FString& Paramete
 	UBBMSettingsViewModel* SettingsVM = TitleVM->GetSettingsViewModel();
 	UBBMCharacterSelectViewModel* CharacterSelectVM = TitleVM->GetCharacterSelectViewModel();
 	UBBMCreditsViewModel* CreditsVM = TitleVM->GetCreditsViewModel();
-	UBBMDualAnimTransition* BlockingTransition = TitleVM->GetBlockingTransition();
-	UBBMSingleAnimTransition* ShiningTransition = TitleVM->GetShiningTransition();
+	UDualAnimTransition* BlockingTransition = TitleVM->GetBlockingTransition();
+	USingleAnimTransition* ShiningTransition = TitleVM->GetShiningTransition();
 	TestNotNull(TEXT("SettingsVM 유효"), SettingsVM);
 	TestNotNull(TEXT("CharacterSelectVM 유효"), CharacterSelectVM);
 	TestNotNull(TEXT("CreditsVM 유효"), CreditsVM);
@@ -1099,18 +1105,18 @@ bool FBBMTitleViewModelBlockingPanelControlTest::RunTest(const FString& Paramete
 	TestTrue(TEXT("BeginViewModel() 이후 BlockingTransition OnEndedNative 바인딩 확인"), BlockingTransition->OnEndedNative.IsBound());
 
 	// 프레젠테이션 핸들러를 모의 연결해 Starting/Ending 비동기 상태를 수동 완료 가능하게 구성
-	auto BindManualHandlers = [Outer = TestWorld.World](UBBMDualAnimTransition* Transition)
+	auto BindManualHandlers = [Outer = TestWorld.World](UDualAnimTransition* Transition)
 	{
 		Transition->BindPresentationHandlers(
 			Outer,
-			FBBMOnPresentationTransitionRequestedSignature::CreateLambda([Transition](bool bWithAnim)
+			FWorldUIOnPresentationTransitionRequestedSignature::CreateLambda([Transition](bool bWithAnim)
 			{
 				if (bWithAnim == false)
 				{
 					Transition->NotifyStartTransitionFinished();
 				}
 			}),
-			FBBMOnPresentationTransitionRequestedSignature::CreateLambda([Transition](bool bWithAnim)
+			FWorldUIOnPresentationTransitionRequestedSignature::CreateLambda([Transition](bool bWithAnim)
 			{
 				if (bWithAnim == false)
 				{
@@ -1153,34 +1159,34 @@ bool FBBMTitleViewModelBlockingPanelControlTest::RunTest(const FString& Paramete
 
 	// 1) Settings 열기 (0 -> 1) -> BlockingTransition StartWithAnim 시작 및 즉시 Visible 전환
 	SettingsVM->OpenWithAnim();
-	TestEqual(TEXT("첫 서브 패널 시작 시 BlockingTransition은 Starting이어야 함"), BlockingTransition->GetState(), EBBMDualAnimState::Starting);
+	TestEqual(TEXT("첫 서브 패널 시작 시 BlockingTransition은 Starting이어야 함"), BlockingTransition->GetState(), EDualAnimState::Starting);
 	TestEqual(TEXT("BlockingTransition 시작 시 BlockingPanelVisibility는 Visible이어야 함"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Visible);
 	TestEqual(TEXT("BlockingPanelVisibility FieldNotify 1회 발송"), BlockingVisibilityNotifyCount, 1);
 
 	SettingsVM->GetOpenCloseTransition()->NotifyStartTransitionFinished();
 	BlockingTransition->NotifyStartTransitionFinished();
-	TestEqual(TEXT("Blocking 시작 완료 후 Started 상태 유지"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+	TestEqual(TEXT("Blocking 시작 완료 후 Started 상태 유지"), BlockingTransition->GetState(), EDualAnimState::Started);
 	TestEqual(TEXT("Blocking Started 상태에서 Visible 유지"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Visible);
 
 	// 2) Credits 추가 열기 (1 -> 2) -> Blocking 유지 및 1개 닫기(2 -> 1) 시 Collapsed 전환 안 됨 검증
 	CreditsVM->OpenWithAnim();
 	CreditsVM->GetOpenCloseTransition()->NotifyStartTransitionFinished();
-	TestEqual(TEXT("2개 패널 열림 중에도 Blocking Started 유지"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+	TestEqual(TEXT("2개 패널 열림 중에도 Blocking Started 유지"), BlockingTransition->GetState(), EDualAnimState::Started);
 
 	CreditsVM->CloseWithAnim();
 	CreditsVM->GetOpenCloseTransition()->NotifyEndTransitionFinished();
-	TestEqual(TEXT("1개 패널만 닫혀도(2->1) Blocking은 Started 유지"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+	TestEqual(TEXT("1개 패널만 닫혀도(2->1) Blocking은 Started 유지"), BlockingTransition->GetState(), EDualAnimState::Started);
 	TestEqual(TEXT("잔여 패널 존재 시 BlockingPanelVisibility는 Visible 유지"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Visible);
 
 	// 3) Settings 닫기 (1 -> 0) -> BlockingTransition EndWithAnim 시작 후 종료 완료 시 Collapsed 복귀
 	SettingsVM->CloseWithAnim();
-	TestEqual(TEXT("Settings Ending 중 아직 OnEndedNative 전이므로 Blocking Started 유지"), BlockingTransition->GetState(), EBBMDualAnimState::Started);
+	TestEqual(TEXT("Settings Ending 중 아직 OnEndedNative 전이므로 Blocking Started 유지"), BlockingTransition->GetState(), EDualAnimState::Started);
 	SettingsVM->GetOpenCloseTransition()->NotifyEndTransitionFinished();
-	TestEqual(TEXT("마지막 서브 패널 종료 시 BlockingTransition은 Ending이어야 함"), BlockingTransition->GetState(), EBBMDualAnimState::Ending);
+	TestEqual(TEXT("마지막 서브 패널 종료 시 BlockingTransition은 Ending이어야 함"), BlockingTransition->GetState(), EDualAnimState::Ending);
 	TestEqual(TEXT("Blocking Ending 중에는 아직 Visible 유지"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Visible);
 
 	BlockingTransition->NotifyEndTransitionFinished();
-	TestEqual(TEXT("Blocking 종료 완료 후 Ended 상태"), BlockingTransition->GetState(), EBBMDualAnimState::Ended);
+	TestEqual(TEXT("Blocking 종료 완료 후 Ended 상태"), BlockingTransition->GetState(), EDualAnimState::Ended);
 	TestEqual(TEXT("Blocking 종료 완료 후 BlockingPanelVisibility는 Collapsed여야 함"), TitleVM->GetBlockingPanelVisibility(), ESlateVisibility::Collapsed);
 	TestEqual(TEXT("BlockingPanelVisibility FieldNotify 2회 누적"), BlockingVisibilityNotifyCount, 2);
 
@@ -1216,7 +1222,7 @@ bool FBBMTitleViewModelBlockingPanelControlTest::RunTest(const FString& Paramete
 
 	// 언바인딩 후 서브 패널을 열어도 BlockingTransition이 반응하지 않아야 함
 	CharacterSelectVM->OpenWithAnim();
-	TestEqual(TEXT("EndViewModel() 후 서브 패널 열림 시 BlockingTransition은 Ended를 유지해야 함"), BlockingTransition->GetState(), EBBMDualAnimState::Ended);
+	TestEqual(TEXT("EndViewModel() 후 서브 패널 열림 시 BlockingTransition은 Ended를 유지해야 함"), BlockingTransition->GetState(), EDualAnimState::Ended);
 
 	return true;
 }
@@ -1410,6 +1416,141 @@ bool FBBMTabViewModelTest::RunTest(const FString& Parameters)
 		TabVM->ConditionalBeginDestroy();
 		TestFalse(TEXT("EndViewModel() 후 OnSelectRequestedNative 언바인딩 확인"), FinalTab->OnSelectRequestedNative.IsBound());
 	}
+
+	return true;
+}
+
+// 10. UBBMSettingsTabEntryWidget MainButtonName 캐싱, SetTabSelected 가시성/스타일 치환 및 OnRequestSelect 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMSettingsTabEntryWidgetTest,
+	"DIS.BBM.UI.SettingsTabEntryWidget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMSettingsTabEntryWidgetTest::RunTest(const FString& Parameters)
+{
+	FBBMMVVMScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드 유효 검증"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	APlayerController* TestPC = TestWorld.World->SpawnActor<APlayerController>();
+	TestNotNull(TEXT("테스트용 PlayerController 스폰 성공"), TestPC);
+	if (TestPC == nullptr)
+	{
+		return false;
+	}
+
+	ULocalPlayer* TestLocalPlayer = NewObject<ULocalPlayer>(GEngine);
+	TestNotNull(TEXT("테스트용 LocalPlayer 생성 성공"), TestLocalPlayer);
+	if (TestLocalPlayer == nullptr)
+	{
+		return false;
+	}
+
+	// SetPlayer를 호출해야 IsLocalPlayerController() 및 FLocalPlayerContext::IsValid()가 성립해 Initialize()가 NativeOnInitialized()를 호출함
+	TestPC->SetPlayer(TestLocalPlayer);
+	ON_SCOPE_EXIT
+	{
+		TestPC->Player = nullptr;
+		TestLocalPlayer->PlayerController = nullptr;
+	};
+
+	// 10-1. MainButtonName 미설정(NAME_None) 시 CachedMainButton 누락 방어 및 SetTabSelected 무변경 조기 반환 검증
+	{
+		AddExpectedMessagePlain(TEXT("MainButtonName이 NAME_None으로 설정되지 않음"), ELogVerbosity::Warning, EAutomationExpectedMessageFlags::Contains, 1);
+
+		UBBMSettingsTabEntryWidget* UnconfiguredWidget = NewObject<UBBMSettingsTabEntryWidget>(TestWorld.World);
+		TestNotNull(TEXT("미설정 SettingsTabEntryWidget 생성 성공"), UnconfiguredWidget);
+		if (UnconfiguredWidget != nullptr)
+		{
+			UnconfiguredWidget->SetPlayerContext(FLocalPlayerContext(TestPC));
+			UnconfiguredWidget->Initialize();
+
+			UnconfiguredWidget->SetTabSelected(true);
+			TestFalse(TEXT("CachedMainButton == nullptr이면 SetTabSelected(true) 호출 시 상태가 변경되지 않아야 함"), UnconfiguredWidget->IsTabSelected());
+		}
+	}
+
+	// 10-2. MainButtonName 지정 후 NativeOnInitialized에서 버튼·기본 스타일 캐싱 및 SetTabSelected 상태 전환 검증
+	UBBMSettingsTabEntryWidget* EntryWidget = NewObject<UBBMSettingsTabEntryWidget>(TestWorld.World);
+	TestNotNull(TEXT("SettingsTabEntryWidget 생성 성공"), EntryWidget);
+	if (EntryWidget == nullptr)
+	{
+		return false;
+	}
+
+	EntryWidget->WidgetTree = NewObject<UWidgetTree>(EntryWidget, TEXT("SettingsTabEntryWidgetTree"));
+	UButton* SelectButton = EntryWidget->WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("Button_Select"));
+	EntryWidget->WidgetTree->RootWidget = SelectButton;
+
+	FButtonStyle DefaultStyle;
+	DefaultStyle.Normal.TintColor = FSlateColor(FLinearColor(0.2f, 0.2f, 0.2f, 1.0f));
+	DefaultStyle.NormalForeground = FSlateColor(FLinearColor::White);
+	SelectButton->SetStyle(DefaultStyle);
+
+	FButtonStyle SelectedStyle;
+	SelectedStyle.Normal.TintColor = FSlateColor(FLinearColor(1.0f, 0.8f, 0.2f, 1.0f));
+	SelectedStyle.NormalForeground = FSlateColor(FLinearColor::Black);
+
+	// protected 프로퍼티(MainButtonName, SelectedButtonStyle)를 리플렉션으로 WBP 파생 설정과 동일하게 주입함
+	FNameProperty* MainButtonNameProp = FindFProperty<FNameProperty>(UBBMSettingsTabEntryWidget::StaticClass(), TEXT("MainButtonName"));
+	FStructProperty* SelectedStyleProp = FindFProperty<FStructProperty>(UBBMSettingsTabEntryWidget::StaticClass(), TEXT("SelectedButtonStyle"));
+	TestNotNull(TEXT("MainButtonName 프로퍼티 리플렉션 조회 성공"), MainButtonNameProp);
+	TestNotNull(TEXT("SelectedButtonStyle 프로퍼티 리플렉션 조회 성공"), SelectedStyleProp);
+	if (MainButtonNameProp == nullptr || SelectedStyleProp == nullptr)
+	{
+		return false;
+	}
+
+	MainButtonNameProp->SetPropertyValue_InContainer(EntryWidget, FName(TEXT("Button_Select")));
+	SelectedStyleProp->CopyCompleteValue(SelectedStyleProp->ContainerPtrToValuePtr<void>(EntryWidget), &SelectedStyle);
+
+	EntryWidget->SetPlayerContext(FLocalPlayerContext(TestPC));
+	EntryWidget->Initialize();
+
+	TestFalse(TEXT("초기 IsTabSelected는 false여야 함"), EntryWidget->IsTabSelected());
+	TestEqual(TEXT("초기 버튼 가시성은 Visible이어야 함"), SelectButton->GetVisibility(), ESlateVisibility::Visible);
+	TestEqual(TEXT("초기 버튼 스타일 Normal.TintColor 보존 확인"), SelectButton->GetStyle().Normal.TintColor.GetSpecifiedColor(), DefaultStyle.Normal.TintColor.GetSpecifiedColor());
+
+	// 10-3. OnClicked -> bIsSelected == false일 때만 OnRequestSelectNative 발송 검증
+	int32 RequestSelectCount = 0;
+	EntryWidget->OnRequestSelectNative.AddLambda([&RequestSelectCount]()
+	{
+		++RequestSelectCount;
+	});
+
+	SelectButton->OnClicked.Broadcast();
+	TestEqual(TEXT("비선택 상태에서 버튼 클릭 시 OnRequestSelectNative 1회 발송"), RequestSelectCount, 1);
+
+	// 10-4. SetTabSelected(true) -> HitTestInvisible + SelectedButtonStyle 전체 치환 및 클릭 요청 차단 검증
+	EntryWidget->SetTabSelected(true);
+	TestTrue(TEXT("SetTabSelected(true) 후 IsTabSelected == true"), EntryWidget->IsTabSelected());
+	TestEqual(TEXT("선택 상태 버튼 가시성은 HitTestInvisible이어야 함"), SelectButton->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("선택 상태 버튼 스타일 Normal.TintColor 치환 확인"), SelectButton->GetStyle().Normal.TintColor.GetSpecifiedColor(), SelectedStyle.Normal.TintColor.GetSpecifiedColor());
+	TestEqual(TEXT("선택 상태 버튼 전경색 치환 확인"), SelectButton->GetStyle().NormalForeground.GetSpecifiedColor(), SelectedStyle.NormalForeground.GetSpecifiedColor());
+
+	// 동일 상태 재호출 시 불필요한 스타일 덮어쓰기 없이 조기 반환 검증
+	FButtonStyle ProbeMarkerStyle = SelectedStyle;
+	ProbeMarkerStyle.Hovered.TintColor = FSlateColor(FLinearColor::Green);
+	SelectButton->SetStyle(ProbeMarkerStyle);
+	EntryWidget->SetTabSelected(true);
+	TestEqual(TEXT("이미 true 상태에서 SetTabSelected(true) 재호출 시 스타일이 덮어쓰이지 않고 조기 반환되어야 함"), SelectButton->GetStyle().Hovered.TintColor.GetSpecifiedColor(), FLinearColor::Green);
+
+	SelectButton->OnClicked.Broadcast();
+	TestEqual(TEXT("선택 상태(bIsSelected == true)에서 OnClicked 발생 시 OnRequestSelectNative가 호출되면 안 됨"), RequestSelectCount, 1);
+
+	// 10-5. SetTabSelected(false) -> Visible + 초기 기본 스타일 전체 복원 및 클릭 재허용 검증
+	EntryWidget->SetTabSelected(false);
+	TestFalse(TEXT("SetTabSelected(false) 후 IsTabSelected == false"), EntryWidget->IsTabSelected());
+	TestEqual(TEXT("비선택 복원 후 버튼 가시성은 Visible이어야 함"), SelectButton->GetVisibility(), ESlateVisibility::Visible);
+	TestEqual(TEXT("비선택 복원 후 초기 Normal.TintColor 복원 확인"), SelectButton->GetStyle().Normal.TintColor.GetSpecifiedColor(), DefaultStyle.Normal.TintColor.GetSpecifiedColor());
+	TestEqual(TEXT("비선택 복원 후 초기 전경색 복원 확인"), SelectButton->GetStyle().NormalForeground.GetSpecifiedColor(), DefaultStyle.NormalForeground.GetSpecifiedColor());
+
+	SelectButton->OnClicked.Broadcast();
+	TestEqual(TEXT("비선택 복원 후 버튼 클릭 시 OnRequestSelectNative 추가 발송(총 2회)"), RequestSelectCount, 2);
 
 	return true;
 }

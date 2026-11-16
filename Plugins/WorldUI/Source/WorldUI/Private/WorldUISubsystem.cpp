@@ -1,21 +1,15 @@
-/*****************************************************************//**
- * @file   BBMWorldUISubsystem.cpp
- * @brief  BBM(비트 배낭 상인) 월드 레벨 전역 UI(위젯 및 ViewModel) 관리 서브시스템 구현
- * @date   2026-11-12
- *********************************************************************/
-
-#include "UI/BBMWorldUISubsystem.h"
-#include "UI/Widget/BBMLayerRootWidget.h"
-#include "UI/Widget/BBMUserWidgetBase.h"
-#include "UI/ViewModel/BBMViewModelBase.h"
+#include "WorldUISubsystem.h"
+#include "Widget/WorldLayerRootWidget.h"
+#include "Widget/WorldUserWidgetBase.h"
+#include "ViewModel/WorldViewModelBase.h"
 #include "Engine/World.h"
 
-UBBMWorldUISubsystem::UBBMWorldUISubsystem() :
+UWorldUISubsystem::UWorldUISubsystem() :
 	LayerRootWidget(nullptr)
 {
 }
 
-void UBBMWorldUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
+void UWorldUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	ActiveWidgets.Empty();
@@ -30,7 +24,7 @@ void UBBMWorldUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 }
 
-void UBBMWorldUISubsystem::Deinitialize()
+void UWorldUISubsystem::Deinitialize()
 {
 	// 위젯을 먼저 분리한 뒤 ViewModel을 닫아 소멸 시 불필요한 프레젠테이션 역참조를 방지
 	ClearAllWidgets();
@@ -48,24 +42,24 @@ void UBBMWorldUISubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-UBBMUserWidgetBase* UBBMWorldUISubsystem::CreateAndRegisterWidgetByConfig(FName WidgetKey, const FBBMWorldWidgetConfig& Config)
+UWorldUserWidgetBase* UWorldUISubsystem::CreateAndRegisterWidgetByConfig(FName WidgetKey, const FWorldWidgetConfig& Config)
 {
 	if (WidgetKey == NAME_None)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMWorldUISubsystem::CreateAndRegisterWidgetByConfig] WidgetKey is NAME_None."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldUISubsystem::CreateAndRegisterWidgetByConfig] WidgetKey is NAME_None."));
 		return nullptr;
 	}
 
 	if (Config.WidgetClass == nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMWorldUISubsystem::CreateAndRegisterWidgetByConfig] WidgetClass is nullptr."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldUISubsystem::CreateAndRegisterWidgetByConfig] WidgetClass is nullptr."));
 		return nullptr;
 	}
 
 	UWorld* World = GetWorld();
 	if (World == nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMWorldUISubsystem::CreateAndRegisterWidgetByConfig] World is nullptr."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldUISubsystem::CreateAndRegisterWidgetByConfig] World is nullptr."));
 		return nullptr;
 	}
 
@@ -75,10 +69,10 @@ UBBMUserWidgetBase* UBBMWorldUISubsystem::CreateAndRegisterWidgetByConfig(FName 
 		RemoveWidget(WidgetKey);
 	}
 
-	UBBMUserWidgetBase* NewWidget = CreateWidget<UBBMUserWidgetBase>(World, Config.WidgetClass);
+	UWorldUserWidgetBase* NewWidget = CreateWidget<UWorldUserWidgetBase>(World, Config.WidgetClass);
 	if (NewWidget == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UBBMWorldUISubsystem::CreateAndRegisterWidgetByConfig] Failed to create widget for key: %s"), *WidgetKey.ToString());
+		UE_LOG(LogTemp, Error, TEXT("[UWorldUISubsystem::CreateAndRegisterWidgetByConfig] Failed to create widget for key: %s"), *WidgetKey.ToString());
 		return nullptr;
 	}
 
@@ -92,23 +86,23 @@ UBBMUserWidgetBase* UBBMWorldUISubsystem::CreateAndRegisterWidgetByConfig(FName 
 	return NewWidget;
 }
 
-UBBMViewModelBase* UBBMWorldUISubsystem::CreateAndRegisterViewModelByConfig(FName WidgetKey, const FBBMWorldViewModelConfig& Config)
+UWorldViewModelBase* UWorldUISubsystem::CreateAndRegisterViewModelByConfig(FName WidgetKey, const FWorldViewModelConfig& Config)
 {
 	if (WidgetKey == NAME_None)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMWorldUISubsystem::CreateAndRegisterViewModelByConfig] WidgetKey is NAME_None."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldUISubsystem::CreateAndRegisterViewModelByConfig] WidgetKey is NAME_None."));
 		return nullptr;
 	}
 
 	if (Config.ViewModelClass == nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMWorldUISubsystem::CreateAndRegisterViewModelByConfig] ViewModelClass is nullptr."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldUISubsystem::CreateAndRegisterViewModelByConfig] ViewModelClass is nullptr."));
 		return nullptr;
 	}
 
 	if (Config.ViewModelClass->HasAnyClassFlags(CLASS_Abstract) == true)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMWorldUISubsystem::CreateAndRegisterViewModelByConfig] ViewModelClass (%s) is Abstract."), *Config.ViewModelClass->GetName());
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldUISubsystem::CreateAndRegisterViewModelByConfig] ViewModelClass (%s) is Abstract."), *Config.ViewModelClass->GetName());
 		return nullptr;
 	}
 
@@ -118,10 +112,10 @@ UBBMViewModelBase* UBBMWorldUISubsystem::CreateAndRegisterViewModelByConfig(FNam
 		RemoveViewModel(WidgetKey);
 	}
 
-	UBBMViewModelBase* NewViewModel = NewObject<UBBMViewModelBase>(this, Config.ViewModelClass);
+	UWorldViewModelBase* NewViewModel = NewObject<UWorldViewModelBase>(this, Config.ViewModelClass);
 	if (NewViewModel == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UBBMWorldUISubsystem::CreateAndRegisterViewModelByConfig] Failed to create ViewModel for key: %s"), *WidgetKey.ToString());
+		UE_LOG(LogTemp, Error, TEXT("[UWorldUISubsystem::CreateAndRegisterViewModelByConfig] Failed to create ViewModel for key: %s"), *WidgetKey.ToString());
 		return nullptr;
 	}
 
@@ -129,27 +123,27 @@ UBBMViewModelBase* UBBMWorldUISubsystem::CreateAndRegisterViewModelByConfig(FNam
 	return NewViewModel;
 }
 
-UBBMUserWidgetBase* UBBMWorldUISubsystem::GetWidget(FName WidgetKey) const
+UWorldUserWidgetBase* UWorldUISubsystem::GetWidget(FName WidgetKey) const
 {
-	if (const TObjectPtr<UBBMUserWidgetBase>* FoundWidget = ActiveWidgets.Find(WidgetKey))
+	if (const TObjectPtr<UWorldUserWidgetBase>* FoundWidget = ActiveWidgets.Find(WidgetKey))
 	{
 		return FoundWidget->Get();
 	}
 	return nullptr;
 }
 
-UBBMViewModelBase* UBBMWorldUISubsystem::GetViewModel(FName WidgetKey) const
+UWorldViewModelBase* UWorldUISubsystem::GetViewModel(FName WidgetKey) const
 {
-	if (const TObjectPtr<UBBMViewModelBase>* FoundVM = ActiveViewModels.Find(WidgetKey))
+	if (const TObjectPtr<UWorldViewModelBase>* FoundVM = ActiveViewModels.Find(WidgetKey))
 	{
 		return FoundVM->Get();
 	}
 	return nullptr;
 }
 
-bool UBBMWorldUISubsystem::RemoveWidget(FName WidgetKey)
+bool UWorldUISubsystem::RemoveWidget(FName WidgetKey)
 {
-	TObjectPtr<UBBMUserWidgetBase>* FoundWidget = ActiveWidgets.Find(WidgetKey);
+	TObjectPtr<UWorldUserWidgetBase>* FoundWidget = ActiveWidgets.Find(WidgetKey);
 	if (FoundWidget == nullptr)
 	{
 		return false;
@@ -160,9 +154,9 @@ bool UBBMWorldUISubsystem::RemoveWidget(FName WidgetKey)
 	return true;
 }
 
-bool UBBMWorldUISubsystem::RemoveViewModel(FName WidgetKey)
+bool UWorldUISubsystem::RemoveViewModel(FName WidgetKey)
 {
-	TObjectPtr<UBBMViewModelBase>* FoundViewModel = ActiveViewModels.Find(WidgetKey);
+	TObjectPtr<UWorldViewModelBase>* FoundViewModel = ActiveViewModels.Find(WidgetKey);
 	if (FoundViewModel == nullptr)
 	{
 		return false;
@@ -173,53 +167,53 @@ bool UBBMWorldUISubsystem::RemoveViewModel(FName WidgetKey)
 	return true;
 }
 
-bool UBBMWorldUISubsystem::RemoveUI(FName WidgetKey)
+bool UWorldUISubsystem::RemoveUI(FName WidgetKey)
 {
 	const bool bRemovedWidget = RemoveWidget(WidgetKey);
 	const bool bRemovedViewModel = RemoveViewModel(WidgetKey);
 	return (bRemovedWidget == true) || (bRemovedViewModel == true);
 }
 
-void UBBMWorldUISubsystem::ClearAllWidgets()
+void UWorldUISubsystem::ClearAllWidgets()
 {
-	for (TPair<FName, TObjectPtr<UBBMUserWidgetBase>>& Pair : ActiveWidgets)
+	for (TPair<FName, TObjectPtr<UWorldUserWidgetBase>>& Pair : ActiveWidgets)
 	{
 		ReleaseWidgetInstance(Pair.Value.Get());
 	}
 	ActiveWidgets.Empty();
 }
 
-void UBBMWorldUISubsystem::ClearAllViewModels()
+void UWorldUISubsystem::ClearAllViewModels()
 {
-	for (TPair<FName, TObjectPtr<UBBMViewModelBase>>& Pair : ActiveViewModels)
+	for (TPair<FName, TObjectPtr<UWorldViewModelBase>>& Pair : ActiveViewModels)
 	{
 		ReleaseViewModelInstance(Pair.Value.Get());
 	}
 	ActiveViewModels.Empty();
 }
 
-int32 UBBMWorldUISubsystem::GetRegisteredWidgetCount() const
+int32 UWorldUISubsystem::GetRegisteredWidgetCount() const
 {
 	return ActiveWidgets.Num();
 }
 
-int32 UBBMWorldUISubsystem::GetRegisteredViewModelCount() const
+int32 UWorldUISubsystem::GetRegisteredViewModelCount() const
 {
 	return ActiveViewModels.Num();
 }
 
-bool UBBMWorldUISubsystem::AddWidgetToLayer(UUserWidget* InWidget, EBBMWidgetZOrder InLayer)
+bool UWorldUISubsystem::AddWidgetToLayer(UUserWidget* InWidget, EWorldWidgetZOrder InLayer)
 {
 	if (EnsureLayerRootInitialized() == false)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMWorldUISubsystem::AddWidgetToLayer] Failed to initialize LayerRootWidget."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldUISubsystem::AddWidgetToLayer] Failed to initialize LayerRootWidget."));
 		return false;
 	}
 
 	return LayerRootWidget->AddWidgetToLayer(InWidget, InLayer);
 }
 
-bool UBBMWorldUISubsystem::BringWidgetToLayerTop(UUserWidget* InWidget)
+bool UWorldUISubsystem::BringWidgetToLayerTop(UUserWidget* InWidget)
 {
 	if (LayerRootWidget == nullptr)
 	{
@@ -229,7 +223,7 @@ bool UBBMWorldUISubsystem::BringWidgetToLayerTop(UUserWidget* InWidget)
 	return LayerRootWidget->BringWidgetToLayerTop(InWidget);
 }
 
-bool UBBMWorldUISubsystem::IsWidgetInAnyLayer(const UWidget* InWidget) const
+bool UWorldUISubsystem::IsWidgetInAnyLayer(const UWidget* InWidget) const
 {
 	if (LayerRootWidget == nullptr)
 	{
@@ -240,7 +234,7 @@ bool UBBMWorldUISubsystem::IsWidgetInAnyLayer(const UWidget* InWidget) const
 }
 
 #if WITH_EDITOR
-void UBBMWorldUISubsystem::SetLayerZOrderMaxThresholdForTesting(int32 InThreshold)
+void UWorldUISubsystem::SetLayerZOrderMaxThresholdForTesting(int32 InThreshold)
 {
 	if (EnsureLayerRootInitialized() == true)
 	{
@@ -249,7 +243,7 @@ void UBBMWorldUISubsystem::SetLayerZOrderMaxThresholdForTesting(int32 InThreshol
 }
 #endif
 
-bool UBBMWorldUISubsystem::EnsureLayerRootInitialized()
+bool UWorldUISubsystem::EnsureLayerRootInitialized()
 {
 	UWorld* World = GetWorld();
 	if (World == nullptr || World->IsGameWorld() == false)
@@ -259,10 +253,10 @@ bool UBBMWorldUISubsystem::EnsureLayerRootInitialized()
 
 	if (LayerRootWidget == nullptr)
 	{
-		LayerRootWidget = CreateWidget<UBBMLayerRootWidget>(World, UBBMLayerRootWidget::StaticClass());
+		LayerRootWidget = CreateWidget<UWorldLayerRootWidget>(World, UWorldLayerRootWidget::StaticClass());
 		if (LayerRootWidget == nullptr)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[UBBMWorldUISubsystem::EnsureLayerRootInitialized] Failed to create UBBMLayerRootWidget."));
+			UE_LOG(LogTemp, Error, TEXT("[UWorldUISubsystem::EnsureLayerRootInitialized] Failed to create UWorldLayerRootWidget."));
 			return false;
 		}
 
@@ -278,7 +272,7 @@ bool UBBMWorldUISubsystem::EnsureLayerRootInitialized()
 	return LayerRootWidget != nullptr;
 }
 
-void UBBMWorldUISubsystem::ReleaseWidgetInstance(UBBMUserWidgetBase* InWidget)
+void UWorldUISubsystem::ReleaseWidgetInstance(UWorldUserWidgetBase* InWidget)
 {
 	if (InWidget == nullptr)
 	{
@@ -293,7 +287,7 @@ void UBBMWorldUISubsystem::ReleaseWidgetInstance(UBBMUserWidgetBase* InWidget)
 	}
 }
 
-void UBBMWorldUISubsystem::ReleaseViewModelInstance(UBBMViewModelBase* InViewModel)
+void UWorldUISubsystem::ReleaseViewModelInstance(UWorldViewModelBase* InViewModel)
 {
 	if (InViewModel == nullptr)
 	{
@@ -301,9 +295,9 @@ void UBBMWorldUISubsystem::ReleaseViewModelInstance(UBBMViewModelBase* InViewMod
 	}
 
 	// 제거 대상 ViewModel을 참조 중인 활성 위젯의 바인딩을 먼저 해제함
-	for (TPair<FName, TObjectPtr<UBBMUserWidgetBase>>& Pair : ActiveWidgets)
+	for (TPair<FName, TObjectPtr<UWorldUserWidgetBase>>& Pair : ActiveWidgets)
 	{
-		UBBMUserWidgetBase* Widget = Pair.Value.Get();
+		UWorldUserWidgetBase* Widget = Pair.Value.Get();
 		if (Widget != nullptr && Widget->GetViewModel() == InViewModel)
 		{
 			Widget->SetViewModelInstance(nullptr);

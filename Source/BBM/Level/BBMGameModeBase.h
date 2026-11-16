@@ -9,7 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "UI/BBMWorldWidgetTypes.h"
+#include "UI/BBMUITypes.h"
 #include "BBMGameModeBase.generated.h"
 
 /**

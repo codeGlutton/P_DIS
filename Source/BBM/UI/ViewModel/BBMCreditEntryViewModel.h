@@ -9,7 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "MVVMViewModelBase.h"
-#include "UI/BBMWorldWidgetTypes.h"
+#include "UI/BBMUITypes.h"
 #include "BBMCreditEntryViewModel.generated.h"
 
 /**

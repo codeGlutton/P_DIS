@@ -1,14 +1,14 @@
 /*****************************************************************//**
  * @file   BBMTitleWidget.h
  * @brief  BBM(비트 배낭 상인) 타이틀 메뉴 메인 위젯 클래스 정의
- * @details UBBMUserWidgetBase를 상속하며, UBBMTitleViewModel과 연동되어 타이틀 화면의 MVVM 뷰 역할을 수행함
+ * @details UWorldUserWidgetBase를 상속하며, UBBMTitleViewModel과 연동되어 타이틀 화면의 MVVM 뷰 역할을 수행함
  * @date   2026-11-07
  *********************************************************************/
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/Widget/BBMUserWidgetBase.h"
+#include "Widget/WorldUserWidgetBase.h"
 #include "BBMTitleWidget.generated.h"
 
 /* 독립 전방 선언 */
@@ -19,7 +19,7 @@ class UBBMTitleViewModel;
  * WBP_TitleMenu 블루프린트의 부모 클래스로 활용되며, Manual 모드로 주입된 UBBMTitleViewModel과 바인딩됨
  */
 UCLASS(BlueprintType, Blueprintable, meta = (DisplayName = "BBM Title Widget"))
-class BBM_API UBBMTitleWidget : public UBBMUserWidgetBase
+class BBM_API UBBMTitleWidget : public UWorldUserWidgetBase
 {
 	GENERATED_BODY()
 
@@ -28,8 +28,8 @@ public:
 	UBBMTitleWidget(const FObjectInitializer& ObjectInitializer);
 
 protected:
-	virtual void BindViewModelPresentationHandlers(UBBMViewModelBase* InViewModel) override;
-	virtual void ClearViewModelPresentationHandlers(UBBMViewModelBase* InViewModel) override;
+	virtual void BindViewModelPresentationHandlers(UWorldViewModelBase* InViewModel) override;
+	virtual void ClearViewModelPresentationHandlers(UWorldViewModelBase* InViewModel) override;
 
 	/* 뷰모델 접근자 */
 public:
@@ -43,14 +43,14 @@ public:
 protected:
 	/* 타이틀 화면 오픈 중 무한 반복 재생할 반짝임 애니메이션 설정 */
 	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
-	FBBMWidgetAnimConfig ShiningAnimConfig;
+	FWorldWidgetAnimConfig ShiningAnimConfig;
 
 	/* 타이틀 블로킹 오버레이 시작 애니메이션 설정 */
 	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
-	FBBMWidgetAnimConfig BlockingStartAnimConfig;
+	FWorldWidgetAnimConfig BlockingStartAnimConfig;
 
 	/* 타이틀 블로킹 오버레이 종료 애니메이션 설정 */
 	UPROPERTY(Category = "BBM|UI|Animation", EditDefaultsOnly, BlueprintReadWrite)
-	FBBMWidgetAnimConfig BlockingEndAnimConfig;
+	FWorldWidgetAnimConfig BlockingEndAnimConfig;
 };
 

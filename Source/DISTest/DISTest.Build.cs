@@ -21,6 +21,7 @@ public class DISTest : ModuleRules
 			"DISRuntime",
 			"BBM",
 			"ExtensionWidget",
+			"WorldUI",
 			"InputCore",
 			"Slate",
 			"SlateCore",

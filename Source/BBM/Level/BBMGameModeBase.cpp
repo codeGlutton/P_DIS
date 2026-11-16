@@ -5,9 +5,9 @@
  *********************************************************************/
 
 #include "Level/BBMGameModeBase.h"
-#include "UI/BBMWorldUISubsystem.h"
-#include "UI/Widget/BBMUserWidgetBase.h"
-#include "UI/ViewModel/BBMViewModelBase.h"
+#include "WorldUISubsystem.h"
+#include "Widget/WorldUserWidgetBase.h"
+#include "ViewModel/WorldViewModelBase.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 
@@ -46,7 +46,7 @@ void ABBMGameModeBase::CreateWorldUIsByPhase(EBBMWidgetCreationPhase Phase)
 		return;
 	}
 
-	UBBMWorldUISubsystem* UISS = World->GetSubsystem<UBBMWorldUISubsystem>();
+	UWorldUISubsystem* UISS = World->GetSubsystem<UWorldUISubsystem>();
 	if (UISS == nullptr)
 	{
 		return;
@@ -59,13 +59,13 @@ void ABBMGameModeBase::CreateWorldUIsByPhase(EBBMWidgetCreationPhase Phase)
 			continue;
 		}
 
-		UBBMUserWidgetBase* CreatedWidget = nullptr;
+		UWorldUserWidgetBase* CreatedWidget = nullptr;
 		if (Config.WidgetConfig.WidgetClass != nullptr)
 		{
 			CreatedWidget = UISS->CreateAndRegisterWidgetByConfig(Config.WidgetKey, Config.WidgetConfig);
 		}
 
-		UBBMViewModelBase* CreatedViewModel = nullptr;
+		UWorldViewModelBase* CreatedViewModel = nullptr;
 		if (Config.ViewModelConfig.ViewModelClass != nullptr)
 		{
 			CreatedViewModel = UISS->CreateAndRegisterViewModelByConfig(Config.WidgetKey, Config.ViewModelConfig);

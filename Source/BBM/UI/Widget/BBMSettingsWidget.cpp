@@ -4,8 +4,8 @@
 UBBMSettingsWidget::UBBMSettingsWidget(const FObjectInitializer& ObjectInitializer) :
 	Super(ObjectInitializer)
 {
-	LifecyclePolicy = EBBMWidgetLifecyclePolicy::PersistentViewport;
-	DefaultZOrderLayer = EBBMWidgetZOrder::Popup;
+	LifecyclePolicy = EWorldWidgetLifecyclePolicy::PersistentViewport;
+	DefaultZOrderLayer = EWorldWidgetZOrder::Popup;
 }
 
 UBBMSettingsViewModel* UBBMSettingsWidget::GetSettingsViewModel() const

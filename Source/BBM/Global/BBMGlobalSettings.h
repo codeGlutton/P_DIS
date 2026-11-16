@@ -10,7 +10,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "Combat/Team/BBMTeamTypes.h"
-#include "UI/BBMWorldWidgetTypes.h"
+#include "UI/BBMUITypes.h"
 #include "BBMGlobalSettings.generated.h"
 
 /* 독립 전방 선언 */

@@ -4,8 +4,8 @@
 UBBMCreditsWidget::UBBMCreditsWidget(const FObjectInitializer& ObjectInitializer) :
 	Super(ObjectInitializer)
 {
-	LifecyclePolicy = EBBMWidgetLifecyclePolicy::PersistentViewport;
-	DefaultZOrderLayer = EBBMWidgetZOrder::Popup;
+	LifecyclePolicy = EWorldWidgetLifecyclePolicy::PersistentViewport;
+	DefaultZOrderLayer = EWorldWidgetZOrder::Popup;
 }
 
 UBBMCreditsViewModel* UBBMCreditsWidget::GetCreditsViewModel() const

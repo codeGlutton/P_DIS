@@ -1,4 +1,4 @@
-#include "UI/BBMWorldWidgetTypes.h"
+#include "WorldUITypes.h"
 #include "Animation/WidgetAnimation.h"
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "Blueprint/WidgetTree.h"
@@ -93,7 +93,7 @@ namespace
 	}
 }
 
-UWidgetAnimation* FBBMWidgetAnimConfig::GetAnimation(UUserWidget* InWidget) const
+UWidgetAnimation* FWorldWidgetAnimConfig::GetAnimation(UUserWidget* InWidget) const
 {
 	if (ResolveAnimation(InWidget) == false)
 	{
@@ -103,7 +103,7 @@ UWidgetAnimation* FBBMWidgetAnimConfig::GetAnimation(UUserWidget* InWidget) cons
 	return CachedAnimation.Get();
 }
 
-UUserWidget* FBBMWidgetAnimConfig::GetOwnerWidget(UUserWidget* InWidget) const
+UUserWidget* FWorldWidgetAnimConfig::GetOwnerWidget(UUserWidget* InWidget) const
 {
 	if (ResolveAnimation(InWidget) == false)
 	{
@@ -113,14 +113,14 @@ UUserWidget* FBBMWidgetAnimConfig::GetOwnerWidget(UUserWidget* InWidget) const
 	return CachedOwnerWidget.Get();
 }
 
-void FBBMWidgetAnimConfig::InvalidateCachedAnimation() const
+void FWorldWidgetAnimConfig::InvalidateCachedAnimation() const
 {
 	CachedTargetWidget.Reset();
 	CachedOwnerWidget.Reset();
 	CachedAnimation.Reset();
 }
 
-bool FBBMWidgetAnimConfig::ResolveAnimation(UUserWidget* InWidget) const
+bool FWorldWidgetAnimConfig::ResolveAnimation(UUserWidget* InWidget) const
 {
 	if (InWidget == nullptr || AnimationName == NAME_None)
 	{
@@ -160,4 +160,3 @@ bool FBBMWidgetAnimConfig::ResolveAnimation(UUserWidget* InWidget) const
 	InvalidateCachedAnimation();
 	return false;
 }
-

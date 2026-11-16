@@ -1,6 +1,6 @@
 /*****************************************************************//**
  * @file   BBMTabViewModelBase.h
- * @brief  UBBMViewModelBase에서 파생되는 범용 MVVM 탭 패널 뷰모델 클래스 정의
+ * @brief  UWorldViewModelBase에서 파생되는 범용 MVVM 탭 패널 뷰모델 클래스 정의
  * @details TabEntries 배열과 SelectedTabIndex(FieldNotify), PreSelectedTabIndex를 관리하며
  *          탭 추가·제거·전체 제거·스위치 및 엔트리 대리자 자동 재바인딩과 상태 재갱신을 수행함
  * @date   2026-11-16
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/ViewModel/BBMViewModelBase.h"
+#include "ViewModel/WorldViewModelBase.h"
 #include "BBMTabViewModelBase.generated.h"
 
 /* 독립 전방 선언 */
@@ -23,7 +23,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBBMOnTabSelectionChangedDynamicSig
  * 탭 전환에 따른 창 변경 상태를 관리하는 MVVM 뷰모델 베이스 클래스
  */
 UCLASS(BlueprintType, Blueprintable, meta = (DisplayName = "BBM Tab ViewModel Base"))
-class BBM_API UBBMTabViewModelBase : public UBBMViewModelBase
+class BBM_API UBBMTabViewModelBase : public UWorldViewModelBase
 {
 	GENERATED_BODY()
 

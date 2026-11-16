@@ -1,29 +1,29 @@
-#include "UI/Widget/BBMUserWidgetBase.h"
-#include "UI/BBMWorldUISubsystem.h"
-#include "UI/ViewModel/BBMViewModelBase.h"
-#include "UI/ViewModel/BBMSingleAnimTransition.h"
-#include "UI/ViewModel/BBMDualAnimTransition.h"
+#include "Widget/WorldUserWidgetBase.h"
+#include "WorldUISubsystem.h"
+#include "ViewModel/WorldViewModelBase.h"
+#include "ViewModel/SingleAnimTransition.h"
+#include "ViewModel/DualAnimTransition.h"
 #include "Animation/WidgetAnimation.h"
 #include "Animation/WidgetAnimationState.h"
 #include "Engine/World.h"
 #include "View/MVVMView.h"
 
-UBBMUserWidgetBase::UBBMUserWidgetBase(const FObjectInitializer& ObjectInitializer) :
+UWorldUserWidgetBase::UWorldUserWidgetBase(const FObjectInitializer& ObjectInitializer) :
 	Super(ObjectInitializer),
-	LifecyclePolicy(EBBMWidgetLifecyclePolicy::PersistentViewport),
-	DefaultZOrderLayer(EBBMWidgetZOrder::Base),
+	LifecyclePolicy(EWorldWidgetLifecyclePolicy::PersistentViewport),
+	DefaultZOrderLayer(EWorldWidgetZOrder::Base),
 	ViewModel(nullptr)
 {
-	OpenAnimConfig.PlayMode = EBBMWidgetAnimPlayMode::RelativeForward;
-	CloseAnimConfig.PlayMode = EBBMWidgetAnimPlayMode::RelativeReverse;
+	OpenAnimConfig.PlayMode = EWorldWidgetAnimPlayMode::RelativeForward;
+	CloseAnimConfig.PlayMode = EWorldWidgetAnimPlayMode::RelativeReverse;
 }
 
-void UBBMUserWidgetBase::NativeConstruct()
+void UWorldUserWidgetBase::NativeConstruct()
 {
 	Super::NativeConstruct();
 
 	// 상시 뷰포트 유지 정책인 경우 현재 표시 중이 아니라면 기본 숨김 상태
-	if (LifecyclePolicy == EBBMWidgetLifecyclePolicy::PersistentViewport)
+	if (LifecyclePolicy == EWorldWidgetLifecyclePolicy::PersistentViewport)
 	{
 		const bool bIsViewModelShowing = (ViewModel.IsValid() == true && ViewModel->IsShowing() == true);
 		if (bIsViewModelShowing == false)
@@ -33,9 +33,9 @@ void UBBMUserWidgetBase::NativeConstruct()
 	}
 }
 
-void UBBMUserWidgetBase::BeginDestroy()
+void UWorldUserWidgetBase::BeginDestroy()
 {
-	if (UBBMViewModelBase* CurrentVM = ViewModel.Get())
+	if (UWorldViewModelBase* CurrentVM = ViewModel.Get())
 	{
 		ClearViewModelPresentationHandlers(CurrentVM);
 		ViewModel.Reset();
@@ -44,7 +44,7 @@ void UBBMUserWidgetBase::BeginDestroy()
 	Super::BeginDestroy();
 }
 
-void UBBMUserWidgetBase::SetViewModelInstance(UBBMViewModelBase* InViewModel)
+void UWorldUserWidgetBase::SetViewModelInstance(UWorldViewModelBase* InViewModel)
 {
 	if (ViewModel.Get() == InViewModel)
 	{
@@ -52,7 +52,7 @@ void UBBMUserWidgetBase::SetViewModelInstance(UBBMViewModelBase* InViewModel)
 	}
 
 	// 기존 뷰모델의 프레젠테이션 요청 핸들러 안전 해제
-	if (UBBMViewModelBase* OldVM = ViewModel.Get())
+	if (UWorldViewModelBase* OldVM = ViewModel.Get())
 	{
 		ClearViewModelPresentationHandlers(OldVM);
 		ViewModel.Reset();
@@ -81,39 +81,39 @@ void UBBMUserWidgetBase::SetViewModelInstance(UBBMViewModelBase* InViewModel)
 	BP_OnViewModelAssigned(InViewModel);
 }
 
-void UBBMUserWidgetBase::OnOpened()
+void UWorldUserWidgetBase::OnOpened()
 {
 }
 
-void UBBMUserWidgetBase::OnClosed()
+void UWorldUserWidgetBase::OnClosed()
 {
 }
 
-void UBBMUserWidgetBase::BindViewModelPresentationHandlers(UBBMViewModelBase* InViewModel)
+void UWorldUserWidgetBase::BindViewModelPresentationHandlers(UWorldViewModelBase* InViewModel)
 {
 	if (InViewModel == nullptr)
 	{
 		return;
 	}
 
-	if (UBBMDualAnimTransition* DualTransition = InViewModel->GetOpenCloseTransition())
+	if (UDualAnimTransition* DualTransition = InViewModel->GetOpenCloseTransition())
 	{
 		DualTransition->BindPresentationHandlers(
 			this,
-			FBBMOnPresentationTransitionRequestedSignature::CreateUObject(this, &UBBMUserWidgetBase::HandleOpenPresentationRequested),
-			FBBMOnPresentationTransitionRequestedSignature::CreateUObject(this, &UBBMUserWidgetBase::HandleClosePresentationRequested)
+			FWorldUIOnPresentationTransitionRequestedSignature::CreateUObject(this, &UWorldUserWidgetBase::HandleOpenPresentationRequested),
+			FWorldUIOnPresentationTransitionRequestedSignature::CreateUObject(this, &UWorldUserWidgetBase::HandleClosePresentationRequested)
 		);
 	}
 }
 
-void UBBMUserWidgetBase::ClearViewModelPresentationHandlers(UBBMViewModelBase* InViewModel)
+void UWorldUserWidgetBase::ClearViewModelPresentationHandlers(UWorldViewModelBase* InViewModel)
 {
 	if (InViewModel == nullptr)
 	{
 		return;
 	}
 
-	if (UBBMDualAnimTransition* DualTransition = InViewModel->GetOpenCloseTransition())
+	if (UDualAnimTransition* DualTransition = InViewModel->GetOpenCloseTransition())
 	{
 		UnbindAllFromAnimationFinishedByConfig(OpenAnimConfig);
 		UnbindAllFromAnimationFinishedByConfig(CloseAnimConfig);
@@ -124,10 +124,10 @@ void UBBMUserWidgetBase::ClearViewModelPresentationHandlers(UBBMViewModelBase* I
 	}
 }
 
-void UBBMUserWidgetBase::HandleSingleTransitionRequested(
+void UWorldUserWidgetBase::HandleSingleTransitionRequested(
 	bool bWithAnim,
-	UBBMSingleAnimTransition* InTransition,
-	const FBBMWidgetAnimConfig& InConfig
+	USingleAnimTransition* InTransition,
+	const FWorldWidgetAnimConfig& InConfig
 )
 {
 	UnbindAllFromAnimationFinishedByConfig(InConfig);
@@ -139,7 +139,7 @@ void UBBMUserWidgetBase::HandleSingleTransitionRequested(
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
-		FinishedDelegate.BindDynamic(InTransition, &UBBMSingleAnimTransition::NotifyAnimFinished);
+		FinishedDelegate.BindDynamic(InTransition, &USingleAnimTransition::NotifyAnimFinished);
 
 		BindToAnimationFinishedByConfig(InConfig, FinishedDelegate);
 		PlayAnimationByConfig(InConfig);
@@ -154,11 +154,11 @@ void UBBMUserWidgetBase::HandleSingleTransitionRequested(
 	}
 }
 
-void UBBMUserWidgetBase::HandleDualTransitionStartRequested(
+void UWorldUserWidgetBase::HandleDualTransitionStartRequested(
 	bool bWithAnim,
-	UBBMDualAnimTransition* InDualTransition,
-	const FBBMWidgetAnimConfig& InStartConfig,
-	const FBBMWidgetAnimConfig& InEndConfig
+	UDualAnimTransition* InDualTransition,
+	const FWorldWidgetAnimConfig& InStartConfig,
+	const FWorldWidgetAnimConfig& InEndConfig
 )
 {
 	UnbindAllFromAnimationFinishedByConfig(InEndConfig);
@@ -172,7 +172,7 @@ void UBBMUserWidgetBase::HandleDualTransitionStartRequested(
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
-		FinishedDelegate.BindDynamic(InDualTransition, &UBBMDualAnimTransition::NotifyStartTransitionFinished);
+		FinishedDelegate.BindDynamic(InDualTransition, &UDualAnimTransition::NotifyStartTransitionFinished);
 
 		BindToAnimationFinishedByConfig(InStartConfig, FinishedDelegate);
 		PlayAnimationByConfig(InStartConfig);
@@ -187,11 +187,11 @@ void UBBMUserWidgetBase::HandleDualTransitionStartRequested(
 	}
 }
 
-void UBBMUserWidgetBase::HandleDualTransitionEndRequested(
+void UWorldUserWidgetBase::HandleDualTransitionEndRequested(
 	bool bWithAnim,
-	UBBMDualAnimTransition* InDualTransition,
-	const FBBMWidgetAnimConfig& InStartConfig,
-	const FBBMWidgetAnimConfig& InEndConfig
+	UDualAnimTransition* InDualTransition,
+	const FWorldWidgetAnimConfig& InStartConfig,
+	const FWorldWidgetAnimConfig& InEndConfig
 )
 {
 	UnbindAllFromAnimationFinishedByConfig(InStartConfig);
@@ -205,7 +205,7 @@ void UBBMUserWidgetBase::HandleDualTransitionEndRequested(
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
-		FinishedDelegate.BindDynamic(InDualTransition, &UBBMDualAnimTransition::NotifyEndTransitionFinished);
+		FinishedDelegate.BindDynamic(InDualTransition, &UDualAnimTransition::NotifyEndTransitionFinished);
 
 		BindToAnimationFinishedByConfig(InEndConfig, FinishedDelegate);
 		PlayAnimationByConfig(InEndConfig);
@@ -220,7 +220,7 @@ void UBBMUserWidgetBase::HandleDualTransitionEndRequested(
 	}
 }
 
-void UBBMUserWidgetBase::HandleOpenPresentationRequested(bool bWithAnim)
+void UWorldUserWidgetBase::HandleOpenPresentationRequested(bool bWithAnim)
 {
 	UnbindAllFromAnimationFinishedByConfig(CloseAnimConfig);
 	UnbindAllFromAnimationFinishedByConfig(OpenAnimConfig);
@@ -238,8 +238,8 @@ void UBBMUserWidgetBase::HandleOpenPresentationRequested(bool bWithAnim)
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
-		FinishedDelegate.BindDynamic(this, &UBBMUserWidgetBase::HandleOpenAnimationFinished);
-		
+		FinishedDelegate.BindDynamic(this, &UWorldUserWidgetBase::HandleOpenAnimationFinished);
+
 		BindToAnimationFinishedByConfig(OpenAnimConfig, FinishedDelegate);
 		PlayAnimationByConfig(OpenAnimConfig);
 	}
@@ -250,7 +250,7 @@ void UBBMUserWidgetBase::HandleOpenPresentationRequested(bool bWithAnim)
 	}
 }
 
-void UBBMUserWidgetBase::HandleClosePresentationRequested(bool bWithAnim)
+void UWorldUserWidgetBase::HandleClosePresentationRequested(bool bWithAnim)
 {
 	UnbindAllFromAnimationFinishedByConfig(OpenAnimConfig);
 	UnbindAllFromAnimationFinishedByConfig(CloseAnimConfig);
@@ -263,7 +263,7 @@ void UBBMUserWidgetBase::HandleClosePresentationRequested(bool bWithAnim)
 	if (bCanPlayAnim == true)
 	{
 		FWidgetAnimationDynamicEvent FinishedDelegate;
-		FinishedDelegate.BindDynamic(this, &UBBMUserWidgetBase::HandleCloseAnimationFinished);
+		FinishedDelegate.BindDynamic(this, &UWorldUserWidgetBase::HandleCloseAnimationFinished);
 
 		BindToAnimationFinishedByConfig(CloseAnimConfig, FinishedDelegate);
 		PlayAnimationByConfig(CloseAnimConfig);
@@ -275,7 +275,7 @@ void UBBMUserWidgetBase::HandleClosePresentationRequested(bool bWithAnim)
 	}
 }
 
-void UBBMUserWidgetBase::HandleOpenAnimationFinished()
+void UWorldUserWidgetBase::HandleOpenAnimationFinished()
 {
 	if (ViewModel != nullptr && ViewModel->GetOpenCloseTransition() != nullptr)
 	{
@@ -283,7 +283,7 @@ void UBBMUserWidgetBase::HandleOpenAnimationFinished()
 	}
 }
 
-void UBBMUserWidgetBase::HandleCloseAnimationFinished()
+void UWorldUserWidgetBase::HandleCloseAnimationFinished()
 {
 	ApplyCloseViewportPresentation();
 
@@ -296,7 +296,7 @@ void UBBMUserWidgetBase::HandleCloseAnimationFinished()
 	}
 }
 
-bool UBBMUserWidgetBase::AddToLayer(EBBMWidgetZOrder InLayer)
+bool UWorldUserWidgetBase::AddToLayer(EWorldWidgetZOrder InLayer)
 {
 	// 이미 뷰포트 또는 레이어 위에 존재하면 중복 등록 및 타 레이어 이동을 허용하지 않음
 	if (IsInLayer() == true)
@@ -304,40 +304,40 @@ bool UBBMUserWidgetBase::AddToLayer(EBBMWidgetZOrder InLayer)
 		return false;
 	}
 
-	UBBMWorldUISubsystem* UIWorldSubsystem = ResolveWorldUISubsystem();
+	UWorldUISubsystem* UIWorldSubsystem = ResolveWorldUISubsystem();
 	if (UIWorldSubsystem == nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMUserWidgetBase::AddToLayer] UBBMWorldUISubsystem is unavailable."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldUserWidgetBase::AddToLayer] UWorldUISubsystem is unavailable."));
 		return false;
 	}
 
 	return UIWorldSubsystem->AddWidgetToLayer(this, InLayer);
 }
 
-bool UBBMUserWidgetBase::BringToLayerTop()
+bool UWorldUserWidgetBase::BringToLayerTop()
 {
-	UBBMWorldUISubsystem* UIWorldSubsystem = ResolveWorldUISubsystem();
+	UWorldUISubsystem* UIWorldSubsystem = ResolveWorldUISubsystem();
 	if (UIWorldSubsystem == nullptr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UBBMUserWidgetBase::BringToLayerTop] UBBMWorldUISubsystem is unavailable."));
+		UE_LOG(LogTemp, Warning, TEXT("[UWorldUserWidgetBase::BringToLayerTop] UWorldUISubsystem is unavailable."));
 		return false;
 	}
 
 	return UIWorldSubsystem->BringWidgetToLayerTop(this);
 }
 
-bool UBBMUserWidgetBase::IsInLayer() const
+bool UWorldUserWidgetBase::IsInLayer() const
 {
 	if (IsInViewport() == true)
 	{
 		return true;
 	}
 
-	const UBBMWorldUISubsystem* UIWorldSubsystem = ResolveWorldUISubsystem();
+	const UWorldUISubsystem* UIWorldSubsystem = ResolveWorldUISubsystem();
 	return (UIWorldSubsystem != nullptr) && (UIWorldSubsystem->IsWidgetInAnyLayer(this) == true);
 }
 
-UBBMWorldUISubsystem* UBBMUserWidgetBase::ResolveWorldUISubsystem() const
+UWorldUISubsystem* UWorldUserWidgetBase::ResolveWorldUISubsystem() const
 {
 	const UWorld* World = GetWorld();
 	if (World == nullptr)
@@ -345,30 +345,30 @@ UBBMWorldUISubsystem* UBBMUserWidgetBase::ResolveWorldUISubsystem() const
 		return nullptr;
 	}
 
-	return World->GetSubsystem<UBBMWorldUISubsystem>();
+	return World->GetSubsystem<UWorldUISubsystem>();
 }
 
-void UBBMUserWidgetBase::ApplyOpenViewportPresentation()
+void UWorldUserWidgetBase::ApplyOpenViewportPresentation()
 {
 	if (IsInLayer() == false)
 	{
 		AddToLayer(DefaultZOrderLayer);
 	}
-	else if (LifecyclePolicy == EBBMWidgetLifecyclePolicy::PersistentViewport)
+	else if (LifecyclePolicy == EWorldWidgetLifecyclePolicy::PersistentViewport)
 	{
 		// 재오픈 시 동일 레이어 캔버스 내 형제 위젯들보다 상위에 배치되도록 ZOrder를 최상단으로 승격함
 		BringToLayerTop();
 	}
 
-	if (LifecyclePolicy == EBBMWidgetLifecyclePolicy::PersistentViewport)
+	if (LifecyclePolicy == EWorldWidgetLifecyclePolicy::PersistentViewport)
 	{
 		SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	}
 }
 
-void UBBMUserWidgetBase::ApplyCloseViewportPresentation()
+void UWorldUserWidgetBase::ApplyCloseViewportPresentation()
 {
-	if (LifecyclePolicy == EBBMWidgetLifecyclePolicy::PersistentViewport)
+	if (LifecyclePolicy == EWorldWidgetLifecyclePolicy::PersistentViewport)
 	{
 		SetVisibility(ESlateVisibility::Collapsed);
 	}
@@ -381,7 +381,7 @@ void UBBMUserWidgetBase::ApplyCloseViewportPresentation()
 	}
 }
 
-void UBBMUserWidgetBase::PlayAnimationByConfig(const FBBMWidgetAnimConfig& InConfig)
+void UWorldUserWidgetBase::PlayAnimationByConfig(const FWorldWidgetAnimConfig& InConfig)
 {
 	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
 	UUserWidget* OwnerWidget = InConfig.GetOwnerWidget(this);
@@ -394,29 +394,29 @@ void UBBMUserWidgetBase::PlayAnimationByConfig(const FBBMWidgetAnimConfig& InCon
 
 	switch (InConfig.PlayMode)
 	{
-	case EBBMWidgetAnimPlayMode::RelativeForward:
+	case EWorldWidgetAnimPlayMode::RelativeForward:
 		OwnerWidget->PlayAnimationForward(Anim, InConfig.PlaybackSpeed);
 		break;
 
-	case EBBMWidgetAnimPlayMode::RelativeReverse:
+	case EWorldWidgetAnimPlayMode::RelativeReverse:
 		OwnerWidget->PlayAnimationReverse(Anim, InConfig.PlaybackSpeed);
 		break;
 
-	case EBBMWidgetAnimPlayMode::Forward:
+	case EWorldWidgetAnimPlayMode::Forward:
 		OwnerWidget->PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::Forward, InConfig.PlaybackSpeed);
 		break;
 
-	case EBBMWidgetAnimPlayMode::Reverse:
+	case EWorldWidgetAnimPlayMode::Reverse:
 		OwnerWidget->PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::Reverse, InConfig.PlaybackSpeed);
 		break;
 
-	case EBBMWidgetAnimPlayMode::PingPong:
+	case EWorldWidgetAnimPlayMode::PingPong:
 		OwnerWidget->PlayAnimation(Anim, 0.0f, SafeLoopCount, EUMGSequencePlayMode::PingPong, InConfig.PlaybackSpeed);
 		break;
 	}
 }
 
-void UBBMUserWidgetBase::StopAnimationByConfig(const FBBMWidgetAnimConfig& InConfig)
+void UWorldUserWidgetBase::StopAnimationByConfig(const FWorldWidgetAnimConfig& InConfig)
 {
 	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
 	UUserWidget* OwnerWidget = InConfig.GetOwnerWidget(this);
@@ -428,7 +428,7 @@ void UBBMUserWidgetBase::StopAnimationByConfig(const FBBMWidgetAnimConfig& InCon
 	OwnerWidget->StopAnimation(Anim);
 }
 
-void UBBMUserWidgetBase::BindToAnimationFinishedByConfig(const FBBMWidgetAnimConfig& InConfig, const FWidgetAnimationDynamicEvent& InFinishedDelegate)
+void UWorldUserWidgetBase::BindToAnimationFinishedByConfig(const FWorldWidgetAnimConfig& InConfig, const FWidgetAnimationDynamicEvent& InFinishedDelegate)
 {
 	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
 	UUserWidget* OwnerWidget = InConfig.GetOwnerWidget(this);
@@ -440,7 +440,7 @@ void UBBMUserWidgetBase::BindToAnimationFinishedByConfig(const FBBMWidgetAnimCon
 	OwnerWidget->BindToAnimationFinished(Anim, InFinishedDelegate);
 }
 
-void UBBMUserWidgetBase::UnbindAllFromAnimationFinishedByConfig(const FBBMWidgetAnimConfig& InConfig)
+void UWorldUserWidgetBase::UnbindAllFromAnimationFinishedByConfig(const FWorldWidgetAnimConfig& InConfig)
 {
 	UWidgetAnimation* Anim = InConfig.GetAnimation(this);
 	UUserWidget* OwnerWidget = InConfig.GetOwnerWidget(this);
@@ -451,4 +451,3 @@ void UBBMUserWidgetBase::UnbindAllFromAnimationFinishedByConfig(const FBBMWidget
 
 	OwnerWidget->UnbindAllFromAnimationFinished(Anim);
 }
-

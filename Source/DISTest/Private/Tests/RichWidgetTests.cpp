@@ -3,22 +3,32 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "Blueprint/WidgetTree.h"
+#include "Components/RichHorizontalBox.h"
 #include "Components/RichListView.h"
 #include "Components/RichScrollBar.h"
+#include "Components/RichVerticalBox.h"
+#include "Components/Spacer.h"
 #include "Engine/Blueprint.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "Input/HittestGrid.h"
 #include "Layout/ArrangedChildren.h"
 #include "Layout/Geometry.h"
+#include "Rendering/DrawElements.h"
+#include "Types/PaintArgs.h"
 #include "Types/RichScrollBarTypes.h"
 #include "UI/Widget/BBMCreditEntryWidget.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
+#include "Widgets/SLeafWidget.h"
+#include "Widgets/SRichHorizontalBox.h"
 #include "Widgets/SRichListView.h"
 #include "Widgets/SRichScrollBar.h"
 #include "Widgets/SRichScrollBarBridge.h"
 #include "Widgets/SRichScrollTrack.h"
+#include "Widgets/SRichVerticalBox.h"
+#include "Widgets/SWindow.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -369,6 +379,328 @@ bool FRichListViewUMGParityTest::RunTest(const FString& Parameters)
 
 	RichScrollBarWidget->ReleaseSlateResources(true);
 	TestFalse(TEXT("URichScrollBar releases Slate widget cleanly"), RichScrollBarWidget->GetSlateRichScrollBar().IsValid());
+
+	return true;
+}
+
+namespace
+{
+	struct FReverseBoxPaintRecord
+	{
+		int32 ChildId = INDEX_NONE;
+		int32 InputLayerId = INDEX_NONE;
+	};
+
+	/**
+	 * 다중 레이어(LayerId + 1)를 소비하며 OnPaint 호출 순서와 입력 LayerId를 기록하는 테스트용 리프 위젯
+	 */
+	class SReversePaintProbeWidget : public SLeafWidget
+	{
+	public:
+		SLATE_BEGIN_ARGS(SReversePaintProbeWidget)
+			: _ChildId(0)
+			, _DesiredSize(FVector2D(100.0f, 40.0f))
+			, _Records(nullptr)
+		{
+		}
+			SLATE_ARGUMENT(int32, ChildId)
+			SLATE_ARGUMENT(FVector2D, DesiredSize)
+			SLATE_ARGUMENT(TArray<FReverseBoxPaintRecord>*, Records)
+		SLATE_END_ARGS()
+
+		void Construct(const FArguments& InArgs)
+		{
+			ChildId = InArgs._ChildId;
+			ProbeDesiredSize = InArgs._DesiredSize;
+			Records = InArgs._Records;
+			SetVisibility(EVisibility::Visible);
+		}
+
+		virtual FVector2D ComputeDesiredSize(float) const override
+		{
+			return ProbeDesiredSize;
+		}
+
+		virtual int32 OnPaint(
+			const FPaintArgs& Args,
+			const FGeometry& AllottedGeometry,
+			const FSlateRect& MyCullingRect,
+			FSlateWindowElementList& OutDrawElements,
+			int32 LayerId,
+			const FWidgetStyle& InWidgetStyle,
+			bool bParentEnabled
+		) const override
+		{
+			if (Records != nullptr)
+			{
+				Records->Add(FReverseBoxPaintRecord{ ChildId, LayerId });
+			}
+
+			// 복합 위젯(예: 버튼 배경 + 텍스트)처럼 2개 레이어를 사용하는 경우를 모사함
+			return LayerId + 1;
+		}
+
+	private:
+		int32 ChildId = 0;
+		FVector2D ProbeDesiredSize = FVector2D::ZeroVector;
+		TArray<FReverseBoxPaintRecord>* Records = nullptr;
+	};
+}
+
+/**
+ * SRichVerticalBox / SRichHorizontalBox 및 URichVerticalBox / URichHorizontalBox의
+ * 레이아웃 불변성, 역순 OnPaint, 자식별 LayerId 증가, FHittestGrid Hit 우선순위 역전 검증
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FRichBoxReversePaintAndHitTest,
+	"DIS.ExtensionWidget.RichBox.ReversePaintAndHit",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
+)
+
+bool FRichBoxReversePaintAndHitTest::RunTest(const FString& Parameters)
+{
+	FExtensionWidgetTestWorldScope WorldScope;
+	TestNotNull(TEXT("Test world must exist for URichVerticalBox/URichHorizontalBox"), WorldScope.World);
+	if (WorldScope.World == nullptr)
+	{
+		return false;
+	}
+
+	const FGeometry RootGeometry = FGeometry::MakeRoot(FVector2D(400.0f, 300.0f), FSlateLayoutTransform());
+	const FSlateRect CullingRect(FVector2f::ZeroVector, FVector2f(400.0f, 300.0f));
+
+	// 1. SRichVerticalBox: 음수 상단 패딩으로 겹치는 3개 자식 배치 후 정순/역순 검증
+	{
+		TArray<FReverseBoxPaintRecord> PaintRecords;
+		TArray<TSharedRef<SReversePaintProbeWidget>> Probes;
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			Probes.Add(
+				SNew(SReversePaintProbeWidget)
+				.ChildId(Index)
+				.DesiredSize(FVector2D(100.0f, 40.0f))
+				.Records(&PaintRecords)
+			);
+		}
+
+		TSharedRef<SRichVerticalBox> RichVerticalBox = SNew(SRichVerticalBox)
+			.bReversePaint(false);
+		RichVerticalBox->AddSlot().AutoHeight()[Probes[0]];
+		RichVerticalBox->AddSlot().AutoHeight().Padding(0.0f, -20.0f, 0.0f, 0.0f)[Probes[1]];
+		RichVerticalBox->AddSlot().AutoHeight().Padding(0.0f, -20.0f, 0.0f, 0.0f)[Probes[2]];
+
+		TSharedRef<SWindow> TestWindow = SNew(SWindow)
+			.ClientSize(FVector2D(400.0f, 300.0f))
+			.AutoCenter(EAutoCenter::None);
+		TestWindow->SetContent(RichVerticalBox);
+		TestWindow->SlatePrepass(1.0f);
+
+		// 정순 상태 ArrangeChildren 좌표 확인 (Y: 0, 20, 40)
+		FArrangedChildren ArrangedNormal(EVisibility::Visible);
+		RichVerticalBox->ArrangeChildren(RootGeometry, ArrangedNormal);
+		TestEqual(TEXT("Normal SRichVerticalBox arranges 3 children"), ArrangedNormal.Num(), 3);
+		if (ArrangedNormal.Num() == 3)
+		{
+			TestEqual(TEXT("Normal Child 0 stays at slot index 0"), ArrangedNormal[0].Widget, StaticCastSharedRef<SWidget>(Probes[0]));
+			TestEqual(TEXT("Normal Child 0 Y position is 0"), static_cast<float>(ArrangedNormal[0].Geometry.GetAbsolutePosition().Y), 0.0f, 0.5f);
+			TestEqual(TEXT("Normal Child 1 Y position is 20"), static_cast<float>(ArrangedNormal[1].Geometry.GetAbsolutePosition().Y), 20.0f, 0.5f);
+			TestEqual(TEXT("Normal Child 2 Y position is 40"), static_cast<float>(ArrangedNormal[2].Geometry.GetAbsolutePosition().Y), 40.0f, 0.5f);
+		}
+
+		if (FSlateApplicationBase::IsInitialized() == true && FSlateApplicationBase::Get().GetRenderer() != nullptr)
+		{
+			TSharedRef<FHittestGrid> HittestGrid = MakeShared<FHittestGrid>();
+			HittestGrid->SetHittestArea(FVector2f::ZeroVector, FVector2f(400.0f, 300.0f), FVector2f::ZeroVector);
+			FSlateWindowElementList DrawElements(TestWindow);
+			FPaintArgs PaintArgs(nullptr, HittestGrid.Get(), HittestGrid.Get(), FVector2f::ZeroVector, 0.0, 0.0f);
+
+			// 1-1. bReversePaint = false (정순 Paint + 동일 LayerId + 나중 슬롯 Hit)
+			PaintRecords.Reset();
+			TestWindow->Paint(PaintArgs, RootGeometry, CullingRect, DrawElements, 0, FWidgetStyle(), true);
+			TestEqual(TEXT("Normal VerticalBox paints 3 probes"), PaintRecords.Num(), 3);
+			if (PaintRecords.Num() == 3)
+			{
+				TestEqual(TEXT("Normal VerticalBox paint order[0] == 0"), PaintRecords[0].ChildId, 0);
+				TestEqual(TEXT("Normal VerticalBox paint order[1] == 1"), PaintRecords[1].ChildId, 1);
+				TestEqual(TEXT("Normal VerticalBox paint order[2] == 2"), PaintRecords[2].ChildId, 2);
+				TestEqual(TEXT("Normal VerticalBox shares same input LayerId across children"), PaintRecords[1].InputLayerId, PaintRecords[0].InputLayerId);
+				TestEqual(TEXT("Normal VerticalBox shares same input LayerId[2]"), PaintRecords[2].InputLayerId, PaintRecords[0].InputLayerId);
+			}
+
+			// 실제 PaintSpaceGeometry 기준 Child 0과 Child 1 겹침 지점(타이틀바 오프셋 무관) 히트 검증
+			const FVector2f NormalOverlapPoint = FVector2f(Probes[0]->GetPaintSpaceGeometry().GetAbsolutePosition()) + FVector2f(50.0f, 25.0f);
+			const TArray<FWidgetAndPointer> NormalHitPath = HittestGrid->GetBubblePath(NormalOverlapPoint, 0.0f, false, 0);
+			TestTrue(TEXT("Normal VerticalBox overlap point produces hit path"), NormalHitPath.Num() > 0);
+			if (NormalHitPath.Num() > 0)
+			{
+				TestEqual(TEXT("Normal VerticalBox overlap hits Child 1 (drawn later)"),
+					NormalHitPath.Last().Widget,
+					StaticCastSharedRef<SWidget>(Probes[1]));
+			}
+
+			// 박스 단독 Paint 시 MaxLayerId 검증 (정순: 모든 자식 LayerId 0 공유 -> Max 1)
+			PaintRecords.Reset();
+			FSlateWindowElementList DirectNormalDrawElements(TestWindow);
+			const int32 DirectNormalMaxLayerId = RichVerticalBox->OnPaint(PaintArgs, RootGeometry, CullingRect, DirectNormalDrawElements, 0, FWidgetStyle(), true);
+			TestEqual(TEXT("Normal VerticalBox direct OnPaint MaxLayerId == 1"), DirectNormalMaxLayerId, 1);
+
+			// 1-2. bReversePaint = true (레이아웃 불변 + 역순 Paint + 자식별 LayerId 증가 + 앞쪽 슬롯 Hit)
+			RichVerticalBox->SetReversePaint(true);
+			TestTrue(TEXT("SetReversePaint(true) updates SRichVerticalBox getter"), RichVerticalBox->GetReversePaint());
+
+			FArrangedChildren ArrangedAfterReverse(EVisibility::Visible);
+			RichVerticalBox->ArrangeChildren(RootGeometry, ArrangedAfterReverse);
+			TestEqual(TEXT("ReversePaint preserves ArrangeChildren count"), ArrangedAfterReverse.Num(), 3);
+			if (ArrangedAfterReverse.Num() == 3)
+			{
+				TestEqual(TEXT("ReversePaint does NOT alter ArrangeChildren order[0]"), ArrangedAfterReverse[0].Widget, StaticCastSharedRef<SWidget>(Probes[0]));
+				TestEqual(TEXT("ReversePaint keeps Child 0 Y position at 0"), static_cast<float>(ArrangedAfterReverse[0].Geometry.GetAbsolutePosition().Y), 0.0f, 0.5f);
+				TestEqual(TEXT("ReversePaint keeps Child 1 Y position at 20"), static_cast<float>(ArrangedAfterReverse[1].Geometry.GetAbsolutePosition().Y), 20.0f, 0.5f);
+				TestEqual(TEXT("ReversePaint keeps Child 2 Y position at 40"), static_cast<float>(ArrangedAfterReverse[2].Geometry.GetAbsolutePosition().Y), 40.0f, 0.5f);
+			}
+
+			PaintRecords.Reset();
+			HittestGrid->Clear();
+			FSlateWindowElementList ReverseDrawElements(TestWindow);
+			TestWindow->Paint(PaintArgs, RootGeometry, CullingRect, ReverseDrawElements, 0, FWidgetStyle(), true);
+			TestEqual(TEXT("Reversed VerticalBox paints 3 probes"), PaintRecords.Num(), 3);
+			if (PaintRecords.Num() == 3)
+			{
+				TestEqual(TEXT("Reversed VerticalBox paint order[0] == 2"), PaintRecords[0].ChildId, 2);
+				TestEqual(TEXT("Reversed VerticalBox paint order[1] == 1"), PaintRecords[1].ChildId, 1);
+				TestEqual(TEXT("Reversed VerticalBox paint order[2] == 0"), PaintRecords[2].ChildId, 0);
+				TestEqual(TEXT("Reversed VerticalBox increments LayerId after 2-layer Child 2"), PaintRecords[1].InputLayerId, PaintRecords[0].InputLayerId + 2);
+				TestEqual(TEXT("Reversed VerticalBox increments LayerId after 2-layer Child 1"), PaintRecords[2].InputLayerId, PaintRecords[1].InputLayerId + 2);
+			}
+
+			const FVector2f ReversedOverlapPoint = FVector2f(Probes[0]->GetPaintSpaceGeometry().GetAbsolutePosition()) + FVector2f(50.0f, 25.0f);
+			const TArray<FWidgetAndPointer> ReversedHitPath = HittestGrid->GetBubblePath(ReversedOverlapPoint, 0.0f, false, 0);
+			TestTrue(TEXT("Reversed VerticalBox overlap point produces hit path"), ReversedHitPath.Num() > 0);
+			if (ReversedHitPath.Num() > 0)
+			{
+				TestEqual(TEXT("Reversed VerticalBox overlap hits Child 0 (painted last with highest LayerId)"),
+					ReversedHitPath.Last().Widget,
+					StaticCastSharedRef<SWidget>(Probes[0]));
+			}
+
+			// 박스 단독 Paint 시 MaxLayerId 검증 (역순 3자식 각 2레이어: 0~1, 2~3, 4~5 -> Max 5)
+			PaintRecords.Reset();
+			FSlateWindowElementList DirectReverseDrawElements(TestWindow);
+			const int32 DirectReverseMaxLayerId = RichVerticalBox->OnPaint(PaintArgs, RootGeometry, CullingRect, DirectReverseDrawElements, 0, FWidgetStyle(), true);
+			TestEqual(TEXT("Reversed VerticalBox direct OnPaint MaxLayerId == 5"), DirectReverseMaxLayerId, 5);
+		}
+	}
+
+	// 2. SRichHorizontalBox: 음수 좌측 패딩으로 겹치는 3개 자식 배치 후 역순 Paint + Hit 검증
+	{
+		TArray<FReverseBoxPaintRecord> PaintRecords;
+		TArray<TSharedRef<SReversePaintProbeWidget>> Probes;
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			Probes.Add(
+				SNew(SReversePaintProbeWidget)
+				.ChildId(Index)
+				.DesiredSize(FVector2D(40.0f, 100.0f))
+				.Records(&PaintRecords)
+			);
+		}
+
+		TSharedRef<SRichHorizontalBox> RichHorizontalBox = SNew(SRichHorizontalBox)
+			.bReversePaint(true);
+		RichHorizontalBox->AddSlot().AutoWidth()[Probes[0]];
+		RichHorizontalBox->AddSlot().AutoWidth().Padding(-20.0f, 0.0f, 0.0f, 0.0f)[Probes[1]];
+		RichHorizontalBox->AddSlot().AutoWidth().Padding(-20.0f, 0.0f, 0.0f, 0.0f)[Probes[2]];
+
+		TSharedRef<SWindow> TestWindow = SNew(SWindow)
+			.ClientSize(FVector2D(400.0f, 300.0f))
+			.AutoCenter(EAutoCenter::None);
+		TestWindow->SetContent(RichHorizontalBox);
+		TestWindow->SlatePrepass(1.0f);
+
+		FArrangedChildren ArrangedHorizontal(EVisibility::Visible);
+		RichHorizontalBox->ArrangeChildren(RootGeometry, ArrangedHorizontal);
+		TestEqual(TEXT("SRichHorizontalBox ArrangeChildren preserves left-to-right coordinates"), ArrangedHorizontal.Num(), 3);
+		if (ArrangedHorizontal.Num() == 3)
+		{
+			TestEqual(TEXT("Horizontal Child 0 X position is 0"), static_cast<float>(ArrangedHorizontal[0].Geometry.GetAbsolutePosition().X), 0.0f, 0.5f);
+			TestEqual(TEXT("Horizontal Child 1 X position is 20"), static_cast<float>(ArrangedHorizontal[1].Geometry.GetAbsolutePosition().X), 20.0f, 0.5f);
+			TestEqual(TEXT("Horizontal Child 2 X position is 40"), static_cast<float>(ArrangedHorizontal[2].Geometry.GetAbsolutePosition().X), 40.0f, 0.5f);
+		}
+
+		if (FSlateApplicationBase::IsInitialized() == true && FSlateApplicationBase::Get().GetRenderer() != nullptr)
+		{
+			TSharedRef<FHittestGrid> HittestGrid = MakeShared<FHittestGrid>();
+			HittestGrid->SetHittestArea(FVector2f::ZeroVector, FVector2f(400.0f, 300.0f), FVector2f::ZeroVector);
+			FSlateWindowElementList DrawElements(TestWindow);
+			FPaintArgs PaintArgs(nullptr, HittestGrid.Get(), HittestGrid.Get(), FVector2f::ZeroVector, 0.0, 0.0f);
+
+			PaintRecords.Reset();
+			TestWindow->Paint(PaintArgs, RootGeometry, CullingRect, DrawElements, 0, FWidgetStyle(), true);
+			TestEqual(TEXT("Reversed HorizontalBox paints 3 probes"), PaintRecords.Num(), 3);
+			if (PaintRecords.Num() == 3)
+			{
+				TestEqual(TEXT("Reversed HorizontalBox paint order[0] == 2"), PaintRecords[0].ChildId, 2);
+				TestEqual(TEXT("Reversed HorizontalBox paint order[1] == 1"), PaintRecords[1].ChildId, 1);
+				TestEqual(TEXT("Reversed HorizontalBox paint order[2] == 0"), PaintRecords[2].ChildId, 0);
+				TestTrue(TEXT("Reversed HorizontalBox increases input LayerId strictly"),
+					PaintRecords[0].InputLayerId < PaintRecords[1].InputLayerId && PaintRecords[1].InputLayerId < PaintRecords[2].InputLayerId);
+			}
+
+			// Child 0(X:0~40)과 Child 1(X:20~60)만 겹치는 상대 X=25 지점 히트 시 Child 0 우선 확인
+			const FVector2f HorizontalOverlapPoint = FVector2f(Probes[0]->GetPaintSpaceGeometry().GetAbsolutePosition()) + FVector2f(25.0f, 50.0f);
+			const TArray<FWidgetAndPointer> HorizontalHitPath = HittestGrid->GetBubblePath(HorizontalOverlapPoint, 0.0f, false, 0);
+			TestTrue(TEXT("Reversed HorizontalBox overlap point produces hit path"), HorizontalHitPath.Num() > 0);
+			if (HorizontalHitPath.Num() > 0)
+			{
+				TestEqual(TEXT("Reversed HorizontalBox overlap at X=25 hits Child 0"),
+					HorizontalHitPath.Last().Widget,
+					StaticCastSharedRef<SWidget>(Probes[0]));
+			}
+		}
+	}
+
+	// 3. UMG URichVerticalBox / URichHorizontalBox 래퍼 동기화 및 슬롯 호환성 검증
+	{
+		URichVerticalBox* UMGVerticalBox = NewObject<URichVerticalBox>(WorldScope.World);
+		URichHorizontalBox* UMGHorizontalBox = NewObject<URichHorizontalBox>(WorldScope.World);
+		TestNotNull(TEXT("URichVerticalBox created"), UMGVerticalBox);
+		TestNotNull(TEXT("URichHorizontalBox created"), UMGHorizontalBox);
+		if (UMGVerticalBox == nullptr || UMGHorizontalBox == nullptr)
+		{
+			return false;
+		}
+
+		USpacer* ChildA = NewObject<USpacer>(UMGVerticalBox);
+		USpacer* ChildB = NewObject<USpacer>(UMGHorizontalBox);
+		TestNotNull(TEXT("URichVerticalBox AddChildToVerticalBox returns UVerticalBoxSlot"), UMGVerticalBox->AddChildToVerticalBox(ChildA));
+		TestNotNull(TEXT("URichHorizontalBox AddChildToHorizontalBox returns UHorizontalBoxSlot"), UMGHorizontalBox->AddChildToHorizontalBox(ChildB));
+
+		UMGVerticalBox->bReversePaint = true;
+		UMGHorizontalBox->bReversePaint = false;
+
+		UMGVerticalBox->TakeWidget();
+		UMGHorizontalBox->TakeWidget();
+		UMGVerticalBox->SynchronizeProperties();
+		UMGHorizontalBox->SynchronizeProperties();
+
+		const TSharedPtr<SRichVerticalBox> SlateVBox = UMGVerticalBox->GetSlateRichVerticalBox();
+		const TSharedPtr<SRichHorizontalBox> SlateHBox = UMGHorizontalBox->GetSlateRichHorizontalBox();
+		TestTrue(TEXT("URichVerticalBox builds SRichVerticalBox"), SlateVBox.IsValid());
+		TestTrue(TEXT("URichHorizontalBox builds SRichHorizontalBox"), SlateHBox.IsValid());
+		if (SlateVBox.IsValid() == true && SlateHBox.IsValid() == true)
+		{
+			TestTrue(TEXT("URichVerticalBox SynchronizeProperties syncs bReversePaint=true"), SlateVBox->GetReversePaint());
+			TestFalse(TEXT("URichHorizontalBox SynchronizeProperties syncs bReversePaint=false"), SlateHBox->GetReversePaint());
+
+			UMGHorizontalBox->SetReversePaint(true);
+			TestTrue(TEXT("URichHorizontalBox SetReversePaint(true) updates Slate widget"), SlateHBox->GetReversePaint());
+		}
+
+		static_cast<UWidget*>(UMGVerticalBox)->ReleaseSlateResources(true);
+		UMGHorizontalBox->ReleaseSlateResources(true);
+		TestFalse(TEXT("URichVerticalBox releases Slate widget cleanly"), UMGVerticalBox->GetSlateRichVerticalBox().IsValid());
+		TestFalse(TEXT("URichHorizontalBox releases Slate widget cleanly"), UMGHorizontalBox->GetSlateRichHorizontalBox().IsValid());
+	}
 
 	return true;
 }

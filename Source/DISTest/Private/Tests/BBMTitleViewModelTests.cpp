@@ -13,6 +13,8 @@
 #include "UI/Widget/BBMUserWidgetBase.h"
 #include "UI/Widget/BBMTitleWidget.h"
 #include "UI/Widget/BBMSettingsWidget.h"
+#include "UI/Widget/BBMTabEntryWidget.h"
+#include "UI/Widget/BBMSettingsTabEntryWidget.h"
 #include "UI/Widget/BBMCreditsWidget.h"
 #include "UI/BBMWorldUISubsystem.h"
 #include "UI/ViewModel/BBMViewModelBase.h"
@@ -21,6 +23,8 @@
 #include "UI/ViewModel/BBMCharacterSelectViewModel.h"
 #include "UI/ViewModel/BBMCreditsViewModel.h"
 #include "UI/ViewModel/BBMCreditEntryViewModel.h"
+#include "UI/ViewModel/BBMTabEntryViewModel.h"
+#include "UI/ViewModel/BBMTabViewModelBase.h"
 #include "UI/ViewModel/BBMSingleAnimTransition.h"
 #include "UI/ViewModel/BBMDualAnimTransition.h"
 #include "Global/BBMGlobalSettings.h"
@@ -410,6 +414,47 @@ bool FBBMSettingsAndCreditsWidgetsTest::RunTest(const FString& Parameters)
 	CreditsWidget->SetViewModelInstance(CreditsVM);
 	TestTrue(TEXT("GetSettingsViewModel()은 바인딩된 SettingsViewModel을 반환해야 함"), SettingsWidget->GetSettingsViewModel() == SettingsVM);
 	TestTrue(TEXT("GetCreditsViewModel()은 바인딩된 CreditsViewModel을 반환해야 함"), CreditsWidget->GetCreditsViewModel() == CreditsVM);
+
+	// UBBMSettingsViewModel BeginViewModel() 4종 탭 엔트리(Game, Audio, Graphics, Controls) 자동 생성·선택 검증
+	TestEqual(TEXT("SettingsVM BeginViewModel 후 TabCount는 4여야 함"), SettingsVM->GetTabCount(), 4);
+	TestEqual(TEXT("SettingsVM 초기 SelectedTabIndex는 0이어야 함"), SettingsVM->GetSelectedTabIndex(), 0);
+	TestEqual(TEXT("SettingsVM 초기 PreSelectedTabIndex는 INDEX_NONE이어야 함"), SettingsVM->GetPreSelectedTabIndex(), INDEX_NONE);
+
+	const TArray<TObjectPtr<UBBMTabEntryViewModel>>& SettingsTabEntries = SettingsVM->GetTabEntries();
+	for (int32 TabIdx = 0; TabIdx < SettingsTabEntries.Num(); ++TabIdx)
+	{
+		UBBMTabEntryViewModel* Entry = SettingsTabEntries[TabIdx];
+		TestNotNull(TEXT("Settings 탭 엔트리 VM 유효"), Entry);
+		if (Entry != nullptr)
+		{
+			TestEqual(TEXT("Settings 탭 엔트리 TabIndex 일치"), Entry->GetTabIndex(), TabIdx);
+			TestFalse(TEXT("Settings 탭 엔트리 TabText가 비어있으면 안 됨"), Entry->GetTabText().IsEmpty());
+			TestEqual(TEXT("초기 0번 탭만 선택 상태여야 함"), Entry->IsSelected(), TabIdx == 0);
+		}
+	}
+
+	if (SettingsTabEntries.IsValidIndex(2) == true && SettingsTabEntries[2] != nullptr)
+	{
+		SettingsTabEntries[2]->RequestSelect();
+		TestEqual(TEXT("2번 탭 선택 요청 시 SelectedTabIndex == 2"), SettingsVM->GetSelectedTabIndex(), 2);
+		TestEqual(TEXT("2번 탭 선택 요청 시 PreSelectedTabIndex == 0"), SettingsVM->GetPreSelectedTabIndex(), 0);
+	}
+
+	// 범용 UBBMTabEntryWidget 및 파생 UBBMSettingsTabEntryWidget 생성·상속·인터페이스 검증
+	UBBMTabEntryWidget* TabEntryWidget = CreateWidget<UBBMTabEntryWidget>(TestWorld.World, UBBMTabEntryWidget::StaticClass());
+	UBBMSettingsTabEntryWidget* SettingsTabEntryWidget = CreateWidget<UBBMSettingsTabEntryWidget>(TestWorld.World, UBBMSettingsTabEntryWidget::StaticClass());
+	TestNotNull(TEXT("UBBMTabEntryWidget 생성 성공"), TabEntryWidget);
+	TestNotNull(TEXT("UBBMSettingsTabEntryWidget 생성 성공"), SettingsTabEntryWidget);
+	if (SettingsTabEntryWidget != nullptr)
+	{
+		TestTrue(TEXT("UBBMSettingsTabEntryWidget는 UBBMTabEntryWidget에서 파생되어야 함"), SettingsTabEntryWidget->IsA<UBBMTabEntryWidget>());
+		TestTrue(TEXT("UBBMSettingsTabEntryWidget는 IUserObjectListEntry를 구현해야 함"), SettingsTabEntryWidget->Implements<UUserObjectListEntry>());
+	}
+
+	// EndViewModel() 호출 시 세팅 탭 엔트리 정리 확인
+	SettingsVM->ConditionalBeginDestroy();
+	TestEqual(TEXT("SettingsVM EndViewModel 후 TabCount == 0"), SettingsVM->GetTabCount(), 0);
+	TestEqual(TEXT("SettingsVM EndViewModel 후 SelectedTabIndex == INDEX_NONE"), SettingsVM->GetSelectedTabIndex(), INDEX_NONE);
 
 	// UBBMGlobalSettings 기본 객체 및 통합 설정 검증
 	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
@@ -1172,6 +1217,199 @@ bool FBBMTitleViewModelBlockingPanelControlTest::RunTest(const FString& Paramete
 	// 언바인딩 후 서브 패널을 열어도 BlockingTransition이 반응하지 않아야 함
 	CharacterSelectVM->OpenWithAnim();
 	TestEqual(TEXT("EndViewModel() 후 서브 패널 열림 시 BlockingTransition은 Ended를 유지해야 함"), BlockingTransition->GetState(), EBBMDualAnimState::Ended);
+
+	return true;
+}
+
+// 9. UBBMTabViewModelBase / UBBMTabEntryViewModel 탭 선택·PreSelectedTabIndex·추가·제거·스위치·재갱신 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMTabViewModelTest,
+	"DIS.BBM.UI.TabViewModel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FBBMTabViewModelTest::RunTest(const FString& Parameters)
+{
+	FBBMMVVMScopedTestWorld TestWorld;
+	TestTrue(TEXT("테스트 월드 유효 검증"), TestWorld.World != nullptr);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	UBBMTabViewModelBase* TabVM = NewObject<UBBMTabViewModelBase>(TestWorld.World);
+	TestNotNull(TEXT("UBBMTabViewModelBase 생성 성공"), TabVM);
+	if (TabVM == nullptr)
+	{
+		return false;
+	}
+
+	TabVM->FinishInitialization();
+
+	// 9-1. 빈 상태 초기 인덱스(INDEX_NONE) 검증
+	TestEqual(TEXT("빈 상태 초기 SelectedTabIndex는 INDEX_NONE"), TabVM->GetSelectedTabIndex(), INDEX_NONE);
+	TestEqual(TEXT("빈 상태 초기 PreSelectedTabIndex는 INDEX_NONE"), TabVM->GetPreSelectedTabIndex(), INDEX_NONE);
+	TestEqual(TEXT("초기 탭 개수 0"), TabVM->GetTabCount(), 0);
+	TestNull(TEXT("빈 상태 GetSelectedTabEntry()는 nullptr"), TabVM->GetSelectedTabEntry());
+
+	// 9-2. AddTab 최상위(맨 뒤) 추가 + 자동 선택 + PreSelectedTabIndex + 중복 대리자 차단 검증
+	TArray<int32> SelectedEvents;
+	TArray<int32> DeselectedEvents;
+	auto HookEntryEvents = [&SelectedEvents, &DeselectedEvents](UBBMTabEntryViewModel* Entry)
+	{
+		Entry->OnSelectedNative.AddLambda([&SelectedEvents](int32 TabIdx)
+		{
+			SelectedEvents.Add(TabIdx);
+		});
+		Entry->OnDeselectedNative.AddLambda([&DeselectedEvents](int32 TabIdx)
+		{
+			DeselectedEvents.Add(TabIdx);
+		});
+	};
+
+	UBBMTabEntryViewModel* Entry0 = NewObject<UBBMTabEntryViewModel>(TabVM);
+	UBBMTabEntryViewModel* Entry1 = NewObject<UBBMTabEntryViewModel>(TabVM);
+	UBBMTabEntryViewModel* Entry2 = NewObject<UBBMTabEntryViewModel>(TabVM);
+	Entry0->SetTabText(FText::FromString(TEXT("Tab0")));
+	Entry1->SetTabText(FText::FromString(TEXT("Tab1")));
+	Entry2->SetTabText(FText::FromString(TEXT("Tab2")));
+	HookEntryEvents(Entry0);
+	HookEntryEvents(Entry1);
+	HookEntryEvents(Entry2);
+
+	TestEqual(TEXT("첫 탭 추가 인덱스 == 0"), TabVM->AddTab(Entry0), 0);
+	TestEqual(TEXT("첫 탭 추가 후 SelectedTabIndex == 0"), TabVM->GetSelectedTabIndex(), 0);
+	TestEqual(TEXT("첫 탭 추가 후 PreSelectedTabIndex == INDEX_NONE"), TabVM->GetPreSelectedTabIndex(), INDEX_NONE);
+	TestTrue(TEXT("Entry0 IsSelected == true"), Entry0->IsSelected());
+	TestEqual(TEXT("첫 탭 선택 이벤트 1회(인덱스 0)"), SelectedEvents.Num(), 1);
+	TestEqual(TEXT("첫 탭 선택 이벤트 전달 인덱스 == 0"), SelectedEvents[0], 0);
+
+	TestEqual(TEXT("두 번째 탭 추가 인덱스 == 1"), TabVM->AddTab(Entry1), 1);
+	TestEqual(TEXT("두 번째 탭 추가 시 SelectedTabIndex == 1 자동 이동"), TabVM->GetSelectedTabIndex(), 1);
+	TestEqual(TEXT("두 번째 탭 추가 후 PreSelectedTabIndex == 0"), TabVM->GetPreSelectedTabIndex(), 0);
+	TestFalse(TEXT("Entry0 자동 해제됨"), Entry0->IsSelected());
+	TestTrue(TEXT("Entry1 자동 선택됨"), Entry1->IsSelected());
+	TestEqual(TEXT("해제 이벤트[0] == 0"), DeselectedEvents.Last(), 0);
+	TestEqual(TEXT("선택 이벤트[1] == 1"), SelectedEvents.Last(), 1);
+
+	TestEqual(TEXT("세 번째 탭 추가 인덱스 == 2"), TabVM->AddTab(Entry2), 2);
+	TestEqual(TEXT("세 번째 탭 추가 시 SelectedTabIndex == 2"), TabVM->GetSelectedTabIndex(), 2);
+	TestEqual(TEXT("세 번째 탭 추가 후 PreSelectedTabIndex == 1"), TabVM->GetPreSelectedTabIndex(), 1);
+
+	// 9-3. 동일 인덱스 선택 시도 무시 및 다른 인덱스 RequestSelect() 전환 검증
+	int32 SelectedIndexNotifyCount = 0;
+	const FDelegateHandle SelectedIndexNotifyHandle = TabVM->AddFieldValueChangedDelegate(
+		UBBMTabViewModelBase::FFieldNotificationClassDescriptor::SelectedTabIndex,
+		INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([&SelectedIndexNotifyCount](UObject* /*Obj*/, UE::FieldNotification::FFieldId /*Id*/)
+		{
+			++SelectedIndexNotifyCount;
+		})
+	);
+
+	const int32 PrevSelectedEventNum = SelectedEvents.Num();
+	const int32 PrevDeselectedEventNum = DeselectedEvents.Num();
+	Entry2->RequestSelect();
+	TestEqual(TEXT("동일 인덱스(2) 선택 시 SelectedTabIndex 유지"), TabVM->GetSelectedTabIndex(), 2);
+	TestEqual(TEXT("동일 인덱스 선택 시 PreSelectedTabIndex 유지"), TabVM->GetPreSelectedTabIndex(), 1);
+	TestEqual(TEXT("동일 인덱스 선택 시 FieldNotify 미발송"), SelectedIndexNotifyCount, 0);
+	TestEqual(TEXT("동일 인덱스 선택 시 OnSelected 미호출"), SelectedEvents.Num(), PrevSelectedEventNum);
+	TestEqual(TEXT("동일 인덱스 선택 시 OnDeselected 미호출"), DeselectedEvents.Num(), PrevDeselectedEventNum);
+
+	Entry0->RequestSelect();
+	TestEqual(TEXT("Entry0 RequestSelect() 후 SelectedTabIndex == 0"), TabVM->GetSelectedTabIndex(), 0);
+	TestEqual(TEXT("Entry0 RequestSelect() 후 PreSelectedTabIndex == 2"), TabVM->GetPreSelectedTabIndex(), 2);
+	TestEqual(TEXT("SelectedTabIndex FieldNotify 1회 발송"), SelectedIndexNotifyCount, 1);
+	TestFalse(TEXT("Entry2 해제됨"), Entry2->IsSelected());
+	TestTrue(TEXT("Entry0 선택됨"), Entry0->IsSelected());
+	TestEqual(TEXT("해제 이벤트 마지막 전달 인덱스 == 2"), DeselectedEvents.Last(), 2);
+	TestEqual(TEXT("선택 이벤트 마지막 전달 인덱스 == 0"), SelectedEvents.Last(), 0);
+
+	// 9-4. SwapTabs(0, 2) 시 SelectedTabIndex 및 PreSelectedTabIndex 동반 이동 및 TabIndex 재갱신 검증
+	const int32 EventCountBeforeSwap = SelectedEvents.Num() + DeselectedEvents.Num();
+	TestTrue(TEXT("SwapTabs(0, 2) 성공"), TabVM->SwapTabs(0, 2));
+	TestEqual(TEXT("스왑 후 인덱스 0은 Entry2"), TabVM->GetTabEntries()[0].Get(), Entry2);
+	TestEqual(TEXT("스왑 후 인덱스 2는 Entry0"), TabVM->GetTabEntries()[2].Get(), Entry0);
+	TestEqual(TEXT("스왑 후 Entry2 TabIndex == 0"), Entry2->GetTabIndex(), 0);
+	TestEqual(TEXT("스왑 후 Entry0 TabIndex == 2"), Entry0->GetTabIndex(), 2);
+	TestEqual(TEXT("스왑 후 SelectedTabIndex는 Entry0을 따라 2로 이동"), TabVM->GetSelectedTabIndex(), 2);
+	TestEqual(TEXT("스왑 후 PreSelectedTabIndex는 Entry2를 따라 0으로 이동"), TabVM->GetPreSelectedTabIndex(), 0);
+	TestEqual(TEXT("스왑 시 동일 엔트리 유지로 선택/해제 중복 대리자 미호출"), SelectedEvents.Num() + DeselectedEvents.Num(), EventCountBeforeSwap);
+
+	// 스왑 후 Entry2 클릭 시 새 인덱스 0으로 전환되는지 확인 (Selected=0, PreSelected=2)
+	Entry2->RequestSelect();
+	TestEqual(TEXT("스왑된 Entry2 클릭 시 SelectedTabIndex == 0"), TabVM->GetSelectedTabIndex(), 0);
+	TestEqual(TEXT("스왑된 Entry2 클릭 후 PreSelectedTabIndex == 2"), TabVM->GetPreSelectedTabIndex(), 2);
+
+	// 9-5. RemoveTabAt(SelectedTabIndex) 시 PreSelectedTabIndex 복귀 + 시프트 + INDEX_NONE 폴백 검증
+	// 현재 배열: [Entry2(0, Selected), Entry1(1), Entry0(2, PreSelected)] -> RemoveTabAt(0) 시 Entry0이 인덱스 1로 당겨지며 선택됨
+	TestTrue(TEXT("선택된 0번 탭(Entry2) 제거 성공"), TabVM->RemoveTabAt(0));
+	TestEqual(TEXT("제거 후 탭 개수 == 2"), TabVM->GetTabCount(), 2);
+	TestEqual(TEXT("선택 탭 제거 시 PreSelectedTabIndex(보정 후 1: Entry0)로 전환"), TabVM->GetSelectedTabIndex(), 1);
+	TestEqual(TEXT("제거된 탭이 PreSelected에서 지워져 PreSelectedTabIndex == INDEX_NONE"), TabVM->GetPreSelectedTabIndex(), INDEX_NONE);
+	TestEqual(TEXT("현재 선택 엔트리는 Entry0"), TabVM->GetSelectedTabEntry(), Entry0);
+	TestTrue(TEXT("Entry0 IsSelected == true"), Entry0->IsSelected());
+	TestEqual(TEXT("남은 Entry0 TabIndex == 1"), Entry0->GetTabIndex(), 1);
+
+	// PreSelectedTabIndex가 INDEX_NONE인 상태에서 선택 탭(1번 Entry0) 제거 -> 남은 Entry1(0번) 폴백 선택
+	TestTrue(TEXT("1번 탭(Entry0) 제거 성공"), TabVM->RemoveTabAt(1));
+	TestEqual(TEXT("PreSelected가 INDEX_NONE일 때 남은 탭(0)으로 폴백"), TabVM->GetSelectedTabIndex(), 0);
+	TestEqual(TEXT("남은 탭 선택 엔트리는 Entry1"), TabVM->GetSelectedTabEntry(), Entry1);
+	TestTrue(TEXT("Entry1 IsSelected == true"), Entry1->IsSelected());
+
+	// 마지막 1개 탭 제거 -> INDEX_NONE 복귀
+	TestTrue(TEXT("마지막 0번 탭(Entry1) 제거 성공"), TabVM->RemoveTabAt(0));
+	TestEqual(TEXT("모든 탭 제거 후 SelectedTabIndex == INDEX_NONE"), TabVM->GetSelectedTabIndex(), INDEX_NONE);
+	TestEqual(TEXT("모든 탭 제거 후 PreSelectedTabIndex == INDEX_NONE"), TabVM->GetPreSelectedTabIndex(), INDEX_NONE);
+	TestFalse(TEXT("제거된 Entry1 IsSelected == false"), Entry1->IsSelected());
+
+	// 9-6. SetTabEntries 재갱신(SelectedTabIndex 범위 유지 및 대리자 재바인딩) + RemoveAllTabs 검증
+	UBBMTabEntryViewModel* NewA = NewObject<UBBMTabEntryViewModel>(TabVM);
+	UBBMTabEntryViewModel* NewB = NewObject<UBBMTabEntryViewModel>(TabVM);
+	UBBMTabEntryViewModel* NewC = NewObject<UBBMTabEntryViewModel>(TabVM);
+	TabVM->SetTabEntries({ NewA, NewB, NewC });
+	TestEqual(TEXT("빈 상태에서 SetTabEntries 후 SelectedTabIndex == 0"), TabVM->GetSelectedTabIndex(), 0);
+	TestTrue(TEXT("SetTabEntries 후 0번 NewA 선택"), NewA->IsSelected());
+	TestEqual(TEXT("NewB TabIndex == 1"), NewB->GetTabIndex(), 1);
+	TestEqual(TEXT("NewC TabIndex == 2"), NewC->GetTabIndex(), 2);
+
+	NewB->RequestSelect();
+	TestEqual(TEXT("재바인딩된 NewB 선택 후 SelectedTabIndex == 1"), TabVM->GetSelectedTabIndex(), 1);
+
+	UBBMTabEntryViewModel* ReboundX = NewObject<UBBMTabEntryViewModel>(TabVM);
+	UBBMTabEntryViewModel* ReboundY = NewObject<UBBMTabEntryViewModel>(TabVM);
+	TabVM->SetTabEntries({ ReboundX, ReboundY });
+	TestEqual(TEXT("SetTabEntries 재갱신 시 SelectedTabIndex는 기본 0으로 초기화됨"), TabVM->GetSelectedTabIndex(), 0);
+	TestEqual(TEXT("SetTabEntries 재갱신 시 PreSelectedTabIndex는 INDEX_NONE으로 초기화됨"), TabVM->GetPreSelectedTabIndex(), INDEX_NONE);
+	TestFalse(TEXT("이전 배열의 NewB 선택 해제됨"), NewB->IsSelected());
+	TestTrue(TEXT("새 배열 ReboundX(인덱스 0) 자동 선택 대입"), ReboundX->IsSelected());
+	TestFalse(TEXT("새 배열 ReboundY 비선택"), ReboundY->IsSelected());
+
+	ReboundY->RequestSelect();
+	TestEqual(TEXT("재갱신된 ReboundY 선택 시 SelectedTabIndex == 1 전환"), TabVM->GetSelectedTabIndex(), 1);
+	TestEqual(TEXT("ReboundY 선택 후 PreSelectedTabIndex == 0"), TabVM->GetPreSelectedTabIndex(), 0);
+
+	TabVM->SetTabEntries({});
+	TestEqual(TEXT("빈 SetTabEntries 호출 시 SelectedTabIndex == INDEX_NONE"), TabVM->GetSelectedTabIndex(), INDEX_NONE);
+	TestEqual(TEXT("빈 SetTabEntries 호출 시 PreSelectedTabIndex == INDEX_NONE"), TabVM->GetPreSelectedTabIndex(), INDEX_NONE);
+	TestFalse(TEXT("빈 SetTabEntries 호출 후 ReboundY 해제됨"), ReboundY->IsSelected());
+
+	TabVM->SetTabEntries({ ReboundX, ReboundY });
+	TabVM->RemoveAllTabs();
+	TestEqual(TEXT("RemoveAllTabs 후 탭 개수 == 0"), TabVM->GetTabCount(), 0);
+	TestEqual(TEXT("RemoveAllTabs 후 SelectedTabIndex == INDEX_NONE"), TabVM->GetSelectedTabIndex(), INDEX_NONE);
+	TestEqual(TEXT("RemoveAllTabs 후 PreSelectedTabIndex == INDEX_NONE"), TabVM->GetPreSelectedTabIndex(), INDEX_NONE);
+	TestFalse(TEXT("RemoveAllTabs 후 ReboundX 해제됨"), ReboundX->IsSelected());
+
+	// 9-7. EndViewModel() 호출 시 모든 엔트리 대리자 언바인딩 확인
+	UBBMTabEntryViewModel* FinalTab = TabVM->AddTabWithText(FText::FromString(TEXT("FinalTab")));
+	TestNotNull(TEXT("AddTabWithText 생성 성공"), FinalTab);
+	if (FinalTab != nullptr)
+	{
+		TestTrue(TEXT("추가 직후 OnSelectRequestedNative 바인딩 확인"), FinalTab->OnSelectRequestedNative.IsBound());
+		TabVM->RemoveFieldValueChangedDelegate(UBBMTabViewModelBase::FFieldNotificationClassDescriptor::SelectedTabIndex, SelectedIndexNotifyHandle);
+		TabVM->ConditionalBeginDestroy();
+		TestFalse(TEXT("EndViewModel() 후 OnSelectRequestedNative 언바인딩 확인"), FinalTab->OnSelectRequestedNative.IsBound());
+	}
 
 	return true;
 }

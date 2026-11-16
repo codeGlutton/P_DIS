@@ -1,4 +1,5 @@
 #include "UI/ViewModel/BBMSettingsViewModel.h"
+#include "UI/ViewModel/BBMTabEntryViewModel.h"
 #include "Save/BBMGameDataSubsystem.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -6,6 +7,34 @@
 void UBBMSettingsViewModel::BeginViewModel()
 {
 	Super::BeginViewModel();
+
+	// 환경설정 4종 탭(Game, Audio, Graphics, Controls) 엔트리 뷰모델 초기화 및 대리자 바인딩
+	static const FName SettingsStringTableId(TEXT("/BBMGameFeatureCore/UI/ST_BBMGameFeatureCore_UI.ST_BBMGameFeatureCore_UI"));
+	const FName SettingsTabKeys[] = {
+		FName(TEXT("Settings_Tab_Game")),
+		FName(TEXT("Settings_Tab_Audio")),
+		FName(TEXT("Settings_Tab_Graphics")),
+		FName(TEXT("Settings_Tab_Controls"))
+	};
+
+	TArray<UBBMTabEntryViewModel*> InitialTabEntries;
+	InitialTabEntries.Reserve(UE_ARRAY_COUNT(SettingsTabKeys));
+
+	for (const FName& TabKey : SettingsTabKeys)
+	{
+		UBBMTabEntryViewModel* EntryVM = NewObject<UBBMTabEntryViewModel>(this);
+		if (EntryVM != nullptr)
+		{
+			EntryVM->SetTabText(FText::FromStringTable(SettingsStringTableId, TabKey.ToString()));
+			InitialTabEntries.Add(EntryVM);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("[UBBMSettingsViewModel::BeginViewModel] UBBMTabEntryViewModel 생성 실패"));
+		}
+	}
+
+	SetTabEntries(InitialTabEntries);
 
 	if (UBBMGameDataSubsystem* GameDataSS = GetGameDataSubsystem())
 	{
@@ -26,6 +55,8 @@ void UBBMSettingsViewModel::BeginViewModel()
 
 void UBBMSettingsViewModel::EndViewModel()
 {
+	RemoveAllTabs();
+
 	if (CachedGameDataSubsystem.IsValid() == true && UserSettingsChangedHandle.IsValid() == true)
 	{
 		CachedGameDataSubsystem->OnUserSettingsChanged.Remove(UserSettingsChangedHandle);

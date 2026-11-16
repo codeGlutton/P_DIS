@@ -8,7 +8,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/ViewModel/BBMViewModelBase.h"
+#include "UI/ViewModel/BBMTabViewModelBase.h"
 #include "Save/BBMSaveTypes.h"
 #include "BBMSettingsViewModel.generated.h"
 
@@ -19,7 +19,7 @@ class UBBMGameDataSubsystem;
  * 환경 설정 패널 ViewModel
  */
 UCLASS(BlueprintType, Blueprintable, meta = (DisplayName = "BBM Settings ViewModel"))
-class BBM_API UBBMSettingsViewModel : public UBBMViewModelBase
+class BBM_API UBBMSettingsViewModel : public UBBMTabViewModelBase
 {
 	GENERATED_BODY()
 

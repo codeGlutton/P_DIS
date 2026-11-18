@@ -35,45 +35,17 @@ public:
 
 	/* 현재 저장된 설정 값을 스냅샷 구조체로 추출 */
 	UFUNCTION(Category = "Settings", BlueprintCallable, BlueprintPure)
-	FBBMUserSettingsData ToSettingsData() const;
+	const FBBMUserSettingsData& GetSettingsData() const;
 
 	/* 전달된 스냅샷 구조체 값을 세이브 객체에 안전 클램핑 후 반영 */
 	UFUNCTION(Category = "Settings", BlueprintCallable)
-	void ApplySettingsData(const FBBMUserSettingsData& InSettingsData);
+	void SetSettingsData(const FBBMUserSettingsData& InSettingsData);
 
 	/* 프로퍼티 */
 public:
-	/* 마스터 볼륨 (0.0 ~ 1.0) */
-	UPROPERTY(Category = "Settings|Audio", EditAnywhere, BlueprintReadWrite)
-	float MasterVolume;
-
-	/* 배경음악(BGM) 볼륨 (0.0 ~ 1.0) */
-	UPROPERTY(Category = "Settings|Audio", EditAnywhere, BlueprintReadWrite)
-	float BGMVolume;
-
-	/* 효과음(SFX) 볼륨 (0.0 ~ 1.0) */
-	UPROPERTY(Category = "Settings|Audio", EditAnywhere, BlueprintReadWrite)
-	float SFXVolume;
-
-	/* 다이얼로그 볼륨 (0.0 ~ 1.0) */
-	UPROPERTY(Category = "Settings|Audio", EditAnywhere, BlueprintReadWrite)
-	float DialogueVolume;
-
-	/* 전투 리듬 펄스 및 박자 가이드 링 시각 보조 효과 활성화 여부 */
-	UPROPERTY(Category = "Settings|Gameplay", EditAnywhere, BlueprintReadWrite)
-	bool bEnableBeatVisualAssist;
-
-	/* 창 모드 설정 */
-	UPROPERTY(Category = "Settings|Display", EditAnywhere, BlueprintReadWrite)
-	TEnumAsByte<EWindowMode::Type> WindowMode;
-
-	/* 화면 해상도 (Width x Height) */
-	UPROPERTY(Category = "Settings|Display", EditAnywhere, BlueprintReadWrite)
-	FIntPoint ScreenResolution;
-
-	/* 수직 동기화(VSync) 활성화 여부 */
-	UPROPERTY(Category = "Settings|Display", EditAnywhere, BlueprintReadWrite)
-	bool bVSyncEnabled;
+	/* 통합 유저 환경설정 스냅샷 데이터 */
+	UPROPERTY(Category = "Settings", EditAnywhere, BlueprintReadWrite)
+	FBBMUserSettingsData SettingsData;
 
 	/* 해금된 플레이어 캐릭터 PrimaryAssetId 목록 */
 	UPROPERTY(Category = "Meta|Unlock", EditAnywhere, BlueprintReadWrite)

@@ -25,8 +25,18 @@
 #include "UI/ViewModel/BBMCharacterSelectViewModel.h"
 #include "UI/ViewModel/BBMCreditsViewModel.h"
 #include "UI/ViewModel/BBMCreditEntryViewModel.h"
+#include "UI/ViewModel/BBMKeyMappingEntryViewModel.h"
+#include "UI/ViewModel/BBMKeyMappingCategoryEntryViewModel.h"
 #include "UI/ViewModel/BBMTabEntryViewModel.h"
+#include "UI/Widget/BBMKeyMappingEntryWidget.h"
+#include "UI/Widget/BBMKeyMappingCategoryEntryWidget.h"
 #include "UI/ViewModel/BBMTabViewModelBase.h"
+#include "InputMappingContext.h"
+#include "InputAction.h"
+#include "InputTriggers.h"
+#include "EnhancedInputSubsystems.h"
+#include "PlayerMappableKeySettings.h"
+#include "Level/BBMPlayerController.h"
 #include "ViewModel/SingleAnimTransition.h"
 #include "ViewModel/DualAnimTransition.h"
 #include "Global/BBMGlobalSettings.h"
@@ -582,13 +592,24 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 		CustomSnapshot.WindowMode = EWindowMode::Windowed;
 		CustomSnapshot.ScreenResolution = FIntPoint(1600, 900);
 		CustomSnapshot.bVSyncEnabled = true;
-		TempSave->ApplySettingsData(CustomSnapshot);
 
-		TestTrue(TEXT("UBBMUserSaveGame 왕복 스냅샷 일치"), TempSave->ToSettingsData() == CustomSnapshot);
+		FBBMKeyCategoryMappingData CustomCategory;
+		CustomCategory.CategoryName = FText::FromString(TEXT("Movement"));
+		FBBMKeyMappingData CustomKeyEntry;
+		CustomKeyEntry.MappingName = FName(TEXT("MoveForward"));
+		CustomKeyEntry.DisplayName = FText::FromString(TEXT("전진"));
+		CustomKeyEntry.InputChord = FInputChord(EKeys::W);
+		CustomCategory.KeyMappings.Add(CustomKeyEntry);
+		CustomSnapshot.KeyMappings.Add(CustomCategory);
+
+		TempSave->SetSettingsData(CustomSnapshot);
+
+		TestTrue(TEXT("UBBMUserSaveGame 왕복 스냅샷 일치"), TempSave->GetSettingsData() == CustomSnapshot);
 	}
 
 	// 5-2. UBBMGameDataSubsystem::Initialize() 직후 초기 설정 복원 검증
-	const FBBMUserSettingsData DefaultSnapshot;
+	FBBMUserSettingsData DefaultSnapshot;
+	DefaultSnapshot.KeyMappings = GameDataSS->GetDefaultKeyMappings();
 	TestTrue(TEXT("초기화 직후 GameDataSubsystem 설정은 기본값과 일치해야 함"), GameDataSS->GetUserSettingsData() == DefaultSnapshot);
 	if (EngineSettings != nullptr)
 	{
@@ -1551,6 +1572,333 @@ bool FBBMSettingsTabEntryWidgetTest::RunTest(const FString& Parameters)
 
 	SelectButton->OnClicked.Broadcast();
 	TestEqual(TEXT("비선택 복원 후 버튼 클릭 시 OnRequestSelectNative 추가 발송(총 2회)"), RequestSelectCount, 2);
+
+	return true;
+}
+
+/**
+ * 테스트 케이스 11: 키 바인딩 저장·RuntimeIMC 동적 리매핑·RegisterIMCs 및 KeyMappingEntry MVVM 연동 검증
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMKeyMappingAndRuntimeIMCTest,
+	"DIS.BBM.UI.KeyMappingAndRuntimeIMC",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
+)
+
+bool FBBMKeyMappingAndRuntimeIMCTest::RunTest(const FString& Parameters)
+{
+	// 기존 유저 세이브 파일(.sav/.bak) 보존 후 테스트 종료 시 원복
+	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+	const FString SavPath = UBBMGameDataSubsystem::GetSaveFilePath(UBBMUserSaveGame::SlotName);
+	const FString BakPath = UBBMGameDataSubsystem::GetBackupFilePath(UBBMUserSaveGame::SlotName);
+	const bool bHadSav = PlatformFile.FileExists(*SavPath);
+	const bool bHadBak = PlatformFile.FileExists(*BakPath);
+	TArray<uint8> PrevSavBytes;
+	TArray<uint8> PrevBakBytes;
+	if (bHadSav == true)
+	{
+		FFileHelper::LoadFileToArray(PrevSavBytes, *SavPath);
+		PlatformFile.DeleteFile(*SavPath);
+	}
+	if (bHadBak == true)
+	{
+		FFileHelper::LoadFileToArray(PrevBakBytes, *BakPath);
+		PlatformFile.DeleteFile(*BakPath);
+	}
+
+	// 임시 Enhanced Input 에셋(Default IMC, Modifier IMC, Chord Actions) 구성
+	UPackage* TransientPkg = GetTransientPackage();
+	UInputAction* ShiftChordAction = NewObject<UInputAction>(TransientPkg, TEXT("IA_TestShiftChord"));
+	UInputAction* CtrlChordAction = NewObject<UInputAction>(TransientPkg, TEXT("IA_TestCtrlChord"));
+	UInputAction* AltChordAction = NewObject<UInputAction>(TransientPkg, TEXT("IA_TestAltChord"));
+	UInputAction* JumpAction = NewObject<UInputAction>(TransientPkg, TEXT("IA_TestJump"));
+	UInputAction* SprintAction = NewObject<UInputAction>(TransientPkg, TEXT("IA_TestSprint"));
+	UInputAction* InteractAction = NewObject<UInputAction>(TransientPkg, TEXT("IA_TestInteract"));
+
+	FObjectProperty* MappableSettingsProp = FindFProperty<FObjectProperty>(UInputAction::StaticClass(), TEXT("PlayerMappableKeySettings"));
+	TestNotNull(TEXT("UInputAction::PlayerMappableKeySettings 리플렉션 조회 성공"), MappableSettingsProp);
+	if (MappableSettingsProp == nullptr)
+	{
+		return false;
+	}
+
+	UPlayerMappableKeySettings* JumpSettings = NewObject<UPlayerMappableKeySettings>(JumpAction);
+	JumpSettings->Name = FName(TEXT("Key_Jump"));
+	JumpSettings->DisplayName = FText::FromString(TEXT("점프"));
+	JumpSettings->DisplayCategory = FText::FromString(TEXT("이동"));
+	MappableSettingsProp->SetObjectPropertyValue_InContainer(JumpAction, JumpSettings);
+
+	UPlayerMappableKeySettings* InteractSettings = NewObject<UPlayerMappableKeySettings>(InteractAction);
+	InteractSettings->Name = FName(TEXT("Key_Interact"));
+	InteractSettings->DisplayName = FText::FromString(TEXT("상호작용"));
+	// 빈 카테고리가 빈 FText 그대로 별도 카테고리로 묶이는지 검증
+	InteractSettings->DisplayCategory = FText::GetEmpty();
+	MappableSettingsProp->SetObjectPropertyValue_InContainer(InteractAction, InteractSettings);
+
+	UPlayerMappableKeySettings* SprintSettings = NewObject<UPlayerMappableKeySettings>(SprintAction);
+	SprintSettings->Name = FName(TEXT("Key_Sprint"));
+	SprintSettings->DisplayName = FText::FromString(TEXT("질주"));
+	SprintSettings->DisplayCategory = FText::FromString(TEXT("이동"));
+	MappableSettingsProp->SetObjectPropertyValue_InContainer(SprintAction, SprintSettings);
+
+	UInputMappingContext* DefaultIMC = NewObject<UInputMappingContext>(TransientPkg, TEXT("IMC_TestDefault"));
+	DefaultIMC->MapKey(JumpAction, EKeys::SpaceBar);
+	DefaultIMC->MapKey(InteractAction, EKeys::E);
+	FEnhancedActionKeyMapping& SprintMapping = DefaultIMC->MapKey(SprintAction, EKeys::W);
+	UInputTriggerChordAction* InitialShiftTrigger = NewObject<UInputTriggerChordAction>(DefaultIMC);
+	InitialShiftTrigger->ChordAction = ShiftChordAction;
+	SprintMapping.Triggers.Add(InitialShiftTrigger);
+
+	UInputMappingContext* ModifierIMC = NewObject<UInputMappingContext>(TransientPkg, TEXT("IMC_TestModifier"));
+	ModifierIMC->MapKey(ShiftChordAction, EKeys::LeftShift);
+	ModifierIMC->MapKey(CtrlChordAction, EKeys::LeftControl);
+	ModifierIMC->MapKey(AltChordAction, EKeys::LeftAlt);
+
+	// UBBMGlobalSettings 백업 및 테스트용 IMC/Chord Action 주입
+	UBBMGlobalSettings* GlobalSettings = GetMutableDefault<UBBMGlobalSettings>();
+	const TSoftObjectPtr<UInputMappingContext> PrevDefaultIMC = GlobalSettings->DefaultInputMappingContext;
+	const TSoftObjectPtr<UInputMappingContext> PrevModifierIMC = GlobalSettings->ModifierInputMappingContext;
+	const TSoftObjectPtr<UInputAction> PrevShiftAction = GlobalSettings->ShiftChordAction;
+	const TSoftObjectPtr<UInputAction> PrevCtrlAction = GlobalSettings->CtrlChordAction;
+	const TSoftObjectPtr<UInputAction> PrevAltAction = GlobalSettings->AltChordAction;
+
+	GlobalSettings->DefaultInputMappingContext = DefaultIMC;
+	GlobalSettings->ModifierInputMappingContext = ModifierIMC;
+	GlobalSettings->ShiftChordAction = ShiftChordAction;
+	GlobalSettings->CtrlChordAction = CtrlChordAction;
+	GlobalSettings->AltChordAction = AltChordAction;
+
+	ON_SCOPE_EXIT
+	{
+		GlobalSettings->DefaultInputMappingContext = PrevDefaultIMC;
+		GlobalSettings->ModifierInputMappingContext = PrevModifierIMC;
+		GlobalSettings->ShiftChordAction = PrevShiftAction;
+		GlobalSettings->CtrlChordAction = PrevCtrlAction;
+		GlobalSettings->AltChordAction = PrevAltAction;
+
+		if (bHadSav == true)
+		{
+			FFileHelper::SaveArrayToFile(PrevSavBytes, *SavPath);
+		}
+		else if (PlatformFile.FileExists(*SavPath) == true)
+		{
+			PlatformFile.DeleteFile(*SavPath);
+		}
+
+		if (bHadBak == true)
+		{
+			FFileHelper::SaveArrayToFile(PrevBakBytes, *BakPath);
+		}
+		else if (PlatformFile.FileExists(*BakPath) == true)
+		{
+			PlatformFile.DeleteFile(*BakPath);
+		}
+	};
+
+	// 11-1. Subsystem Initialize() 시 DefaultIMC 카테고리/매핑 파싱·RuntimeIMC 복제·초기 UserSaveData 채우기 검증
+	FBBMMVVMScopedTestWorld TestWorld;
+	if (TestWorld.GameInstance == nullptr)
+	{
+		return false;
+	}
+
+	UBBMGameDataSubsystem* GameDataSS = TestWorld.GameInstance->GetSubsystem<UBBMGameDataSubsystem>();
+	TestNotNull(TEXT("UBBMGameDataSubsystem 조회 성공"), GameDataSS);
+	if (GameDataSS == nullptr)
+	{
+		return false;
+	}
+
+	UInputMappingContext* RuntimeIMC = GameDataSS->GetRuntimeIMC();
+	TestNotNull(TEXT("RuntimeIMC 복제 생성 확인"), RuntimeIMC);
+	TestTrue(TEXT("RuntimeIMC는 원본 DefaultIMC와 별도 인스턴스여야 함"), RuntimeIMC != DefaultIMC);
+
+	const TArray<FBBMKeyCategoryMappingData>& DefaultKeyMappings = GameDataSS->GetDefaultKeyMappings();
+	TestEqual(TEXT("DefaultKeyMappings 카테고리 수는 2개(\"이동\", 빈 카테고리)여야 함"), DefaultKeyMappings.Num(), 2);
+	if (DefaultKeyMappings.Num() != 2)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("1번째 카테고리는 \"이동\"이어야 함"), DefaultKeyMappings[0].CategoryName.ToString(), FString(TEXT("이동")));
+	TestEqual(TEXT("\"이동\" 카테고리 내 항목 수는 2개여야 함"), DefaultKeyMappings[0].KeyMappings.Num(), 2);
+	if (DefaultKeyMappings[0].KeyMappings.Num() != 2)
+	{
+		return false;
+	}
+	TestEqual(TEXT("\"이동\"[0]은 Key_Jump여야 함"), DefaultKeyMappings[0].KeyMappings[0].MappingName, FName(TEXT("Key_Jump")));
+	TestEqual(TEXT("\"이동\"[0] DisplayName 파싱 확인"), DefaultKeyMappings[0].KeyMappings[0].DisplayName.ToString(), FString(TEXT("점프")));
+	TestEqual(TEXT("\"이동\"[0] 기본 키 확인"), DefaultKeyMappings[0].KeyMappings[0].InputChord, FInputChord(EKeys::SpaceBar));
+	TestEqual(TEXT("\"이동\"[1]은 Key_Sprint여야 함"), DefaultKeyMappings[0].KeyMappings[1].MappingName, FName(TEXT("Key_Sprint")));
+	TestEqual(TEXT("\"이동\"[1] 초기 bShift Chord 복원 확인"), DefaultKeyMappings[0].KeyMappings[1].InputChord, FInputChord(EKeys::W, true, false, false, false));
+
+	TestTrue(TEXT("2번째 카테고리는 빈 FText 그대로 유지되어야 함"), DefaultKeyMappings[1].CategoryName.IsEmpty());
+	TestEqual(TEXT("빈 카테고리 내 항목 수는 1개여야 함"), DefaultKeyMappings[1].KeyMappings.Num(), 1);
+	if (DefaultKeyMappings[1].KeyMappings.Num() != 1)
+	{
+		return false;
+	}
+	TestEqual(TEXT("빈 카테고리[0]은 Key_Interact여야 함"), DefaultKeyMappings[1].KeyMappings[0].MappingName, FName(TEXT("Key_Interact")));
+	TestEqual(TEXT("빈 카테고리[0] 기본 키 확인"), DefaultKeyMappings[1].KeyMappings[0].InputChord, FInputChord(EKeys::E));
+
+	const FBBMUserSettingsData& InitialSettings = GameDataSS->GetUserSettingsData();
+	TestTrue(TEXT("초기 UserSaveData KeyMappings는 CachedDefaultKeyMappings와 일치해야 함"), InitialSettings.KeyMappings == DefaultKeyMappings);
+
+	// 11-2. LocalPlayer + ABBMPlayerController 연동 및 RegisterIMCs() 등록 검증
+	ULocalPlayer* TestLocalPlayer = NewObject<ULocalPlayer>(GEngine);
+	TestNotNull(TEXT("테스트용 LocalPlayer 생성 성공"), TestLocalPlayer);
+	if (TestLocalPlayer == nullptr)
+	{
+		return false;
+	}
+
+	const FPlatformUserId TestPlatformUser = FPlatformMisc::GetPlatformUserForUserIndex(0);
+	const int32 InsertedPlayerIndex = TestWorld.GameInstance->AddLocalPlayer(TestLocalPlayer, TestPlatformUser);
+	TestTrue(TEXT("GameInstance::AddLocalPlayer 등록 성공"), InsertedPlayerIndex != INDEX_NONE);
+
+	ABBMPlayerController* TestPC = TestWorld.World->SpawnActor<ABBMPlayerController>();
+	TestNotNull(TEXT("테스트용 ABBMPlayerController 스폰 성공"), TestPC);
+	if (TestPC == nullptr)
+	{
+		return false;
+	}
+
+	ON_SCOPE_EXIT
+	{
+		TestPC->Player = nullptr;
+		TestLocalPlayer->PlayerController = nullptr;
+		TestWorld.GameInstance->RemoveLocalPlayer(TestLocalPlayer);
+	};
+
+	// SetPlayer -> InitInputSystem -> ABBMPlayerController::SetupInputComponent -> GameDataSS->RegisterIMCs 호출 확인
+	TestPC->SetPlayer(TestLocalPlayer);
+
+	UEnhancedInputLocalPlayerSubsystem* InputSS = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(TestLocalPlayer);
+	TestNotNull(TEXT("UEnhancedInputLocalPlayerSubsystem 조회 성공"), InputSS);
+	if (InputSS == nullptr)
+	{
+		return false;
+	}
+
+	GameDataSS->RegisterIMCs(TestLocalPlayer);
+	int32 ModifierPriority = -1;
+	int32 RuntimePriority = -1;
+	TestTrue(TEXT("RegisterIMCs 이후 ModifierIMC가 서브시스템에 등록되어야 함"), InputSS->HasMappingContext(ModifierIMC, ModifierPriority));
+	TestTrue(TEXT("RegisterIMCs 이후 RuntimeIMC가 서브시스템에 등록되어야 함"), InputSS->HasMappingContext(RuntimeIMC, RuntimePriority));
+	TestTrue(TEXT("ModifierIMC 우선순위(1)가 RuntimeIMC(0)보다 높아야 함"), ModifierPriority > RuntimePriority);
+
+	// 11-3. SettingsVM -> KeyMappingCategoryEntries -> KeyMappingEntries 2단 계층 및 RemapKey(CatIdx, EntryIdx, ...) 연동 검증
+	UBBMSettingsViewModel* SettingsVM = NewObject<UBBMSettingsViewModel>(TestWorld.World);
+	TestNotNull(TEXT("UBBMSettingsViewModel 생성 성공"), SettingsVM);
+	if (SettingsVM == nullptr)
+	{
+		return false;
+	}
+	SettingsVM->FinishInitialization();
+	SettingsVM->Open();
+
+	const TArray<TObjectPtr<UBBMKeyMappingCategoryEntryViewModel>>& CategoryVMs = SettingsVM->GetKeyMappingCategoryEntries();
+	TestEqual(TEXT("SettingsVM KeyMappingCategoryEntries 개수는 2개여야 함"), CategoryVMs.Num(), 2);
+	if (CategoryVMs.Num() != 2)
+	{
+		return false;
+	}
+
+	UBBMKeyMappingCategoryEntryViewModel* MoveCategoryVM = CategoryVMs[0];
+	UBBMKeyMappingCategoryEntryViewModel* EmptyCategoryVM = CategoryVMs[1];
+	TestNotNull(TEXT("MoveCategoryVM 유효"), MoveCategoryVM);
+	TestNotNull(TEXT("EmptyCategoryVM 유효"), EmptyCategoryVM);
+	if (MoveCategoryVM == nullptr || EmptyCategoryVM == nullptr)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Category[0] Index 일치"), MoveCategoryVM->GetCategoryIndex(), 0);
+	TestEqual(TEXT("Category[0] Name 일치"), MoveCategoryVM->GetCategoryName().ToString(), FString(TEXT("이동")));
+	TestEqual(TEXT("Category[1] Index 일치"), EmptyCategoryVM->GetCategoryIndex(), 1);
+	TestTrue(TEXT("Category[1] Name 빈 텍스트 일치"), EmptyCategoryVM->GetCategoryName().IsEmpty());
+
+	const TArray<TObjectPtr<UBBMKeyMappingEntryViewModel>>& MoveEntries = MoveCategoryVM->GetKeyMappingEntries();
+	const TArray<TObjectPtr<UBBMKeyMappingEntryViewModel>>& EmptyEntries = EmptyCategoryVM->GetKeyMappingEntries();
+	TestEqual(TEXT("Category[0] 엔트리 개수 2개"), MoveEntries.Num(), 2);
+	TestEqual(TEXT("Category[1] 엔트리 개수 1개"), EmptyEntries.Num(), 1);
+	if (MoveEntries.Num() != 2 || EmptyEntries.Num() != 1)
+	{
+		return false;
+	}
+
+	UBBMKeyMappingEntryViewModel* JumpEntryVM = MoveEntries[0];
+	UBBMKeyMappingEntryViewModel* SprintEntryVM = MoveEntries[1];
+	UBBMKeyMappingEntryViewModel* InteractEntryVM = EmptyEntries[0];
+	TestEqual(TEXT("JumpEntryVM Index == 0"), JumpEntryVM->GetEntryIndex(), 0);
+	TestEqual(TEXT("JumpEntryVM MappingName 일치"), JumpEntryVM->GetMappingName(), FName(TEXT("Key_Jump")));
+	TestEqual(TEXT("SprintEntryVM Index == 1"), SprintEntryVM->GetEntryIndex(), 1);
+	TestEqual(TEXT("InteractEntryVM Index == 0"), InteractEntryVM->GetEntryIndex(), 0);
+
+	// OnUserSettingsChanged 브로드캐스트 횟수 추적으로 무한 전파·중복 푸시 차단 검증
+	int32 SubsystemChangedCount = 0;
+	const FDelegateHandle SubsystemChangedHandle = GameDataSS->OnUserSettingsChanged.AddLambda(
+		[&SubsystemChangedCount](const FBBMUserSettingsData& /*NewSettings*/)
+		{
+			++SubsystemChangedCount;
+		}
+	);
+	ON_SCOPE_EXIT
+	{
+		GameDataSS->OnUserSettingsChanged.Remove(SubsystemChangedHandle);
+	};
+
+	// EntryVM 동일 값 SetInputChord 호출 시 대리자/서브시스템 푸시 없음 검증
+	JumpEntryVM->SetInputChord(FInputChord(EKeys::SpaceBar));
+	TestEqual(TEXT("동일 값 SetInputChord 호출 시 OnUserSettingsChanged가 호출되지 않아야 함"), SubsystemChangedCount, 0);
+
+	// EntryVM -> CategoryVM -> HandleCategoryInputChordChanged -> RemapKey -> RuntimeIMC 전파 검증
+	const FInputChord NewJumpChord(EKeys::F, false, true, true, false);
+	JumpEntryVM->SetInputChord(NewJumpChord);
+
+	TestEqual(TEXT("EntryVM 변경 1회당 OnUserSettingsChanged는 정확히 1회만 호출되어야 함"), SubsystemChangedCount, 1);
+	TestTrue(TEXT("EntryVM 변경 후 bHasPendingEdit == true"), SettingsVM->GetHasPendingEdit());
+	TestEqual(TEXT("SettingsVM KeyMappings[0][0] NewJumpChord 반영 확인"), SettingsVM->GetKeyMappings()[0].KeyMappings[0].InputChord, NewJumpChord);
+	TestEqual(TEXT("Subsystem KeyMappings[0][0] NewJumpChord 즉시 반영 확인"), GameDataSS->GetUserSettingsData().KeyMappings[0].KeyMappings[0].InputChord, NewJumpChord);
+
+	const FEnhancedActionKeyMapping& RemappedJump = RuntimeIMC->GetMappings()[0];
+	TestEqual(TEXT("RuntimeIMC Jump Key가 F로 갱신되어야 함"), RemappedJump.Key, EKeys::F);
+	TestEqual(TEXT("RuntimeIMC Jump Triggers에 Ctrl/Alt Chord Trigger 2개가 부착되어야 함"), RemappedJump.Triggers.Num(), 2);
+	TestEqual(TEXT("원본 DefaultIMC Jump Key는 SpaceBar 그대로 유지되어야 함"), DefaultIMC->GetMappings()[0].Key, EKeys::SpaceBar);
+
+	// SettingsVM::RemapKey(CatIdx, EntryIdx, NewChord) 직접 호출 -> EntryVM 동기화 및 1회만 푸시되는지 검증
+	const int32 CountBeforeRemapKey = SubsystemChangedCount;
+	const FInputChord NewSprintChord(EKeys::LeftShift);
+	SettingsVM->RemapKey(0, 1, NewSprintChord);
+	TestEqual(TEXT("RemapKey 직접 호출 시에도 OnUserSettingsChanged는 정확히 1회만 호출되어야 함"), SubsystemChangedCount, CountBeforeRemapKey + 1);
+	TestEqual(TEXT("RemapKey 이후 SprintEntryVM InputChord 동기화 확인"), SprintEntryVM->GetInputChord(), NewSprintChord);
+	TestEqual(TEXT("RuntimeIMC Sprint Triggers에서 기존 Shift Chord Trigger가 제거되어야 함"), RuntimeIMC->GetMappings()[2].Triggers.Num(), 0);
+	TestEqual(TEXT("RuntimeIMC Sprint Key가 LeftShift로 갱신되어야 함"), RuntimeIMC->GetMappings()[2].Key, EKeys::LeftShift);
+
+	// CancelSettings 호출 시 EntryVM(SetInputChord 경유)과 RuntimeIMC가 진입 전 기본값으로 롤백되며 역전파 푸시가 없는지 검증
+	const int32 CountBeforeCancel = SubsystemChangedCount;
+	SettingsVM->CancelSettings();
+	TestEqual(TEXT("CancelSettings 시 ApplyUserSettingsRuntime 1회 외 역전파 추가 호출이 없어야 함"), SubsystemChangedCount, CountBeforeCancel + 1);
+	TestFalse(TEXT("CancelSettings 후 bHasPendingEdit == false"), SettingsVM->GetHasPendingEdit());
+	TestEqual(TEXT("Cancel 이후 JumpEntryVM SpaceBar 복원"), JumpEntryVM->GetInputChord(), FInputChord(EKeys::SpaceBar));
+	TestEqual(TEXT("Cancel 이후 SprintEntryVM W+Shift 복원"), SprintEntryVM->GetInputChord(), FInputChord(EKeys::W, true, false, false, false));
+	TestEqual(TEXT("Cancel 이후 RuntimeIMC Jump Triggers 제거 복원"), RuntimeIMC->GetMappings()[0].Triggers.Num(), 0);
+	TestEqual(TEXT("Cancel 이후 RuntimeIMC Sprint Shift Trigger 복원"), RuntimeIMC->GetMappings()[2].Triggers.Num(), 1);
+
+	// RemapKey(1, 0, ...) -> ResetToDefaults -> DefaultKeyMappings 복원 확인
+	SettingsVM->RemapKey(1, 0, FInputChord(EKeys::Q));
+	TestEqual(TEXT("InteractEntryVM RemapKey 동기화 확인"), InteractEntryVM->GetInputChord(), FInputChord(EKeys::Q));
+	SettingsVM->ResetToDefaults();
+	TestEqual(TEXT("ResetToDefaults 이후 Interact Key 기본값 복원"), SettingsVM->GetKeyMappings()[1].KeyMappings[0].InputChord, FInputChord(EKeys::E));
+	TestEqual(TEXT("ResetToDefaults 이후 InteractEntryVM 기본값 복원"), InteractEntryVM->GetInputChord(), FInputChord(EKeys::E));
+
+	UBBMKeyMappingEntryWidget* KeyEntryWidget = NewObject<UBBMKeyMappingEntryWidget>(TestWorld.World);
+	TestNotNull(TEXT("UBBMKeyMappingEntryWidget 인스턴스 생성 성공"), KeyEntryWidget);
+	TestTrue(TEXT("UBBMKeyMappingEntryWidget는 IUserObjectListEntry를 구현해야 함"), KeyEntryWidget->GetClass()->ImplementsInterface(UUserObjectListEntry::StaticClass()));
+
+	UBBMKeyMappingCategoryEntryWidget* CategoryEntryWidget = NewObject<UBBMKeyMappingCategoryEntryWidget>(TestWorld.World);
+	TestNotNull(TEXT("UBBMKeyMappingCategoryEntryWidget 인스턴스 생성 성공"), CategoryEntryWidget);
+	TestTrue(TEXT("UBBMKeyMappingCategoryEntryWidget는 IUserObjectListEntry를 구현해야 함"), CategoryEntryWidget->GetClass()->ImplementsInterface(UUserObjectListEntry::StaticClass()));
 
 	return true;
 }

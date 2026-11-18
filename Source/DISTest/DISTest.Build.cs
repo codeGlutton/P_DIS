@@ -23,6 +23,7 @@ public class DISTest : ModuleRules
 			"ExtensionWidget",
 			"WorldUI",
 			"InputCore",
+			"EnhancedInput",
 			"Slate",
 			"SlateCore",
 			"UMG",

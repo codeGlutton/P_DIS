@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "Item/DISItemTypes.h"
 #include "GameFramework/GameUserSettings.h"
+#include "Framework/Commands/InputChord.h"
 #include "BBMSaveTypes.generated.h"
 
 /**
@@ -73,6 +74,71 @@ public:
 };
 
 /**
+ * 단일 입력 액션 매핑의 식별자·표시 이름·키 조합을 보관하는 구조체
+ */
+USTRUCT(BlueprintType)
+struct BBM_API FBBMKeyMappingData
+{
+	GENERATED_BODY()
+
+public:
+	bool operator==(const FBBMKeyMappingData& Other) const
+	{
+		return MappingName == Other.MappingName
+			&& DisplayName.IdenticalTo(Other.DisplayName)
+			&& InputChord == Other.InputChord;
+	}
+
+	bool operator!=(const FBBMKeyMappingData& Other) const
+	{
+		return !(*this == Other);
+	}
+
+public:
+	/* IMC 매핑 식별 이름 */
+	UPROPERTY(Category = "Settings|Input", EditAnywhere, BlueprintReadWrite)
+	FName MappingName;
+
+	/* UI 표시용 이름 */
+	UPROPERTY(Category = "Settings|Input", EditAnywhere, BlueprintReadWrite)
+	FText DisplayName;
+
+	/* 기본 또는 사용자 지정 입력 키 조합 */
+	UPROPERTY(Category = "Settings|Input", EditAnywhere, BlueprintReadWrite)
+	FInputChord InputChord;
+};
+
+/**
+ * 카테고리별 키 매핑 배열과 카테고리 표시 이름을 묶어 관리하는 구조체
+ */
+USTRUCT(BlueprintType)
+struct BBM_API FBBMKeyCategoryMappingData
+{
+	GENERATED_BODY()
+
+public:
+	bool operator==(const FBBMKeyCategoryMappingData& Other) const
+	{
+		return CategoryName.IdenticalTo(Other.CategoryName)
+			&& KeyMappings == Other.KeyMappings;
+	}
+
+	bool operator!=(const FBBMKeyCategoryMappingData& Other) const
+	{
+		return !(*this == Other);
+	}
+
+public:
+	/* UI 표시용 카테고리 이름 */
+	UPROPERTY(Category = "Settings|Input", EditAnywhere, BlueprintReadWrite)
+	FText CategoryName;
+
+	/* 해당 카테고리에 속한 키 매핑 목록 */
+	UPROPERTY(Category = "Settings|Input", EditAnywhere, BlueprintReadWrite)
+	TArray<FBBMKeyMappingData> KeyMappings;
+};
+
+/**
  * 유저 환경설정 전달·캐싱·대리자 통지용 스냅샷 구조체
  */
 USTRUCT(BlueprintType)
@@ -102,6 +168,14 @@ public:
 		DialogueVolume = FMath::Clamp(DialogueVolume, 0.0f, 1.0f);
 		ScreenResolution.X = FMath::Max(320, ScreenResolution.X);
 		ScreenResolution.Y = FMath::Max(240, ScreenResolution.Y);
+
+		for (FBBMKeyCategoryMappingData& CategoryData : KeyMappings)
+		{
+			CategoryData.KeyMappings.RemoveAll([](const FBBMKeyMappingData& MappingData)
+			{
+				return MappingData.MappingName.IsNone() == true;
+			});
+		}
 	}
 
 	bool operator==(const FBBMUserSettingsData& Other) const
@@ -113,7 +187,8 @@ public:
 			&& bEnableBeatVisualAssist == Other.bEnableBeatVisualAssist
 			&& WindowMode == Other.WindowMode
 			&& ScreenResolution == Other.ScreenResolution
-			&& bVSyncEnabled == Other.bVSyncEnabled;
+			&& bVSyncEnabled == Other.bVSyncEnabled
+			&& KeyMappings == Other.KeyMappings;
 	}
 
 	bool operator!=(const FBBMUserSettingsData& Other) const
@@ -153,5 +228,9 @@ public:
 	/* 수직 동기화(VSync) 활성화 여부 */
 	UPROPERTY(Category = "Settings|Display", EditAnywhere, BlueprintReadWrite)
 	bool bVSyncEnabled;
+
+	/* 카테고리별 입력 키 조합 설정 목록 */
+	UPROPERTY(Category = "Settings|Input", EditAnywhere, BlueprintReadWrite)
+	TArray<FBBMKeyCategoryMappingData> KeyMappings;
 };
 

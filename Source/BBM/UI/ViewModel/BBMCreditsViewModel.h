@@ -23,6 +23,11 @@ class BBM_API UBBMCreditsViewModel : public UWorldViewModelBase
 {
 	GENERATED_BODY()
 
+	/* ViewModel 수명 주기 훅 */
+protected:
+	virtual void BeginViewModel() override;
+	virtual void EndViewModel() override;
+
 	/* 크레딧 항목 설정 및 조회 */
 public:
 	/**
@@ -32,18 +37,18 @@ public:
 	void SetCreditCategories(const TArray<FBBMCreditCategory>& InCreditCategories);
 
 	/**
-	 * 생성된 크레딧 엔트리 ViewModel 배열 읽기 전용 참조를 반환함 (C++ 및 테스트용)
+	 * 생성된 크레딧 엔트리 ViewModel 배열 읽기 전용 참조를 반환함
 	 */
 	const TArray<TObjectPtr<UBBMCreditEntryViewModel>>& GetCreditEntries() const { return CreditEntries; }
 
-	/* ViewModel 수명 주기 훅 */
-protected:
-	virtual void BeginViewModel() override;
-	virtual void EndViewModel() override;
+	/**
+	 * 크레딧 엔트리 ViewModel 배열을 새 목록으로 교체함
+	 */
+	void SetCreditEntries(const TArray<TObjectPtr<UBBMCreditEntryViewModel>>& InCreditEntries);
 
 	/* 뷰 바인딩 프로퍼티 */
 private:
 	/* ListView Items에 바인딩할 카테고리별 크레딧 엔트리 ViewModel 목록 (FieldNotify) */
-	UPROPERTY(Category = "BBM|UI|Credits", BlueprintReadOnly, FieldNotify, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(Category = "BBM|UI|Credits", BlueprintReadOnly, FieldNotify, Setter = SetCreditEntries, Getter = GetCreditEntries, meta = (AllowPrivateAccess = "true"))
 	TArray<TObjectPtr<UBBMCreditEntryViewModel>> CreditEntries;
 };

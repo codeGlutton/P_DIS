@@ -29,6 +29,10 @@ class UBBMUserSaveGame;
 class UBBMRunSaveGame;
 class ABBMPlayerMerchantBase;
 class UBBMPlayerCharacterDefinition;
+class UInputMappingContext;
+class UInputAction;
+class ULocalPlayer;
+struct FEnhancedActionKeyMapping;
 
 /**
  * BBM 영속 게임 데이터(PersistData) 관리 및 비동기 직렬화 전담 서브시스템
@@ -122,7 +126,7 @@ public:
 
 	/* 유저 환경설정 스냅샷 조회 */
 	UFUNCTION(Category = "BBM|Settings", BlueprintCallable, BlueprintPure)
-	FBBMUserSettingsData GetUserSettingsData() const;
+	const FBBMUserSettingsData& GetUserSettingsData() const;
 
 	/* 유저 환경설정 즉각 런타임 적용 (디스크 저장 없이 오디오/화면 반영 및 대리자 통지) */
 	UFUNCTION(Category = "BBM|Settings", BlueprintCallable)
@@ -134,6 +138,24 @@ public:
 	/* 유저 환경설정을 기본값으로 복원 후 즉각 런타임 적용 */
 	UFUNCTION(Category = "BBM|Settings", BlueprintCallable)
 	void ResetUserSettingsToDefaults();
+
+	/* 런타임 입력 매핑(IMC) 동적 리매핑 및 등록 */
+public:
+	/* 복제된 RuntimeIMC에서 지정 MappingName의 키와 Chord 트리거를 갱신함 */
+	UFUNCTION(Category = "BBM|Input", BlueprintCallable)
+	void RemapByName(FName MappingName, const FInputChord& Chord, bool bNeedRebuild = true);
+
+	/* ModifierIMC 및 RuntimeIMC를 지정 LocalPlayer의 EnhancedInput 서브시스템에 등록하고 현재 설정을 재적용함 */
+	UFUNCTION(Category = "BBM|Input", BlueprintCallable)
+	void RegisterIMCs(ULocalPlayer* InLocalPlayer);
+
+	/* Default IMC 초기 파싱 결과(카테고리별 순서·표시명·기본 FInputChord) 배열 반환 */
+	UFUNCTION(Category = "BBM|Input", BlueprintCallable, BlueprintPure)
+	const TArray<FBBMKeyCategoryMappingData>& GetDefaultKeyMappings() const { return CachedDefaultKeyMappings; }
+
+	/* 복제된 런타임 Input Mapping Context 반환 */
+	UFUNCTION(Category = "BBM|Input", BlueprintCallable, BlueprintPure)
+	UInputMappingContext* GetRuntimeIMC() const { return RuntimeIMC; }
 
 	/* 현재 비동기 세이브/로드 진행 여부 조회 */
 	UFUNCTION(Category = "BBM|Save", BlueprintCallable, BlueprintPure)
@@ -175,11 +197,26 @@ public:
 
 	/* 내부 환경설정 런타임 적용 및 초기화 복원 */
 protected:
+	/* UBBMGlobalSettings에서 Default/Modifier IMC 및 Chord Action을 로드하고 기본 키 매핑 맵을 캐싱함 */
+	void InitializeInputMappingsFromSettings();
+
+	/* Default IMC 매핑의 UInputTriggerChordAction을 분석해 FInputChord 수식어 플래그를 추출함 */
+	FInputChord ExtractChordFromMapping(const FEnhancedActionKeyMapping& InMapping) const;
+
+	/* FInputChord의 bShift/bCtrl/bAlt 플래그에 맞춰 UInputTriggerChordAction을 추가함 */
+	void AddChordTriggers(FEnhancedActionKeyMapping& InOutMapping, const FInputChord& InChord);
+
+	/* RuntimeIMC가 등록된 활성 EnhancedInput 서브시스템이 있을 때 컨트롤 매핑 리빌드를 요청함 */
+	void RebuildControlMappingsIfRegistered() const;
+
 	/* 사운드 믹스 및 사운드 클래스 볼륨 오버라이드 적용 */
 	void ApplyAudioSettingsInternal(const FBBMUserSettingsData& InSettings);
 
 	/* UGameUserSettings 기반 창모드/해상도/VSync 런타임 적용 (SaveSettings 미호출) */
 	void ApplyDisplaySettingsInternal(const FBBMUserSettingsData& InSettings);
+
+	/* RuntimeIMC에 유저 키 매핑 설정 일괄 적용 (등록된 서브시스템이 있을 때만 리빌드) */
+	void ApplyInputSettingsInternal(const FBBMUserSettingsData& InSettings);
 
 	/* GameViewport 생성 시점 초기 화면 설정 재적용 콜백 */
 	void HandleViewportCreatedForInitialSettings();
@@ -238,4 +275,31 @@ protected:
 
 	/* 뷰포트 생성 콜백 기반 초기 화면 복원 완료 여부 */
 	bool bAppliedInitialViewportSettings = false;
+
+	/* 런타임 리매핑이 적용되는 복제 Input Mapping Context */
+	UPROPERTY(Category = "BBM|Input", Transient, BlueprintReadOnly)
+	TObjectPtr<UInputMappingContext> RuntimeIMC;
+
+	/* GlobalSettings에서 로드해 캐싱한 원본 Default IMC */
+	UPROPERTY(Category = "BBM|Input", Transient, BlueprintReadOnly)
+	TObjectPtr<UInputMappingContext> CachedDefaultIMC;
+
+	/* Shift·Alt·Ctrl 모디파이어 판정용 원본 Input Mapping Context */
+	UPROPERTY(Category = "BBM|Input", Transient, BlueprintReadOnly)
+	TObjectPtr<UInputMappingContext> CachedModifierIMC;
+
+	/* Chord Trigger Shift 조합 판정용 Input Action */
+	UPROPERTY(Category = "BBM|Input", Transient, BlueprintReadOnly)
+	TObjectPtr<const UInputAction> CachedShiftChordAction;
+
+	/* Chord Trigger Ctrl 조합 판정용 Input Action */
+	UPROPERTY(Category = "BBM|Input", Transient, BlueprintReadOnly)
+	TObjectPtr<const UInputAction> CachedCtrlChordAction;
+
+	/* Chord Trigger Alt 조합 판정용 Input Action */
+	UPROPERTY(Category = "BBM|Input", Transient, BlueprintReadOnly)
+	TObjectPtr<const UInputAction> CachedAltChordAction;
+
+	/* Initialize 시 Default IMC에서 추출한 카테고리별 기본 키 매핑 정보 목록 */
+	TArray<FBBMKeyCategoryMappingData> CachedDefaultKeyMappings;
 };

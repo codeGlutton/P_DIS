@@ -14,6 +14,7 @@
 
 /* 독립 전방 선언 (상단에 단독 배치) */
 class UBBMGameDataSubsystem;
+class UBBMKeyMappingCategoryEntryViewModel;
 
 /**
  * 환경 설정 패널 ViewModel
@@ -96,6 +97,21 @@ public:
 	UFUNCTION(Category = "BBM|UI|Settings", BlueprintCallable)
 	void SetVSyncEnabled(bool bInVSyncEnabled);
 
+	/* 카테고리별 키 매핑 배열 반환 */
+	UFUNCTION(Category = "BBM|UI|Settings", BlueprintPure)
+	const TArray<FBBMKeyCategoryMappingData>& GetKeyMappings() const { return KeyMappings; }
+
+	/* 카테고리별 키 매핑 배열 일괄 설정 및 즉각 런타임 적용 */
+	UFUNCTION(Category = "BBM|UI|Settings", BlueprintCallable)
+	void SetKeyMappings(const TArray<FBBMKeyCategoryMappingData>& InKeyMappings);
+
+	/* ListView 바인딩용 키 매핑 카테고리 엔트리 ViewModel 배열 반환 */
+	const TArray<TObjectPtr<UBBMKeyMappingCategoryEntryViewModel>>& GetKeyMappingCategoryEntries() const { return KeyMappingCategoryEntries; }
+
+	/* 카테고리·엔트리 인덱스로 단일 키 조합을 갱신하고 엔트리 VM 동기화 및 즉각 런타임 적용 */
+	UFUNCTION(Category = "BBM|UI|Settings", BlueprintCallable)
+	void RemapKey(int32 InCategoryIndex, int32 InEntryIndex, const FInputChord& InNewChord);
+
 	/* 미확정 변경 사항 존재 여부 반환 (Apply 버튼 활성화 바인딩용) */
 	UFUNCTION(Category = "BBM|UI|Settings", BlueprintPure)
 	bool GetHasPendingEdit() const { return bHasPendingEdit; }
@@ -122,6 +138,11 @@ public:
 	UFUNCTION(Category = "BBM|UI|Settings", BlueprintCallable)
 	void ResetToDefaults();
 
+	/* 엔트리 초기화 헬퍼 */
+private:
+	void AddFixedTabEntries();
+	void RefreshKeyMappingCategoryEntries();
+
 	/* 내부 동기화 및 서브시스템 조회 헬퍼 */
 private:
 	/* GameDataSubsystem 캐싱 조회 및 반환 (미발견 시 에러 로그 출력) */
@@ -136,8 +157,22 @@ private:
 	/* GameDataSubsystem::OnUserSettingsChanged 수신 콜백 */
 	void HandleSubsystemSettingsChanged(const FBBMUserSettingsData& NewSettings);
 
-	/* 현재 설정 스냅샷과 진입 기준 스냅샷 비교로 bHasPendingEdit 갱신 */
-	void RefreshHasPendingEdit();
+	/* 키 설정 헬퍼 */
+private:
+	/* 키 맵 카테고리 배열을 새 목록으로 교체하고 대리자 재바인딩을 수행함 */
+	void SetKeyMappingCategoryEntries(const TArray<TObjectPtr<UBBMKeyMappingCategoryEntryViewModel>>& InKeyMappingCategoryEntries);
+
+	/* 모든 키 맵 카테고리를 제거 */
+	void RemoveAllKeyMappingCategoryEntries();
+
+	/* 모든 KeyMappingCategoryEntries 카테고리 VM의 커스텀 대리자에 바인딩함 */
+	void RebindKeyMappingCategoryEntries();
+
+	/* 모든 KeyMappingCategoryEntries 카테고리 VM의 커스텀 대리자 바인딩을 해제함 */
+	void UnbindKeyMappingCategoryEntries();
+
+	/* 카테고리 엔트리 VM InputChord 변경 시 RemapKey로 위임하여 상태를 일관 동기화함 */
+	void HandleCategoryInputChordChanged(int32 InCategoryIndex, int32 InEntryIndex, FName InMappingName, const FInputChord& InNewChord);
 
 	/* 필드 노티파이 프로퍼티 */
 private:
@@ -173,12 +208,26 @@ private:
 	UPROPERTY(Category = "BBM|UI|Settings", BlueprintReadWrite, FieldNotify, Setter = SetVSyncEnabled, Getter = GetVSyncEnabled, meta = (AllowPrivateAccess = "true"))
 	bool bVSyncEnabled = false;
 
+	/* 카테고리별 입력 키 조합 설정 배열 */
+	UPROPERTY(Category = "BBM|UI|Settings", BlueprintReadWrite, FieldNotify, Setter = SetKeyMappings, Getter = GetKeyMappings, meta = (AllowPrivateAccess = "true"))
+	TArray<FBBMKeyCategoryMappingData> KeyMappings;
+
+	/* 키 설정 카테고리 ListView에 바인딩할 엔트리 ViewModel 배열 */
+	UPROPERTY(Category = "BBM|UI|Settings", BlueprintReadOnly, FieldNotify, Setter = SetKeyMappingCategoryEntries, Getter = GetKeyMappingCategoryEntries, meta = (AllowPrivateAccess = "true"))
+	TArray<TObjectPtr<UBBMKeyMappingCategoryEntryViewModel>> KeyMappingCategoryEntries;
+
 	/* 미확정 변경 사항 존재 여부 (Apply 버튼 활성화 바인딩 및 미확정 닫힘 롤백용) */
 	UPROPERTY(Category = "BBM|UI|Settings", BlueprintReadOnly, FieldNotify, Getter = GetHasPendingEdit, meta = (AllowPrivateAccess = "true"))
 	bool bHasPendingEdit = false;
 
 	/* 내부 상태 및 대리자 핸들 */
 private:
+	struct FKeyMappingCategoryEntryBinding
+	{
+		TWeakObjectPtr<UBBMKeyMappingCategoryEntryViewModel> Entry;
+		FDelegateHandle ChordChangedHandle;
+	};
+
 	/* 현재 설정 값 */
 	FBBMUserSettingsData CachedCurrentSettings;
 
@@ -187,6 +236,9 @@ private:
 
 	/* OnUserSettingsChanged 대리자 등록 핸들 */
 	FDelegateHandle UserSettingsChangedHandle;
+
+	/* 키 매핑 카테고리 엔트리 VM 대리자 등록 핸들 목록 */
+	TArray<FKeyMappingCategoryEntryBinding> KeyMappingCategoryEntryBindings;
 
 	/* 설정 창 진입 시점 스냅샷 (Cancel 또는 미확정 닫힘 시 복원용) */
 	FBBMUserSettingsData CachedSettingsBeforeEdit;

@@ -16,6 +16,8 @@
 /* 독립 전방 선언 */
 class USoundMix;
 class USoundClass;
+class UInputMappingContext;
+class UInputAction;
 
 /**
  * BBM 프로젝트의 전역 개발자 환경설정 통합 클래스
@@ -70,4 +72,26 @@ public:
 	/* 크레딧 화면에 순서대로 표시할 카테고리별 크레딧 항목 목록 */
 	UPROPERTY(Category = "UI|Credits", EditAnywhere, BlueprintReadOnly, Config)
 	TArray<FBBMCreditCategory> CreditCategories;
+
+	/* 입력 설정 */
+public:
+	/* 런타임 복제 및 키 리매핑 대상 기본 Input Mapping Context */
+	UPROPERTY(Category = "Input", EditAnywhere, BlueprintReadOnly, Config)
+	TSoftObjectPtr<UInputMappingContext> DefaultInputMappingContext;
+
+	/* Shift·Alt·Ctrl 모디파이어 판정용 전용 Input Mapping Context (비복제 등록) */
+	UPROPERTY(Category = "Input", EditAnywhere, BlueprintReadOnly, Config)
+	TSoftObjectPtr<UInputMappingContext> ModifierInputMappingContext;
+
+	/* Chord Trigger Shift 조합 판정용 Input Action */
+	UPROPERTY(Category = "Input", EditAnywhere, BlueprintReadOnly, Config)
+	TSoftObjectPtr<UInputAction> ShiftChordAction;
+
+	/* Chord Trigger Ctrl 조합 판정용 Input Action */
+	UPROPERTY(Category = "Input", EditAnywhere, BlueprintReadOnly, Config)
+	TSoftObjectPtr<UInputAction> CtrlChordAction;
+
+	/* Chord Trigger Alt 조합 판정용 Input Action */
+	UPROPERTY(Category = "Input", EditAnywhere, BlueprintReadOnly, Config)
+	TSoftObjectPtr<UInputAction> AltChordAction;
 };

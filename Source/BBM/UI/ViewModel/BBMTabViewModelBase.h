@@ -41,13 +41,12 @@ public:
 	/**
 	 * 탭 엔트리 배열을 새 목록으로 교체하고 선택 인덱스 동기화 및 대리자 재바인딩을 수행함
 	 */
-	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Tab")
-	void SetTabEntries(const TArray<UBBMTabEntryViewModel*>& InTabEntries);
+	void SetTabEntries(const TArray<TObjectPtr<UBBMTabEntryViewModel>>& InTabEntries);
 
 	/**
 	 * 현재 선택된 탭 인덱스를 반환함 (보유 탭이 없으면 INDEX_NONE)
 	 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, FieldNotify, Category = "BBM|UI|Tab")
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|Tab")
 	int32 GetSelectedTabIndex() const { return SelectedTabIndex; }
 
 	/**
@@ -59,7 +58,7 @@ public:
 	/**
 	 * 직전에 선택되어 있던 탭 인덱스를 반환함
 	 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, FieldNotify, Category = "BBM|UI|Tab")
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BBM|UI|Tab")
 	int32 GetPreSelectedTabIndex() const { return PreSelectedTabIndex; }
 
 	/**
@@ -118,14 +117,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Tab")
 	bool SwapTabs(int32 InIndexA, int32 InIndexB);
 
-	/* 탭 엔트리 재갱신 */
-protected:
-	/**
-	 * 모든 엔트리 뷰모델의 TabIndex·bIsSelected 상태를 현재 배열·SelectedTabIndex에 맞게 재갱신하고 대리자를 재바인딩함
-	 */
-	UFUNCTION(BlueprintCallable, Category = "BBM|UI|Tab")
-	void RefreshTabEntries();
-
 	/* ViewModel 수명 주기 및 파생 클래스 확장 훅 */
 protected:
 	virtual void EndViewModel() override;
@@ -165,7 +156,7 @@ private:
 	};
 
 	/* 소유 중인 탭 버튼 엔트리 뷰모델 목록 (FieldNotify) */
-	UPROPERTY(Category = "BBM|UI|Tab", BlueprintReadOnly, FieldNotify, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(Category = "BBM|UI|Tab", BlueprintReadOnly, FieldNotify, Setter = SetTabEntries, Getter = GetTabEntries, meta = (AllowPrivateAccess = "true"))
 	TArray<TObjectPtr<UBBMTabEntryViewModel>> TabEntries;
 
 	/* 현재 선택된 탭 인덱스 (탭이 없을 때만 INDEX_NONE) */

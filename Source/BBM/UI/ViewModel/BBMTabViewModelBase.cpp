@@ -7,7 +7,7 @@ UBBMTabViewModelBase::UBBMTabViewModelBase() :
 {
 }
 
-void UBBMTabViewModelBase::SetTabEntries(const TArray<UBBMTabEntryViewModel*>& InTabEntries)
+void UBBMTabViewModelBase::SetTabEntries(const TArray<TObjectPtr<UBBMTabEntryViewModel>>& InTabEntries)
 {
 	// 기존 엔트리 대리자 해제 및 새 목록에서 제외되는 선택 엔트리 정리
 	UnbindTabEntries();
@@ -15,7 +15,7 @@ void UBBMTabViewModelBase::SetTabEntries(const TArray<UBBMTabEntryViewModel*>& I
 	TArray<TObjectPtr<UBBMTabEntryViewModel>> NewEntries;
 	NewEntries.Reserve(InTabEntries.Num());
 
-	for (UBBMTabEntryViewModel* Entry : InTabEntries)
+	for (const TObjectPtr<UBBMTabEntryViewModel>& Entry : InTabEntries)
 	{
 		if (Entry == nullptr)
 		{
@@ -285,45 +285,9 @@ bool UBBMTabViewModelBase::SwapTabs(int32 InIndexA, int32 InIndexB)
 	return true;
 }
 
-void UBBMTabViewModelBase::RefreshTabEntries()
-{
-	const int32 OldSelectedIndex = SelectedTabIndex;
-
-	int32 NextSelectedIndex = SelectedTabIndex;
-	int32 NextPreSelectedIndex = PreSelectedTabIndex;
-
-	if (TabEntries.IsEmpty() == true)
-	{
-		NextSelectedIndex = INDEX_NONE;
-		NextPreSelectedIndex = INDEX_NONE;
-	}
-	else
-	{
-		if (TabEntries.IsValidIndex(NextSelectedIndex) == false)
-		{
-			NextSelectedIndex = 0;
-		}
-
-		if (TabEntries.IsValidIndex(NextPreSelectedIndex) == false || NextPreSelectedIndex == NextSelectedIndex)
-		{
-			NextPreSelectedIndex = INDEX_NONE;
-		}
-	}
-
-	UpdateSelectedAndPreSelectedIndices(NextSelectedIndex, NextPreSelectedIndex);
-	SyncEntriesIndexAndSelection();
-	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(TabEntries);
-	RebindTabEntries();
-
-	if (OldSelectedIndex != SelectedTabIndex)
-	{
-		OnSelectedTabChanged(OldSelectedIndex, SelectedTabIndex);
-	}
-}
-
 void UBBMTabViewModelBase::EndViewModel()
 {
-	UnbindTabEntries();
+	RemoveAllTabs();
 
 	Super::EndViewModel();
 }

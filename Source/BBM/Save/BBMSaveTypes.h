@@ -152,6 +152,7 @@ struct BBM_API FBBMUserSettingsData
 		SFXVolume(1.0f),
 		DialogueVolume(1.0f),
 		bEnableBeatVisualAssist(true),
+		Language(TEXT("ko-KR")),
 		WindowMode(EWindowMode::WindowedFullscreen),
 		ScreenResolution(1920, 1080),
 		bVSyncEnabled(false)
@@ -166,6 +167,11 @@ public:
 		BGMVolume = FMath::Clamp(BGMVolume, 0.0f, 1.0f);
 		SFXVolume = FMath::Clamp(SFXVolume, 0.0f, 1.0f);
 		DialogueVolume = FMath::Clamp(DialogueVolume, 0.0f, 1.0f);
+		Language.TrimStartAndEndInline();
+		if (Language.IsEmpty() == true)
+		{
+			Language = TEXT("ko-KR");
+		}
 		ScreenResolution.X = FMath::Max(320, ScreenResolution.X);
 		ScreenResolution.Y = FMath::Max(240, ScreenResolution.Y);
 
@@ -185,6 +191,7 @@ public:
 			&& FMath::IsNearlyEqual(SFXVolume, Other.SFXVolume)
 			&& FMath::IsNearlyEqual(DialogueVolume, Other.DialogueVolume)
 			&& bEnableBeatVisualAssist == Other.bEnableBeatVisualAssist
+			&& Language == Other.Language
 			&& WindowMode == Other.WindowMode
 			&& ScreenResolution == Other.ScreenResolution
 			&& bVSyncEnabled == Other.bVSyncEnabled
@@ -216,6 +223,10 @@ public:
 	/* 전투 리듬 펄스 및 박자 가이드 링 시각 보조 효과 활성화 여부 */
 	UPROPERTY(Category = "Settings|Gameplay", EditAnywhere, BlueprintReadWrite)
 	bool bEnableBeatVisualAssist;
+
+	/* 언어 및 문화권 코드 (예: "ko-KR", "en") */
+	UPROPERTY(Category = "Settings|Gameplay", EditAnywhere, BlueprintReadWrite)
+	FString Language;
 
 	/* 창 모드 설정 (전체화면 / 테두리 없는 창모드 / 창모드) */
 	UPROPERTY(Category = "Settings|Display", EditAnywhere, BlueprintReadWrite)

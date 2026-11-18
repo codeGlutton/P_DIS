@@ -22,6 +22,9 @@
 #include "ViewModel/WorldViewModelBase.h"
 #include "UI/ViewModel/BBMTitleViewModel.h"
 #include "UI/ViewModel/BBMSettingsViewModel.h"
+#include "UI/ViewModel/BBMComboBoxTextViewModel.h"
+#include "UI/ViewModel/BBMComboBoxTextEntryViewModel.h"
+#include "UI/Widget/BBMComboBoxTextEntryWidget.h"
 #include "UI/ViewModel/BBMCharacterSelectViewModel.h"
 #include "UI/ViewModel/BBMCreditsViewModel.h"
 #include "UI/ViewModel/BBMCreditEntryViewModel.h"
@@ -575,10 +578,12 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 		FBBMUserSettingsData ClampedTest;
 		ClampedTest.MasterVolume = 2.5f;
 		ClampedTest.DialogueVolume = -0.3f;
+		ClampedTest.Language = TEXT("   ");
 		ClampedTest.ScreenResolution = FIntPoint(100, 50);
 		ClampedTest.ClampValues();
 		TestEqual(TEXT("MasterVolume 상한 클램핑 (1.0)"), ClampedTest.MasterVolume, 1.0f);
 		TestEqual(TEXT("DialogueVolume 하한 클램핑 (0.0)"), ClampedTest.DialogueVolume, 0.0f);
+		TestEqual(TEXT("빈 Language 기본값(ko-KR) 복원"), ClampedTest.Language, FString(TEXT("ko-KR")));
 		TestEqual(TEXT("ScreenResolution 최소 폭 클램핑 (320)"), ClampedTest.ScreenResolution.X, 320);
 		TestEqual(TEXT("ScreenResolution 최소 높이 클램핑 (240)"), ClampedTest.ScreenResolution.Y, 240);
 
@@ -589,6 +594,7 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 		CustomSnapshot.SFXVolume = 0.65f;
 		CustomSnapshot.DialogueVolume = 0.55f;
 		CustomSnapshot.bEnableBeatVisualAssist = false;
+		CustomSnapshot.Language = TEXT("en");
 		CustomSnapshot.WindowMode = EWindowMode::Windowed;
 		CustomSnapshot.ScreenResolution = FIntPoint(1600, 900);
 		CustomSnapshot.bVSyncEnabled = true;
@@ -678,15 +684,17 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 	SettingsVM->SetBGMVolume(0.4f);
 	SettingsVM->SetSFXVolume(0.5f);
 	SettingsVM->SetDialogueVolume(0.25f);
-	SettingsVM->SetEnableBeatVisualAssist(false);
-	SettingsVM->SetWindowMode(EWindowMode::Windowed);
-	SettingsVM->SetScreenResolution(FIntPoint(1280, 720));
-	SettingsVM->SetVSyncEnabled(true);
+	SettingsVM->SetEnableBeatVisualAssist(ECheckBoxState::Unchecked);
+	SettingsVM->SetLanguageKey(FName(TEXT("English")));
+	SettingsVM->SetWindowModeKey(FName(TEXT("Windowed")));
+	SettingsVM->SetScreenResolutionKey(FName(TEXT("HD")));
+	SettingsVM->SetVSyncEnabled(ECheckBoxState::Checked);
 
-	TestTrue(TEXT("즉각 설정 변경 시 OnUserSettingsChanged 대리자가 호출되어야 함"), SettingsChangedCount >= 8);
+	TestTrue(TEXT("즉각 설정 변경 시 OnUserSettingsChanged 대리자가 호출되어야 함"), SettingsChangedCount >= 9);
 	TestEqual(TEXT("ViewModel MasterVolume 즉각 반영"), GameDataSS->GetUserSettingsData().MasterVolume, 0.3f);
 	TestEqual(TEXT("ViewModel DialogueVolume 즉각 반영"), GameDataSS->GetUserSettingsData().DialogueVolume, 0.25f);
 	TestEqual(TEXT("ViewModel bEnableBeatVisualAssist 즉각 반영"), GameDataSS->GetUserSettingsData().bEnableBeatVisualAssist, false);
+	TestEqual(TEXT("ViewModel Language 즉각 반영"), GameDataSS->GetUserSettingsData().Language, FString(TEXT("en")));
 	if (EngineSettings != nullptr)
 	{
 		TestTrue(TEXT("VSync 즉각 UGameUserSettings 반영"), EngineSettings->IsVSyncEnabled());
@@ -701,7 +709,17 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Cancel 후 Subsystem 설정이 진입 전 값으로 복원되어야 함"), GameDataSS->GetUserSettingsData() == DefaultSnapshot);
 	TestEqual(TEXT("Cancel 후 ViewModel MasterVolume 복원"), SettingsVM->GetMasterVolume(), DefaultSnapshot.MasterVolume);
 	TestEqual(TEXT("Cancel 후 ViewModel DialogueVolume 복원"), SettingsVM->GetDialogueVolume(), DefaultSnapshot.DialogueVolume);
-	TestEqual(TEXT("Cancel 후 ViewModel bEnableBeatVisualAssist 복원"), SettingsVM->GetEnableBeatVisualAssist(), DefaultSnapshot.bEnableBeatVisualAssist);
+	TestEqual(
+		TEXT("Cancel 후 ViewModel bEnableBeatVisualAssist 복원"),
+		SettingsVM->GetEnableBeatVisualAssist(),
+		(DefaultSnapshot.bEnableBeatVisualAssist == true) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked
+	);
+	TestEqual(
+		TEXT("Cancel 후 ViewModel bVSyncEnabled 복원"),
+		SettingsVM->GetVSyncEnabled(),
+		(DefaultSnapshot.bVSyncEnabled == true) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked
+	);
+	TestEqual(TEXT("Cancel 후 ViewModel LanguageKey 복원"), SettingsVM->GetLanguageKey(), FName(TEXT("Korean")));
 	TestFalse(TEXT("Cancel만으로는 유저 세이브 .sav 파일이 디스크에 쓰이지 않아야 함"), PlatformFile.FileExists(*SavPath));
 	SettingsVM->Close();
 
@@ -715,7 +733,8 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 	// 5-5. ApplySettings 확정 저장 후 Cancel 비-롤백 + Apply 후 재편집 Cancel 롤백 + ResetToDefaults 검증
 	SettingsVM->Open();
 	SettingsVM->SetDialogueVolume(0.6f);
-	SettingsVM->SetEnableBeatVisualAssist(false);
+	SettingsVM->SetEnableBeatVisualAssist(ECheckBoxState::Unchecked);
+	SettingsVM->SetLanguageKey(FName(TEXT("English")));
 	SettingsVM->ApplySettings();
 
 	// 비동기 저장 파이프라인 완료 대기 (최대 2초)
@@ -734,6 +753,7 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 	SettingsVM->CancelSettings();
 	TestEqual(TEXT("Apply 직후 CancelSettings()는 커밋된 DialogueVolume을 유지해야 함"), GameDataSS->GetUserSettingsData().DialogueVolume, 0.6f);
 	TestEqual(TEXT("Apply 직후 CancelSettings()는 커밋된 BeatVisualAssist를 유지해야 함"), GameDataSS->GetUserSettingsData().bEnableBeatVisualAssist, false);
+	TestEqual(TEXT("Apply 직후 CancelSettings()는 커밋된 Language를 유지해야 함"), GameDataSS->GetUserSettingsData().Language, FString(TEXT("en")));
 
 	// Apply 이후 패널이 열린 상태에서 추가 수정 뒤 Cancel 시 직전 Apply 커밋값(0.6)으로 롤백되어야 함
 	SettingsVM->SetDialogueVolume(0.1f);
@@ -754,7 +774,17 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 	SettingsVM->ResetToDefaults();
 	TestTrue(TEXT("ResetToDefaults 후 Subsystem 설정이 기본값과 일치해야 함"), GameDataSS->GetUserSettingsData() == DefaultSnapshot);
 	TestEqual(TEXT("ResetToDefaults 후 ViewModel DialogueVolume이 대리자를 통해 기본값으로 동기화되어야 함"), SettingsVM->GetDialogueVolume(), DefaultSnapshot.DialogueVolume);
-	TestEqual(TEXT("ResetToDefaults 후 ViewModel BeatVisualAssist가 대리자를 통해 기본값으로 동기화되어야 함"), SettingsVM->GetEnableBeatVisualAssist(), DefaultSnapshot.bEnableBeatVisualAssist);
+	TestEqual(
+		TEXT("ResetToDefaults 후 ViewModel BeatVisualAssist가 대리자를 통해 기본값으로 동기화되어야 함"),
+		SettingsVM->GetEnableBeatVisualAssist(),
+		(DefaultSnapshot.bEnableBeatVisualAssist == true) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked
+	);
+	TestEqual(
+		TEXT("ResetToDefaults 후 ViewModel VSyncEnabled가 대리자를 통해 기본값으로 동기화되어야 함"),
+		SettingsVM->GetVSyncEnabled(),
+		(DefaultSnapshot.bVSyncEnabled == true) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked
+	);
+	TestEqual(TEXT("ResetToDefaults 후 ViewModel LanguageKey가 대리자를 통해 기본값 키로 동기화되어야 함"), SettingsVM->GetLanguageKey(), FName(TEXT("Korean")));
 
 	// 5-6. Apply된 .sav가 존재하는 상태에서 새 Subsystem 초기화 시 자동 초기 복원 검증
 	{
@@ -765,8 +795,193 @@ bool FBBMSettingsViewModelAndSubsystemTest::RunTest(const FString& Parameters)
 		{
 			TestEqual(TEXT("Initialize() 시 디스크에 저장된 DialogueVolume(0.6)이 자동 로드·복원되어야 함"), SecondSS->GetUserSettingsData().DialogueVolume, 0.6f);
 			TestEqual(TEXT("Initialize() 시 디스크에 저장된 BeatVisualAssist(false)가 자동 로드·복원되어야 함"), SecondSS->GetUserSettingsData().bEnableBeatVisualAssist, false);
+			TestEqual(TEXT("Initialize() 시 디스크에 저장된 Language(en)가 자동 로드·복원되어야 함"), SecondSS->GetUserSettingsData().Language, FString(TEXT("en")));
 		}
 	}
+
+	// 5-7. UBBMGlobalSettings 3종 선택 옵션 TArray(DefaultGame.ini 로드 및 순서) 검증
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	TestNotNull(TEXT("UBBMGlobalSettings CDO 조회 성공"), GlobalSettings);
+	if (GlobalSettings != nullptr)
+	{
+		TestEqual(TEXT("LanguageOptions 항목 개수(2개) 일치"), GlobalSettings->LanguageOptions.Num(), 2);
+		if (GlobalSettings->LanguageOptions.Num() >= 2)
+		{
+			TestEqual(TEXT("LanguageOptions[0] Key == Korean"), GlobalSettings->LanguageOptions[0].Key, FName(TEXT("Korean")));
+			TestEqual(TEXT("LanguageOptions[0] Value == ko-KR"), GlobalSettings->LanguageOptions[0].Value, FString(TEXT("ko-KR")));
+			TestEqual(TEXT("LanguageOptions[1] Key == English"), GlobalSettings->LanguageOptions[1].Key, FName(TEXT("English")));
+			TestEqual(TEXT("LanguageOptions[1] Value == en"), GlobalSettings->LanguageOptions[1].Value, FString(TEXT("en")));
+		}
+
+		TestEqual(TEXT("WindowModeOptions 항목 개수(3개) 일치"), GlobalSettings->WindowModeOptions.Num(), 3);
+		if (GlobalSettings->WindowModeOptions.Num() >= 3)
+		{
+			TestEqual(TEXT("WindowModeOptions[0] Key == Fullscreen"), GlobalSettings->WindowModeOptions[0].Key, FName(TEXT("Fullscreen")));
+			TestTrue(TEXT("WindowModeOptions[0] Value == Fullscreen"), GlobalSettings->WindowModeOptions[0].Value == EWindowMode::Fullscreen);
+			TestEqual(TEXT("WindowModeOptions[1] Key == WindowedFullscreen"), GlobalSettings->WindowModeOptions[1].Key, FName(TEXT("WindowedFullscreen")));
+			TestTrue(TEXT("WindowModeOptions[1] Value == WindowedFullscreen"), GlobalSettings->WindowModeOptions[1].Value == EWindowMode::WindowedFullscreen);
+			TestEqual(TEXT("WindowModeOptions[2] Key == Windowed"), GlobalSettings->WindowModeOptions[2].Key, FName(TEXT("Windowed")));
+			TestTrue(TEXT("WindowModeOptions[2] Value == Windowed"), GlobalSettings->WindowModeOptions[2].Value == EWindowMode::Windowed);
+		}
+
+		TestEqual(TEXT("ScreenResolutionOptions 항목 개수(4개) 일치"), GlobalSettings->ScreenResolutionOptions.Num(), 4);
+		if (GlobalSettings->ScreenResolutionOptions.Num() >= 4)
+		{
+			TestEqual(TEXT("ScreenResolutionOptions[0] Key == HD"), GlobalSettings->ScreenResolutionOptions[0].Key, FName(TEXT("HD")));
+			TestTrue(TEXT("ScreenResolutionOptions[0] Value == 1280x720"), GlobalSettings->ScreenResolutionOptions[0].Value == FIntPoint(1280, 720));
+			TestEqual(TEXT("ScreenResolutionOptions[1] Key == HDPlus"), GlobalSettings->ScreenResolutionOptions[1].Key, FName(TEXT("HDPlus")));
+			TestTrue(TEXT("ScreenResolutionOptions[1] Value == 1600x900"), GlobalSettings->ScreenResolutionOptions[1].Value == FIntPoint(1600, 900));
+			TestEqual(TEXT("ScreenResolutionOptions[2] Key == FHD"), GlobalSettings->ScreenResolutionOptions[2].Key, FName(TEXT("FHD")));
+			TestTrue(TEXT("ScreenResolutionOptions[2] Value == 1920x1080"), GlobalSettings->ScreenResolutionOptions[2].Value == FIntPoint(1920, 1080));
+			TestEqual(TEXT("ScreenResolutionOptions[3] Key == QHD"), GlobalSettings->ScreenResolutionOptions[3].Key, FName(TEXT("QHD")));
+			TestTrue(TEXT("ScreenResolutionOptions[3] Value == 2560x1440"), GlobalSettings->ScreenResolutionOptions[3].Value == FIntPoint(2560, 1440));
+		}
+
+		// FBBMSelectionDataBase 다형성 IsSameKey / IsSameValue 검증
+		if (GlobalSettings->LanguageOptions.Num() >= 1 && GlobalSettings->WindowModeOptions.Num() >= 1)
+		{
+			FBBMStringSelectionData UpperCaseLang;
+			UpperCaseLang.Value = TEXT("KO-KR");
+			const FBBMSelectionDataBase& LangBase = GlobalSettings->LanguageOptions[0];
+			TestTrue(TEXT("IsSameKey 일치"), LangBase.IsSameKey(FName(TEXT("Korean"))));
+			TestFalse(TEXT("IsSameKey NAME_None 거부"), LangBase.IsSameKey(NAME_None));
+			TestTrue(TEXT("FBBMStringSelectionData IsSameValue 대소문자 무시 일치"), LangBase.IsSameValue(UpperCaseLang));
+			TestFalse(TEXT("다른 파생 타입 간 IsSameValue 거부"), LangBase.IsSameValue(GlobalSettings->WindowModeOptions[0]));
+		}
+	}
+
+	// 5-8. UBBMSettingsViewModel 3종 콤보박스 서브 뷰모델 초기 구성 및 양방향 동기화 검증
+	{
+		UBBMComboBoxTextViewModel* LanguageComboVM = SettingsVM->GetLanguageComboBoxViewModel();
+		UBBMComboBoxTextViewModel* WindowModeComboVM = SettingsVM->GetWindowModeComboBoxViewModel();
+		UBBMComboBoxTextViewModel* ResolutionComboVM = SettingsVM->GetScreenResolutionComboBoxViewModel();
+		TestNotNull(TEXT("LanguageComboBoxViewModel 생성자에서 생성됨"), LanguageComboVM);
+		TestNotNull(TEXT("WindowModeComboBoxViewModel 생성자에서 생성됨"), WindowModeComboVM);
+		TestNotNull(TEXT("ScreenResolutionComboBoxViewModel 생성자에서 생성됨"), ResolutionComboVM);
+
+		if (LanguageComboVM != nullptr && WindowModeComboVM != nullptr && ResolutionComboVM != nullptr)
+		{
+			SettingsVM->Open();
+			TestEqual(TEXT("LanguageComboBoxViewModel 초기 엔트리 개수(2개)"), LanguageComboVM->GetComboBoxItems().Num(), 2);
+			TestEqual(TEXT("WindowModeComboBoxViewModel 초기 엔트리 개수(3개)"), WindowModeComboVM->GetComboBoxItems().Num(), 3);
+			TestEqual(TEXT("ScreenResolutionComboBoxViewModel 초기 엔트리 개수(4개)"), ResolutionComboVM->GetComboBoxItems().Num(), 4);
+
+			// ResetToDefaults 이후 Open() 시 기본 설정값(ko-KR / WindowedFullscreen / 1920x1080)에 맞춰 SelectedKey 자동 동기화 확인
+			TestEqual(TEXT("초기 Sync 후 LanguageComboVM SelectedKey == Korean"), LanguageComboVM->GetSelectedKey(), FName(TEXT("Korean")));
+			TestEqual(TEXT("초기 Sync 후 WindowModeComboVM SelectedKey == WindowedFullscreen"), WindowModeComboVM->GetSelectedKey(), FName(TEXT("WindowedFullscreen")));
+			TestEqual(TEXT("초기 Sync 후 ResolutionComboVM SelectedKey == FHD"), ResolutionComboVM->GetSelectedKey(), FName(TEXT("FHD")));
+
+			// 정방향: 콤보박스 모듈 SelectedKey 변경 -> SettingsVM Key/CachedCurrentSettings 및 Subsystem 반영
+			LanguageComboVM->SetSelectedKey(FName(TEXT("English")));
+			WindowModeComboVM->SetSelectedKey(FName(TEXT("Windowed")));
+			ResolutionComboVM->SetSelectedKey(FName(TEXT("HD")));
+
+			TestEqual(TEXT("LanguageComboVM(English) 선택 시 SettingsVM LanguageKey == English"), SettingsVM->GetLanguageKey(), FName(TEXT("English")));
+			TestEqual(TEXT("LanguageComboVM(English) 선택 시 Subsystem Language == en"), GameDataSS->GetUserSettingsData().Language, FString(TEXT("en")));
+			TestEqual(TEXT("WindowModeComboVM(Windowed) 선택 시 SettingsVM WindowModeKey == Windowed"), SettingsVM->GetWindowModeKey(), FName(TEXT("Windowed")));
+			TestTrue(TEXT("WindowModeComboVM(Windowed) 선택 시 Subsystem WindowMode == Windowed"), GameDataSS->GetUserSettingsData().WindowMode == EWindowMode::Windowed);
+			TestEqual(TEXT("ResolutionComboVM(HD) 선택 시 SettingsVM ScreenResolutionKey == HD"), SettingsVM->GetScreenResolutionKey(), FName(TEXT("HD")));
+			TestTrue(TEXT("ResolutionComboVM(HD) 선택 시 Subsystem ScreenResolution == 1280x720"), GameDataSS->GetUserSettingsData().ScreenResolution == FIntPoint(1280, 720));
+
+			// 역방향: SettingsVM Key 직접 변경 -> Array 순회 갱신 + Subsystem 반영 + 콤보박스 모듈 SelectedKey 자동 반영
+			SettingsVM->SetLanguageKey(FName(TEXT("Korean")));
+			SettingsVM->SetWindowModeKey(FName(TEXT("Fullscreen")));
+			SettingsVM->SetScreenResolutionKey(FName(TEXT("QHD")));
+
+			TestEqual(TEXT("SettingsVM SetLanguageKey(Korean) 시 LanguageComboVM SelectedKey == Korean"), LanguageComboVM->GetSelectedKey(), FName(TEXT("Korean")));
+			TestEqual(TEXT("SettingsVM SetLanguageKey(Korean) 시 Subsystem Language == ko-KR"), GameDataSS->GetUserSettingsData().Language, FString(TEXT("ko-KR")));
+			TestEqual(TEXT("SettingsVM SetWindowModeKey(Fullscreen) 시 WindowModeComboVM SelectedKey == Fullscreen"), WindowModeComboVM->GetSelectedKey(), FName(TEXT("Fullscreen")));
+			TestTrue(TEXT("SettingsVM SetWindowModeKey(Fullscreen) 시 Subsystem WindowMode == Fullscreen"), GameDataSS->GetUserSettingsData().WindowMode == EWindowMode::Fullscreen);
+			TestEqual(TEXT("SettingsVM SetScreenResolutionKey(QHD) 시 ResolutionComboVM SelectedKey == QHD"), ResolutionComboVM->GetSelectedKey(), FName(TEXT("QHD")));
+			TestTrue(TEXT("SettingsVM SetScreenResolutionKey(QHD) 시 Subsystem ScreenResolution == 2560x1440"), GameDataSS->GetUserSettingsData().ScreenResolution == FIntPoint(2560, 1440));
+
+			// 미등록 키 입력 시 기존 키·설정값 유지 검증
+			SettingsVM->SetLanguageKey(FName(TEXT("InvalidLanguageKey")));
+			TestEqual(TEXT("미등록 언어 키 입력 시 기존 LanguageKey(Korean) 유지"), SettingsVM->GetLanguageKey(), FName(TEXT("Korean")));
+			TestEqual(TEXT("미등록 언어 키 입력 시 Subsystem Language(ko-KR) 유지"), GameDataSS->GetUserSettingsData().Language, FString(TEXT("ko-KR")));
+
+			// CancelSettings 호출 시 Open() 시점 스냅샷(Korean, WindowedFullscreen, FHD)으로 콤보박스 모듈까지 복원 확인
+			SettingsVM->CancelSettings();
+			TestEqual(TEXT("Cancel 후 LanguageComboVM SelectedKey 복원"), LanguageComboVM->GetSelectedKey(), FName(TEXT("Korean")));
+			TestEqual(TEXT("Cancel 후 WindowModeComboVM SelectedKey 복원"), WindowModeComboVM->GetSelectedKey(), FName(TEXT("WindowedFullscreen")));
+			TestEqual(TEXT("Cancel 후 ResolutionComboVM SelectedKey 복원"), ResolutionComboVM->GetSelectedKey(), FName(TEXT("FHD")));
+			SettingsVM->Close();
+		}
+	}
+
+	return true;
+}
+
+/**
+ * 테스트 케이스 5-B: 텍스트 콤보박스 VM 모듈(UBBMComboBoxTextViewModel) 및 엔트리 VM/위젯 껍데기 검증
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMComboBoxTextViewModelTest,
+	"DIS.BBM.UI.ComboBoxTextViewModel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
+)
+
+bool FBBMComboBoxTextViewModelTest::RunTest(const FString& Parameters)
+{
+	FBBMMVVMScopedTestWorld TestWorld;
+	TestNotNull(TEXT("테스트 월드 생성 성공"), TestWorld.World);
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	UBBMComboBoxTextViewModel* ComboBoxVM = NewObject<UBBMComboBoxTextViewModel>(TestWorld.World);
+	TestNotNull(TEXT("UBBMComboBoxTextViewModel 생성 성공"), ComboBoxVM);
+	if (ComboBoxVM == nullptr)
+	{
+		return false;
+	}
+
+	int32 ItemsChangedCount = 0;
+	int32 KeyChangedCount = 0;
+	FName LastKey = NAME_None;
+
+	ComboBoxVM->AddFieldValueChangedDelegate(
+		UBBMComboBoxTextViewModel::FFieldNotificationClassDescriptor::ComboBoxItems,
+		INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([&ItemsChangedCount](UObject* /*InObject*/, UE::FieldNotification::FFieldId /*InFieldId*/)
+		{
+			++ItemsChangedCount;
+		})
+	);
+	ComboBoxVM->OnSelectedKeyChangedNative.AddLambda([&KeyChangedCount, &LastKey](FName InKey)
+	{
+		++KeyChangedCount;
+		LastKey = InKey;
+	});
+
+	UBBMComboBoxTextEntryViewModel* Entry0 = ComboBoxVM->AddComboBoxTextEntry(FName(TEXT("First")), FText::FromString(TEXT("첫 번째")));
+	UBBMComboBoxTextEntryViewModel* Entry1 = ComboBoxVM->AddComboBoxTextEntry(FName(TEXT("Second")), FText::FromString(TEXT("두 번째")));
+	TestNotNull(TEXT("첫 번째 엔트리 VM 생성 성공"), Entry0);
+	TestNotNull(TEXT("두 번째 엔트리 VM 생성 성공"), Entry1);
+	if (Entry0 != nullptr && Entry1 != nullptr)
+	{
+		TestEqual(TEXT("Entry0 EntryIndex == 0"), Entry0->GetEntryIndex(), 0);
+		TestEqual(TEXT("Entry0 EntryText 일치"), Entry0->GetEntryText().ToString(), FString(TEXT("첫 번째")));
+		TestEqual(TEXT("Entry1 EntryIndex == 1"), Entry1->GetEntryIndex(), 1);
+		TestEqual(TEXT("Entry1 EntryText 일치"), Entry1->GetEntryText().ToString(), FString(TEXT("두 번째")));
+	}
+	TestEqual(TEXT("AddComboBoxTextEntry 2회 호출 시 ComboBoxItems 알림 2회"), ItemsChangedCount, 2);
+	TestEqual(TEXT("ComboBoxItems 배열 길이 2개"), ComboBoxVM->GetComboBoxItems().Num(), 2);
+
+	ComboBoxVM->SetSelectedKey(FName(TEXT("Second")));
+	TestEqual(TEXT("OnSelectedKeyChangedNative 1회 호출"), KeyChangedCount, 1);
+	TestEqual(TEXT("대리자 전달 Key == Second"), LastKey, FName(TEXT("Second")));
+
+	ComboBoxVM->SetSelectedKey(FName(TEXT("Second")));
+	TestEqual(TEXT("동일 키 재설정 시 대리자 중복 호출 방지"), KeyChangedCount, 1);
+
+	ComboBoxVM->RemoveAllComboBoxTextEntries();
+	TestEqual(TEXT("RemoveAllComboBoxTextEntries 이후 배열 비어있음"), ComboBoxVM->GetComboBoxItems().Num(), 0);
+	TestEqual(TEXT("RemoveAllComboBoxTextEntries 이후 SelectedKey == NAME_None"), ComboBoxVM->GetSelectedKey(), FName(NAME_None));
+	TestEqual(TEXT("RemoveAllComboBoxTextEntries 이후 OnSelectedKeyChangedNative Key == NAME_None"), LastKey, FName(NAME_None));
+
+	UBBMComboBoxTextEntryWidget* EntryWidgetShell = CreateWidget<UBBMComboBoxTextEntryWidget>(TestWorld.World);
+	TestNotNull(TEXT("UBBMComboBoxTextEntryWidget 껍데기 인스턴스 생성 성공"), EntryWidgetShell);
 
 	return true;
 }

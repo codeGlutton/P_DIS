@@ -212,6 +212,9 @@ protected:
 	/* 사운드 믹스 및 사운드 클래스 볼륨 오버라이드 적용 */
 	void ApplyAudioSettingsInternal(const FBBMUserSettingsData& InSettings);
 
+	/* FInternationalization 기반 언어 런타임 적용 (에디터 보호 및 ini 미저장) */
+	void ApplyLanguageSettingsInternal(const FBBMUserSettingsData& InSettings);
+
 	/* UGameUserSettings 기반 창모드/해상도/VSync 런타임 적용 (SaveSettings 미호출) */
 	void ApplyDisplaySettingsInternal(const FBBMUserSettingsData& InSettings);
 

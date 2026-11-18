@@ -39,6 +39,8 @@
 #include "EnhancedActionKeyMapping.h"
 #include "EnhancedInputLibrary.h"
 #include "EnhancedInputSubsystems.h"
+#include "Internationalization/Internationalization.h"
+#include "Internationalization/Culture.h"
 
 UBBMGameDataSubsystem::UBBMGameDataSubsystem() :
 	UserSaveData(nullptr),
@@ -365,6 +367,7 @@ void UBBMGameDataSubsystem::ApplyUserSettingsRuntime(const FBBMUserSettingsData&
 	}
 
 	ApplyAudioSettingsInternal(SanitizedSettings);
+	ApplyLanguageSettingsInternal(SanitizedSettings);
 	ApplyDisplaySettingsInternal(SanitizedSettings);
 	ApplyInputSettingsInternal(SanitizedSettings);
 
@@ -652,6 +655,31 @@ void UBBMGameDataSubsystem::ApplyAudioSettingsInternal(const FBBMUserSettingsDat
 		{
 			AudioDevice->SetSoundMixClassOverride(SoundMix, SoundClass, Pair.Value, 1.0f, 0.0f, false);
 		}
+	}
+}
+
+void UBBMGameDataSubsystem::ApplyLanguageSettingsInternal(const FBBMUserSettingsData& InSettings)
+{
+	// 에디터 및 커맨드릿 환경에서는 에디터 UI 언어가 동반 변경되지 않도록 전환을 건너뜀
+	if (GIsEditor == true || IsRunningCommandlet() == true)
+	{
+		return;
+	}
+
+	if (InSettings.Language.IsEmpty() == true)
+	{
+		return;
+	}
+
+	FInternationalization& I18n = FInternationalization::Get();
+	if (I18n.GetCurrentLanguage()->GetName() == InSettings.Language)
+	{
+		return;
+	}
+
+	if (I18n.SetCurrentLanguage(InSettings.Language) == false)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMGameDataSubsystem::ApplyLanguageSettingsInternal] 언어 전환 실패 (Language=%s)"), *InSettings.Language);
 	}
 }
 

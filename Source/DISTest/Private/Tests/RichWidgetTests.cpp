@@ -5,7 +5,9 @@
 #include "Blueprint/WidgetTree.h"
 #include "Brushes/SlateColorBrush.h"
 #include "Brushes/SlateNoResource.h"
+#include "Components/RichComboBoxKey.h"
 #include "Components/RichHorizontalBox.h"
+#include "Components/RichInputKeySelector.h"
 #include "Components/RichListView.h"
 #include "Components/RichScrollBar.h"
 #include "Components/RichSlider.h"
@@ -16,15 +18,27 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Input/HittestGrid.h"
+#include "Kismet2/KismetEditorUtilities.h"
 #include "Layout/ArrangedChildren.h"
 #include "Layout/Geometry.h"
+#include "MVVMBlueprintView.h"
+#include "MVVMBlueprintViewModelContext.h"
+#include "MVVMSubsystem.h"
+#include "MVVMWidgetBlueprintExtension_View.h"
 #include "Rendering/DrawElements.h"
+#include "RichWidgetTestHelpers.h"
+#include "Slate/SObjectWidget.h"
 #include "Types/PaintArgs.h"
+#include "Types/RichComboBoxTypes.h"
 #include "Types/RichScrollBarTypes.h"
 #include "Types/RichSliderTypes.h"
+#include "UI/ViewModel/BBMTabEntryViewModel.h"
 #include "UI/Widget/BBMCreditEntryWidget.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
+#include "View/MVVMView.h"
+#include "View/MVVMViewClass.h"
+#include "WidgetBlueprint.h"
 #include "Widgets/SLeafWidget.h"
 #include "Widgets/SRichHorizontalBox.h"
 #include "Widgets/SRichListView.h"
@@ -96,6 +110,88 @@ namespace
 		GeneratedClass->AssembleReferenceTokenStream();
 		GeneratedClass->GetDefaultObject();
 		return GeneratedClass;
+	}
+
+	UClass* CreateTransientMVVMEntryWidgetBlueprintClass(const TCHAR* InAssetBaseName, FName InViewModelName)
+	{
+		const FName UniqueName = MakeUniqueObjectName(GetTransientPackage(), UWidgetBlueprint::StaticClass(), FName(InAssetBaseName));
+		UWidgetBlueprint* WidgetBlueprint = Cast<UWidgetBlueprint>(FKismetEditorUtilities::CreateBlueprint(
+			UUserWidget::StaticClass(),
+			GetTransientPackage(),
+			UniqueName,
+			BPTYPE_Normal,
+			UWidgetBlueprint::StaticClass(),
+			UWidgetBlueprintGeneratedClass::StaticClass()
+		));
+		if (WidgetBlueprint == nullptr)
+		{
+			return nullptr;
+		}
+
+		if (WidgetBlueprint->WidgetTree == nullptr)
+		{
+			WidgetBlueprint->WidgetTree = NewObject<UWidgetTree>(WidgetBlueprint);
+		}
+		if (WidgetBlueprint->WidgetTree != nullptr && WidgetBlueprint->WidgetTree->RootWidget == nullptr)
+		{
+			WidgetBlueprint->WidgetTree->RootWidget = WidgetBlueprint->WidgetTree->ConstructWidget<USpacer>(USpacer::StaticClass());
+		}
+
+		UMVVMWidgetBlueprintExtension_View* ViewExtension = UWidgetBlueprintExtension::RequestExtension<UMVVMWidgetBlueprintExtension_View>(WidgetBlueprint);
+		if (ViewExtension == nullptr)
+		{
+			return nullptr;
+		}
+
+		if (ViewExtension->GetBlueprintView() == nullptr)
+		{
+			ViewExtension->CreateBlueprintViewInstance();
+		}
+
+		UMVVMBlueprintView* BlueprintView = ViewExtension->GetBlueprintView();
+		if (BlueprintView == nullptr)
+		{
+			return nullptr;
+		}
+
+		if (UMVVMBlueprintViewSettings* ViewSettings = BlueprintView->GetSettings())
+		{
+			ViewSettings->bCreateViewWithoutBindings = true;
+		}
+
+		FMVVMBlueprintViewModelContext ViewModelContext(UBBMTabEntryViewModel::StaticClass(), InViewModelName);
+		ViewModelContext.CreationType = EMVVMBlueprintViewModelContextCreationType::Manual;
+		BlueprintView->AddViewModel(ViewModelContext);
+
+		FKismetEditorUtilities::CompileBlueprint(WidgetBlueprint);
+		return WidgetBlueprint->GeneratedClass;
+	}
+
+	UUserWidget* FindFirstChildUserWidget(const TSharedRef<SWidget>& InSlateWidget, const UUserWidget* InIgnoredRoot)
+	{
+		if (InSlateWidget->GetType() == SObjectWidget::StaticWidgetClass().GetWidgetType())
+		{
+			UUserWidget* CandidateWidget = StaticCastSharedRef<SObjectWidget>(InSlateWidget)->GetWidgetObject();
+			if (CandidateWidget != nullptr && CandidateWidget != InIgnoredRoot)
+			{
+				return CandidateWidget;
+			}
+		}
+
+		FChildren* Children = const_cast<SWidget&>(InSlateWidget.Get()).GetChildren();
+		if (Children != nullptr)
+		{
+			const int32 NumChildren = Children->Num();
+			for (int32 ChildIndex = 0; ChildIndex < NumChildren; ++ChildIndex)
+			{
+				if (UUserWidget* FoundWidget = FindFirstChildUserWidget(Children->GetChildAt(ChildIndex), InIgnoredRoot))
+				{
+					return FoundWidget;
+				}
+			}
+		}
+
+		return nullptr;
 	}
 }
 
@@ -887,6 +983,350 @@ bool FRichSliderWidgetTest::RunTest(const FString& Parameters)
 		UMGRichSlider->ReleaseSlateResources(true);
 		TestFalse(TEXT("URichSlider releases Slate widget cleanly"), UMGRichSlider->GetSlateRichSlider().IsValid());
 	}
+
+	return true;
+}
+
+// =================================================================================================
+// 6. URichComboBoxKey ViewModel Extension 모방 자동 생성 · VM 주입 · SelectedKey TwoWay 동기화 검증
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FRichComboBoxKeyViewModelExtensionTest,
+	"DIS.ExtensionWidget.RichComboBoxKey.ViewModelExtension",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter
+)
+
+bool FRichComboBoxKeyViewModelExtensionTest::RunTest(const FString& Parameters)
+{
+	FExtensionWidgetTestWorldScope WorldScope;
+	TestNotNull(TEXT("Test world valid for URichComboBoxKey"), WorldScope.World);
+	if (WorldScope.World == nullptr)
+	{
+		return false;
+	}
+
+	UClass* ContentEntryClass = CreateTransientMVVMEntryWidgetBlueprintClass(TEXT("TransientComboContentBP"), FName(TEXT("ContentEntryVM")));
+	UClass* ItemEntryClass = CreateTransientMVVMEntryWidgetBlueprintClass(TEXT("TransientComboItemBP"), FName(TEXT("ItemEntryVM")));
+	TestNotNull(TEXT("Content entry WBP compiled"), ContentEntryClass);
+	TestNotNull(TEXT("Item entry WBP compiled"), ItemEntryClass);
+	if (ContentEntryClass == nullptr || ItemEntryClass == nullptr)
+	{
+		return false;
+	}
+
+	UWidgetBlueprintGeneratedClass* ContentWBPGC = Cast<UWidgetBlueprintGeneratedClass>(ContentEntryClass);
+	UWidgetBlueprintGeneratedClass* ItemWBPGC = Cast<UWidgetBlueprintGeneratedClass>(ItemEntryClass);
+	TestNotNull(TEXT("Content WBP generated class has UMVVMViewClass"), ContentWBPGC != nullptr ? ContentWBPGC->GetExtension<UMVVMViewClass>() : nullptr);
+	TestNotNull(TEXT("Item WBP generated class has UMVVMViewClass"), ItemWBPGC != nullptr ? ItemWBPGC->GetExtension<UMVVMViewClass>() : nullptr);
+
+	// 헤드리스 테스트 월드(LocalPlayer 미생성)에서도 UMVVMViewClass::Initialize가 실행되도록 허용함
+	if (ContentWBPGC != nullptr)
+	{
+		ContentWBPGC->bCanCallInitializedWithoutPlayerContext = true;
+	}
+	if (ItemWBPGC != nullptr)
+	{
+		ItemWBPGC->bCanCallInitializedWithoutPlayerContext = true;
+	}
+
+	UUserWidget* HostWidget = CreateWidget<UBBMCreditEntryWidget>(WorldScope.World);
+	TestNotNull(TEXT("Host widget created for URichComboBoxKey"), HostWidget);
+	if (HostWidget == nullptr)
+	{
+		return false;
+	}
+	if (HostWidget->WidgetTree == nullptr)
+	{
+		HostWidget->WidgetTree = NewObject<UWidgetTree>(HostWidget);
+	}
+
+	URichComboBoxKey* ComboBox = HostWidget->WidgetTree->ConstructWidget<URichComboBoxKey>(URichComboBoxKey::StaticClass());
+	TestNotNull(TEXT("URichComboBoxKey constructed"), ComboBox);
+	if (ComboBox == nullptr)
+	{
+		return false;
+	}
+	HostWidget->WidgetTree->RootWidget = ComboBox;
+
+	ComboBox->SetUseViewModelExtension(true);
+	ComboBox->SetContentWidgetClass(ContentEntryClass);
+	ComboBox->SetContentViewModelName(FName(TEXT("ContentEntryVM")));
+	ComboBox->SetContentViewModelClass(UBBMTabEntryViewModel::StaticClass());
+	ComboBox->SetItemWidgetClass(ItemEntryClass);
+	ComboBox->SetItemViewModelName(FName(TEXT("ItemEntryVM")));
+	ComboBox->SetItemViewModelClass(UBBMTabEntryViewModel::StaticClass());
+
+	UBBMTabEntryViewModel* KoreanVM = NewObject<UBBMTabEntryViewModel>(HostWidget);
+	UBBMTabEntryViewModel* EnglishVM = NewObject<UBBMTabEntryViewModel>(HostWidget);
+	UBBMTabEntryViewModel* UpdatedKoreanVM = NewObject<UBBMTabEntryViewModel>(HostWidget);
+	KoreanVM->SetTabText(FText::FromString(TEXT("한국어")));
+	EnglishVM->SetTabText(FText::FromString(TEXT("English")));
+	UpdatedKoreanVM->SetTabText(FText::FromString(TEXT("한국어 (갱신)")));
+
+	int32 SelectedOptionNotifyCount = 0;
+	FName LastNotifiedSelectedOption = NAME_None;
+	int32 SelectedOptionDelegateCount = 0;
+	FName LastDelegateOption = NAME_None;
+	int32 LastDelegateIndex = INDEX_NONE;
+	const FDelegateHandle SelectedOptionNotifyHandle = ComboBox->AddFieldValueChangedDelegate(
+		URichComboBoxKey::FFieldNotificationClassDescriptor::SelectedOption,
+		INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([ComboBox, &SelectedOptionNotifyCount, &LastNotifiedSelectedOption](UObject* /*InObj*/, UE::FieldNotification::FFieldId /*InId*/)
+		{
+			++SelectedOptionNotifyCount;
+			LastNotifiedSelectedOption = ComboBox->GetSelectedOption();
+		})
+	);
+	const FDelegateHandle SelectedOptionDelegateHandle = ComboBox->OnSelectedOptionChangedNative.AddLambda([&SelectedOptionDelegateCount, &LastDelegateOption, &LastDelegateIndex](FName InKey, int32 InIndex)
+	{
+		++SelectedOptionDelegateCount;
+		LastDelegateOption = InKey;
+		LastDelegateIndex = InIndex;
+	});
+	TestTrue(TEXT("SelectedOption FieldNotify delegate registered"), SelectedOptionNotifyHandle.IsValid());
+	TestTrue(TEXT("OnSelectedOptionChangedNative delegate registered"), SelectedOptionDelegateHandle.IsValid());
+
+	// 1. SetViewModelItems 호출 시 기존 SelectedOption 초기화(Slate 생성 전/후 일관 동작) 및 이후 선택 유지 검증
+	const FName KoreanKey(TEXT("ko_KR"));
+	const FName EnglishKey(TEXT("en"));
+	ComboBox->SetSelectedOption(KoreanKey);
+	TestEqual(TEXT("SelectedOption set before items"), ComboBox->GetSelectedOption(), KoreanKey);
+	TestEqual(TEXT("SelectedOption notify fired once on initial set"), SelectedOptionNotifyCount, 1);
+	TestEqual(TEXT("Last notified key inside initial callback matches KoreanKey"), LastNotifiedSelectedOption, KoreanKey);
+	TestEqual(TEXT("OnSelectedOptionChangedNative fired once on initial set"), SelectedOptionDelegateCount, 1);
+	TestEqual(TEXT("Initial delegate index before items is INDEX_NONE"), LastDelegateIndex, static_cast<int32>(INDEX_NONE));
+
+	TArray<FRichComboBoxKeyViewModelItem> InitialItems;
+	InitialItems.Add({ KoreanKey, KoreanVM });
+	InitialItems.Add({ EnglishKey, EnglishVM });
+	ComboBox->SetViewModelItems(InitialItems);
+
+	TestEqual(TEXT("SetViewModelItems resets SelectedOption to NAME_None before Slate build"), ComboBox->GetSelectedOption(), FName(NAME_None));
+	TestEqual(TEXT("SelectedOption notify incremented to 2 on SetViewModelItems clear"), SelectedOptionNotifyCount, 2);
+	TestEqual(TEXT("OnSelectedOptionChangedNative incremented to 2 on SetViewModelItems clear"), SelectedOptionDelegateCount, 2);
+	TestEqual(TEXT("Cleared delegate index is INDEX_NONE"), LastDelegateIndex, static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("CachedKeyIndices resolves KoreanKey index 0 in O(1)"), ComboBox->FindItemIndexByKey(KoreanKey), 0);
+	TestEqual(TEXT("CachedKeyIndices resolves EnglishKey index 1 in O(1)"), ComboBox->FindItemIndexByKey(EnglishKey), 1);
+	TestEqual(TEXT("Cached TMap returns KoreanVM in O(1)"), ComboBox->FindViewModelByKey(KoreanKey), static_cast<UObject*>(KoreanVM));
+	TestEqual(TEXT("Cached TMap returns EnglishVM in O(1)"), ComboBox->FindViewModelByKey(EnglishKey), static_cast<UObject*>(EnglishVM));
+
+	// 항목 설정 이후 선택된 키는 TakeWidget() 시 Content 위젯 초기 생성까지 유지되어야 함
+	ComboBox->SetSelectedOption(KoreanKey);
+	TestEqual(TEXT("SelectedOption set after items resolves KoreanKey"), ComboBox->GetSelectedOption(), KoreanKey);
+	TestEqual(TEXT("SelectedOption notify incremented to 3"), SelectedOptionNotifyCount, 3);
+	TestEqual(TEXT("OnSelectedOptionChangedNative incremented to 3"), SelectedOptionDelegateCount, 3);
+	TestEqual(TEXT("Delegate index resolves KoreanKey index 0"), LastDelegateIndex, 0);
+
+	// 2. bUseViewModelExtension == true 시 OnGenerateContentWidget 무시 및 Content 위젯 자동 VM 주입 검증
+	URichWidgetTestDelegateHelper* DelegateHelper = NewObject<URichWidgetTestDelegateHelper>(HostWidget);
+	TestNotNull(TEXT("Delegate helper constructed"), DelegateHelper);
+	if (DelegateHelper == nullptr)
+	{
+		return false;
+	}
+	ComboBox->OnGenerateContentWidget.BindUFunction(DelegateHelper, FName(TEXT("HandleGenerateContentWidget")));
+	TestTrue(TEXT("Manual OnGenerateContentWidget delegate bound"), ComboBox->OnGenerateContentWidget.IsBound());
+
+	TSharedRef<SWidget> ComboSlate = ComboBox->TakeWidget();
+	TestEqual(TEXT("bUseViewModelExtension ignores manual OnGenerateContentWidget"), DelegateHelper->GenerateContentCallCount, 0);
+
+	UUserWidget* GeneratedContentWidget = FindFirstChildUserWidget(ComboSlate, HostWidget);
+	TestNotNull(TEXT("Content entry widget generated into ComboBoxContent by extension"), GeneratedContentWidget);
+	if (GeneratedContentWidget != nullptr)
+	{
+		UMVVMView* ContentView = UMVVMSubsystem::GetViewFromUserWidget(GeneratedContentWidget);
+		TestNotNull(TEXT("Content widget has UMVVMView"), ContentView);
+		if (ContentView != nullptr)
+		{
+			TestEqual(TEXT("Content UMVVMView receives KoreanVM by name"), ContentView->GetViewModel(FName(TEXT("ContentEntryVM"))).GetObject(), static_cast<UObject*>(KoreanVM));
+		}
+	}
+
+	// 3. SetViewModelItems 교체 시 선택 초기화 후 SetViewModelByClass 폴백 주입 검증
+	ComboBox->SetContentViewModelName(NAME_None);
+	TArray<FRichComboBoxKeyViewModelItem> ReplacedItems;
+	ReplacedItems.Add({ KoreanKey, UpdatedKoreanVM });
+	ReplacedItems.Add({ EnglishKey, EnglishVM });
+	ComboBox->SetViewModelItems(ReplacedItems);
+
+	TestEqual(TEXT("SetViewModelItems resets SelectedOption to NAME_None after Slate build"), ComboBox->GetSelectedOption(), FName(NAME_None));
+	TestEqual(TEXT("SelectedOption notify incremented to 4 on Slate SetViewModelItems clear"), SelectedOptionNotifyCount, 4);
+	TestEqual(TEXT("OnSelectedOptionChangedNative incremented to 4 on Slate SetViewModelItems clear"), SelectedOptionDelegateCount, 4);
+
+	ComboBox->SetSelectedOption(KoreanKey);
+	TestEqual(TEXT("SelectedOption restored to KoreanKey after item replacement"), ComboBox->GetSelectedOption(), KoreanKey);
+	TestEqual(TEXT("SelectedOption notify incremented to 5"), SelectedOptionNotifyCount, 5);
+	TestEqual(TEXT("OnSelectedOptionChangedNative incremented to 5"), SelectedOptionDelegateCount, 5);
+
+	UUserWidget* FallbackContentWidget = FindFirstChildUserWidget(ComboSlate, HostWidget);
+	TestNotNull(TEXT("Fallback Content widget generated after selecting KoreanKey"), FallbackContentWidget);
+	if (FallbackContentWidget != nullptr && FallbackContentWidget != GeneratedContentWidget)
+	{
+		UMVVMView* FallbackView = UMVVMSubsystem::GetViewFromUserWidget(FallbackContentWidget);
+		TestNotNull(TEXT("Fallback Content widget has UMVVMView"), FallbackView);
+		if (FallbackView != nullptr)
+		{
+			TestEqual(TEXT("Fallback SetViewModelByClass injects UpdatedKoreanVM"), FallbackView->GetViewModel(FName(TEXT("ContentEntryVM"))).GetObject(), static_cast<UObject*>(UpdatedKoreanVM));
+		}
+	}
+
+	// 4. 선택 변경(SetSelectedOption -> SelectedOption 선 대입 후 TwoWay 브로드캐스트 + OnSelectedOptionChangedNative) 및 TwoWay 무순환 검증
+	FName SimulatedVMKey = KoreanKey;
+	int32 ReverseTwoWayCount = 0;
+	const FDelegateHandle TwoWayHandle = ComboBox->AddFieldValueChangedDelegate(
+		URichComboBoxKey::FFieldNotificationClassDescriptor::SelectedOption,
+		INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([ComboBox, &SimulatedVMKey, &ReverseTwoWayCount](UObject* /*InObj*/, UE::FieldNotification::FFieldId /*InId*/)
+		{
+			++ReverseTwoWayCount;
+			const FName PulledKey = ComboBox->GetSelectedOption();
+			if (SimulatedVMKey != PulledKey)
+			{
+				SimulatedVMKey = PulledKey;
+				ComboBox->SetSelectedOption(SimulatedVMKey);
+			}
+		})
+	);
+
+	ComboBox->SetSelectedOption(EnglishKey);
+	TestEqual(TEXT("SelectedOption synced from SetSelectedOption"), ComboBox->GetSelectedOption(), EnglishKey);
+	TestEqual(TEXT("Simulated TwoWay VM received EnglishKey"), SimulatedVMKey, EnglishKey);
+	TestEqual(TEXT("TwoWay loop terminated in 1 hop with zero recursion"), ReverseTwoWayCount, 1);
+	TestEqual(TEXT("SelectedOption notify incremented once on external selection change"), SelectedOptionNotifyCount, 6);
+	TestEqual(TEXT("Last notified SelectedOption matches EnglishKey"), LastNotifiedSelectedOption, EnglishKey);
+	TestEqual(TEXT("OnSelectedOptionChangedNative incremented once on external selection change"), SelectedOptionDelegateCount, 6);
+	TestEqual(TEXT("OnSelectedOptionChangedNative passed EnglishKey"), LastDelegateOption, EnglishKey);
+	TestEqual(TEXT("OnSelectedOptionChangedNative passed EnglishKey index 1"), LastDelegateIndex, 1);
+	ComboBox->RemoveFieldValueChangedDelegate(URichComboBoxKey::FFieldNotificationClassDescriptor::SelectedOption, TwoWayHandle);
+
+	// 5. 새로운 옵션 목록 전달 시 SelectedOption이 NAME_None으로 정리되는지 검증
+	TArray<FRichComboBoxKeyViewModelItem> OnlyKoreanItems;
+	OnlyKoreanItems.Add({ KoreanKey, KoreanVM });
+	ComboBox->SetViewModelItems(OnlyKoreanItems);
+	TestEqual(TEXT("SelectedOption resets to NAME_None when SetViewModelItems updates items"), ComboBox->GetSelectedOption(), FName(NAME_None));
+	TestEqual(TEXT("SelectedOption notify increments when cleared by SetViewModelItems"), SelectedOptionNotifyCount, 7);
+	TestEqual(TEXT("OnSelectedOptionChangedNative increments when cleared by SetViewModelItems"), SelectedOptionDelegateCount, 7);
+	TestEqual(TEXT("OnSelectedOptionChangedNative fires NAME_None and INDEX_NONE when invalidated"), LastDelegateIndex, static_cast<int32>(INDEX_NONE));
+
+	// 6. bUseViewModelExtension == false 전환 시 수동 OnGenerateContentWidget 및 수동 옵션 API(AddOption/ClearOptions) 동작 검증
+	ComboBox->SetUseViewModelExtension(false);
+	TestEqual(TEXT("Manual OnGenerateContentWidget called once when disabling ViewModelExtension"), DelegateHelper->GenerateContentCallCount, 1);
+	ComboBox->AddOption(EnglishKey);
+	ComboBox->SetSelectedOption(EnglishKey);
+	TestEqual(TEXT("Manual OnGenerateContentWidget invoked again on SetSelectedOption when bUseViewModelExtension == false"), DelegateHelper->GenerateContentCallCount, 2);
+	TestEqual(TEXT("Manual OnGenerateContentWidget received EnglishKey"), DelegateHelper->LastGeneratedContentKey, EnglishKey);
+	TestNull(TEXT("No Extension UUserWidget child when manual delegate returns USpacer"), FindFirstChildUserWidget(ComboSlate, HostWidget));
+
+	ComboBox->ClearOptions();
+	TestEqual(TEXT("ClearOptions resets SelectedOption to NAME_None"), ComboBox->GetSelectedOption(), FName(NAME_None));
+
+	ComboBox->RemoveFieldValueChangedDelegate(URichComboBoxKey::FFieldNotificationClassDescriptor::SelectedOption, SelectedOptionNotifyHandle);
+	ComboBox->OnSelectedOptionChangedNative.Remove(SelectedOptionDelegateHandle);
+	ComboBox->ReleaseSlateResources(true);
+	TestTrue(TEXT("Manual OnGenerateContentWidget delegate preserved across ReleaseSlateResources"), ComboBox->OnGenerateContentWidget.IsBoundToObject(DelegateHelper));
+
+	return true;
+}
+
+/**
+ * 7. URichInputKeySelector FieldNotify 선 대입-후 알림 및 TwoWay 무순환 · 에코 억제 검증 테스트
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FRichInputKeySelectorTwoWayTest,
+	"DIS.ExtensionWidget.RichInputKeySelector.TwoWayAndEvents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
+)
+
+bool FRichInputKeySelectorTwoWayTest::RunTest(const FString& Parameters)
+{
+	FExtensionWidgetTestWorldScope WorldScope;
+	TestNotNull(TEXT("Test world valid for URichInputKeySelector"), WorldScope.World);
+	if (WorldScope.World == nullptr)
+	{
+		return false;
+	}
+
+	UUserWidget* HostWidget = CreateWidget<UBBMCreditEntryWidget>(WorldScope.World);
+	TestNotNull(TEXT("Host widget created for URichInputKeySelector"), HostWidget);
+	if (HostWidget == nullptr || HostWidget->WidgetTree == nullptr)
+	{
+		return false;
+	}
+
+	URichInputKeySelector* KeySelector = HostWidget->WidgetTree->ConstructWidget<URichInputKeySelector>(URichInputKeySelector::StaticClass());
+	TestNotNull(TEXT("URichInputKeySelector constructed"), KeySelector);
+	if (KeySelector == nullptr)
+	{
+		return false;
+	}
+	HostWidget->WidgetTree->RootWidget = KeySelector;
+
+	URichWidgetTestDelegateHelper* DelegateHelper = NewObject<URichWidgetTestDelegateHelper>(HostWidget);
+	TestNotNull(TEXT("Delegate helper constructed for URichInputKeySelector"), DelegateHelper);
+	if (DelegateHelper == nullptr)
+	{
+		return false;
+	}
+	KeySelector->OnKeySelected.AddDynamic(DelegateHelper, &URichWidgetTestDelegateHelper::HandleKeySelected);
+
+	// Slate 위젯 생성 상태에서 키 변경 시 FieldNotify 및 OnKeySelected가 각 1회씩 발행되고 동일 값 재설정/SynchronizeProperties에서는 중복 발행되지 않아야 함
+	KeySelector->TakeWidget();
+
+	FInputChord SimulatedVMChord(EKeys::W);
+	int32 FieldNotifyCount = 0;
+	int32 ReverseTwoWayCount = 0;
+	FInputChord LastNotifiedChord;
+
+	const FDelegateHandle SelectedKeyNotifyHandle = KeySelector->AddFieldValueChangedDelegate(
+		URichInputKeySelector::FFieldNotificationClassDescriptor::SelectedKey,
+		INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateLambda([KeySelector, &SimulatedVMChord, &FieldNotifyCount, &ReverseTwoWayCount, &LastNotifiedChord](UObject* /*InObj*/, UE::FieldNotification::FFieldId /*InId*/)
+		{
+			++FieldNotifyCount;
+			// 콜백 실행 시점에 이미 GetSelectedKey()가 신값을 반환해야 함 (엔진 UInputKeySelector 버그 부재 검증)
+			LastNotifiedChord = KeySelector->GetSelectedKey();
+			if (ReverseTwoWayCount < 8 && SimulatedVMChord != LastNotifiedChord)
+			{
+				++ReverseTwoWayCount;
+				SimulatedVMChord = LastNotifiedChord;
+				KeySelector->SetSelectedKey(SimulatedVMChord);
+			}
+		})
+	);
+
+	// 1. 초기 키 설정: W
+	KeySelector->SetSelectedKey(SimulatedVMChord);
+	TestEqual(TEXT("Initial SetSelectedKey notifies once"), FieldNotifyCount, 1);
+	TestEqual(TEXT("GetSelectedKey inside FieldNotify already equals W"), LastNotifiedChord, FInputChord(EKeys::W));
+	TestEqual(TEXT("OnKeySelected fires once on initial W update"), DelegateHelper->KeySelectedCallCount, 1);
+	TestEqual(TEXT("OnKeySelected received W"), DelegateHelper->LastSelectedKeyChord, FInputChord(EKeys::W));
+
+	// 2. TwoWay 변경: W -> SpaceBar
+	SimulatedVMChord = FInputChord(EKeys::SpaceBar);
+	KeySelector->SetSelectedKey(SimulatedVMChord);
+	TestEqual(TEXT("TwoWay update W -> SpaceBar notifies once"), FieldNotifyCount, 2);
+	TestEqual(TEXT("GetSelectedKey inside FieldNotify equals SpaceBar"), LastNotifiedChord, FInputChord(EKeys::SpaceBar));
+	TestEqual(TEXT("Simulated TwoWay VM kept SpaceBar without rollback"), SimulatedVMChord, FInputChord(EKeys::SpaceBar));
+	TestEqual(TEXT("No recursive re-entry occurred after SpaceBar update"), ReverseTwoWayCount, 0);
+	TestEqual(TEXT("OnKeySelected fires once for SpaceBar update"), DelegateHelper->KeySelectedCallCount, 2);
+	TestEqual(TEXT("OnKeySelected received SpaceBar"), DelegateHelper->LastSelectedKeyChord, FInputChord(EKeys::SpaceBar));
+
+	// 3. ResetToDefaults 시나리오 재현: SpaceBar -> W 복원 시 순환 없이 1회 종료
+	SimulatedVMChord = FInputChord(EKeys::W);
+	KeySelector->SetSelectedKey(SimulatedVMChord);
+	TestEqual(TEXT("TwoWay reset SpaceBar -> W notifies once"), FieldNotifyCount, 3);
+	TestEqual(TEXT("GetSelectedKey inside FieldNotify equals W"), LastNotifiedChord, FInputChord(EKeys::W));
+	TestEqual(TEXT("Simulated TwoWay VM kept W without rollback"), SimulatedVMChord, FInputChord(EKeys::W));
+	TestEqual(TEXT("No recursive re-entry occurred after reset"), ReverseTwoWayCount, 0);
+	TestEqual(TEXT("OnKeySelected fires once on reset to W"), DelegateHelper->KeySelectedCallCount, 3);
+	TestEqual(TEXT("OnKeySelected received W after reset"), DelegateHelper->LastSelectedKeyChord, FInputChord(EKeys::W));
+
+	// 4. 동일 키 재설정 및 SynchronizeProperties 호출 시 중복 알림 차단 검증
+	KeySelector->SetSelectedKey(SimulatedVMChord);
+	KeySelector->SynchronizeProperties();
+	TestEqual(TEXT("Same key and SynchronizeProperties do not emit extra FieldNotify"), FieldNotifyCount, 3);
+	TestEqual(TEXT("Same key and SynchronizeProperties do not emit extra OnKeySelected"), DelegateHelper->KeySelectedCallCount, 3);
+
+	KeySelector->RemoveFieldValueChangedDelegate(URichInputKeySelector::FFieldNotificationClassDescriptor::SelectedKey, SelectedKeyNotifyHandle);
+	static_cast<UVisual*>(KeySelector)->ReleaseSlateResources(true);
 
 	return true;
 }

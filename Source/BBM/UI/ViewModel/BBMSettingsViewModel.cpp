@@ -1,16 +1,94 @@
 #include "UI/ViewModel/BBMSettingsViewModel.h"
+#include "UI/ViewModel/BBMComboBoxTextViewModel.h"
 #include "UI/ViewModel/BBMTabEntryViewModel.h"
 #include "UI/ViewModel/BBMKeyMappingEntryViewModel.h"
 #include "UI/ViewModel/BBMKeyMappingCategoryEntryViewModel.h"
+#include "Global/BBMGlobalSettings.h"
 #include "Save/BBMGameDataSubsystem.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
+
+namespace
+{
+	template <typename OptionStructType>
+	void PopulateComboBoxFromOptions(UBBMComboBoxTextViewModel* InComboBoxVM, const TArray<OptionStructType>& InOptions)
+	{
+		static_assert(TIsDerivedFrom<OptionStructType, FBBMSelectionDataBase>::IsDerived, "OptionStructType must derive from FBBMSelectionDataBase");
+
+		if (InComboBoxVM == nullptr)
+		{
+			return;
+		}
+
+		InComboBoxVM->RemoveAllComboBoxTextEntries();
+		for (const FBBMSelectionDataBase& Option : InOptions)
+		{
+			InComboBoxVM->AddComboBoxTextEntry(Option.Key, Option.DisplayName);
+		}
+	}
+
+	template <typename OptionStructType, typename ValueType>
+	FName FindOptionKeyForValue(const TArray<OptionStructType>& InOptions, const ValueType& InValue)
+	{
+		static_assert(TIsDerivedFrom<OptionStructType, FBBMSelectionDataBase>::IsDerived, "OptionStructType must derive from FBBMSelectionDataBase");
+
+		OptionStructType TargetOption;
+		TargetOption.Value = InValue;
+		for (const FBBMSelectionDataBase& Option : InOptions)
+		{
+			if (Option.IsSameValue(TargetOption) == true)
+			{
+				return Option.Key;
+			}
+		}
+
+		return NAME_None;
+	}
+
+	template <typename OptionStructType>
+	const OptionStructType* FindOptionByKey(const TArray<OptionStructType>& InOptions, FName InKey)
+	{
+		static_assert(TIsDerivedFrom<OptionStructType, FBBMSelectionDataBase>::IsDerived, "OptionStructType must derive from FBBMSelectionDataBase");
+
+		for (const OptionStructType& Option : InOptions)
+		{
+			if (Option.IsSameKey(InKey) == true)
+			{
+				return &Option;
+			}
+		}
+
+		return nullptr;
+	}
+
+	bool ConvertCheckBoxStateToBool(ECheckBoxState InCheckBoxState)
+	{
+		return (InCheckBoxState == ECheckBoxState::Checked);
+	}
+
+	ECheckBoxState ConvertBoolToCheckBoxState(bool bInEnabled)
+	{
+		return (bInEnabled == true) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+	}
+}
+
+UBBMSettingsViewModel::UBBMSettingsViewModel()
+{
+	LanguageComboBoxViewModel = CreateDefaultSubobject<UBBMComboBoxTextViewModel>(TEXT("LanguageComboBoxViewModel"));
+	WindowModeComboBoxViewModel = CreateDefaultSubobject<UBBMComboBoxTextViewModel>(TEXT("WindowModeComboBoxViewModel"));
+	ScreenResolutionComboBoxViewModel = CreateDefaultSubobject<UBBMComboBoxTextViewModel>(TEXT("ScreenResolutionComboBoxViewModel"));
+}
 
 void UBBMSettingsViewModel::BeginViewModel()
 {
 	Super::BeginViewModel();
 
-	/* 1. 세이브 데이터 동기화 */
+	/* 1. 고정 크기 엔트리 구성 */
+
+	AddFixedTabEntries();
+	AddFixedComboBoxEntries();
+
+	/* 2. 세이브 데이터 동기화 */
 
 	if (UBBMGameDataSubsystem* GameDataSS = GetGameDataSubsystem())
 	{
@@ -27,14 +105,11 @@ void UBBMSettingsViewModel::BeginViewModel()
 	}
 
 	HandleSubsystemSettingsChanged(CachedSettingsBeforeEdit);
-
-	/* 2. 데이터로 엔트리 구성 */
-
-	AddFixedTabEntries();
 }
 
 void UBBMSettingsViewModel::EndViewModel()
 {
+	RemoveAllComboBoxEntries();
 	RemoveAllKeyMappingCategoryEntries();
 	RemoveAllTabs();
 
@@ -159,16 +234,16 @@ void UBBMSettingsViewModel::SetDialogueVolume(float InDialogueVolume)
 	}
 }
 
-bool UBBMSettingsViewModel::GetEnableBeatVisualAssist() const
+ECheckBoxState UBBMSettingsViewModel::GetEnableBeatVisualAssist() const
 {
-	return bEnableBeatVisualAssist;
+	return EnableBeatVisualAssist;
 }
 
-void UBBMSettingsViewModel::SetEnableBeatVisualAssist(bool bInEnableBeatVisualAssist)
+void UBBMSettingsViewModel::SetEnableBeatVisualAssist(ECheckBoxState InEnableBeatVisualAssist)
 {
-	CachedCurrentSettings.bEnableBeatVisualAssist = bInEnableBeatVisualAssist;
+	CachedCurrentSettings.bEnableBeatVisualAssist = ConvertCheckBoxStateToBool(InEnableBeatVisualAssist);
 
-	if (UE_MVVM_SET_PROPERTY_VALUE(bEnableBeatVisualAssist, bInEnableBeatVisualAssist) == false)
+	if (UE_MVVM_SET_PROPERTY_VALUE(EnableBeatVisualAssist, InEnableBeatVisualAssist) == false)
 	{
 		return;
 	}
@@ -179,19 +254,36 @@ void UBBMSettingsViewModel::SetEnableBeatVisualAssist(bool bInEnableBeatVisualAs
 	}
 }
 
-EWindowMode::Type UBBMSettingsViewModel::GetWindowMode() const
+FName UBBMSettingsViewModel::GetLanguageKey() const
 {
-	return WindowMode;
+	return LanguageKey;
 }
 
-void UBBMSettingsViewModel::SetWindowMode(EWindowMode::Type InWindowMode)
+void UBBMSettingsViewModel::SetLanguageKey(FName InLanguageKey)
 {
-	CachedCurrentSettings.WindowMode = InWindowMode;
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	const FBBMStringSelectionData* FoundOption = (GlobalSettings != nullptr)
+		? FindOptionByKey(GlobalSettings->LanguageOptions, InLanguageKey)
+		: nullptr;
+	if (FoundOption == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMSettingsViewModel::SetLanguageKey] 미등록 언어 키(%s)"), *InLanguageKey.ToString());
+		return;
+	}
 
-	if (UE_MVVM_SET_PROPERTY_VALUE(WindowMode, InWindowMode) == false)
+	FString SanitizedLanguage = FoundOption->Value.TrimStartAndEnd();
+	if (SanitizedLanguage.IsEmpty() == true)
+	{
+		SanitizedLanguage = TEXT("ko-KR");
+	}
+	CachedCurrentSettings.Language = SanitizedLanguage;
+
+	if (UE_MVVM_SET_PROPERTY_VALUE(LanguageKey, InLanguageKey) == false)
 	{
 		return;
 	}
+
+	RefreshComboBoxSelection(LanguageComboBoxViewModel, LanguageKey);
 
 	if (bIsSyncingFromSubsystem == false)
 	{
@@ -199,23 +291,66 @@ void UBBMSettingsViewModel::SetWindowMode(EWindowMode::Type InWindowMode)
 	}
 }
 
-FIntPoint UBBMSettingsViewModel::GetScreenResolution() const
+FName UBBMSettingsViewModel::GetWindowModeKey() const
 {
-	return ScreenResolution;
+	return WindowModeKey;
 }
 
-void UBBMSettingsViewModel::SetScreenResolution(FIntPoint InScreenResolution)
+void UBBMSettingsViewModel::SetWindowModeKey(FName InWindowModeKey)
 {
-	const FIntPoint ClampedResolution(
-		FMath::Max(320, InScreenResolution.X),
-		FMath::Max(240, InScreenResolution.Y)
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	const FBBMWindowModeSelectionData* FoundOption = (GlobalSettings != nullptr)
+		? FindOptionByKey(GlobalSettings->WindowModeOptions, InWindowModeKey)
+		: nullptr;
+	if (FoundOption == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMSettingsViewModel::SetWindowModeKey] 미등록 창 모드 키(%s)"), *InWindowModeKey.ToString());
+		return;
+	}
+
+	CachedCurrentSettings.WindowMode = FoundOption->Value;
+
+	if (UE_MVVM_SET_PROPERTY_VALUE(WindowModeKey, InWindowModeKey) == false)
+	{
+		return;
+	}
+
+	RefreshComboBoxSelection(WindowModeComboBoxViewModel, WindowModeKey);
+
+	if (bIsSyncingFromSubsystem == false)
+	{
+		PushCurrentValuesToSubsystem();
+	}
+}
+
+FName UBBMSettingsViewModel::GetScreenResolutionKey() const
+{
+	return ScreenResolutionKey;
+}
+
+void UBBMSettingsViewModel::SetScreenResolutionKey(FName InScreenResolutionKey)
+{
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	const FBBMIntPointSelectionData* FoundOption = (GlobalSettings != nullptr)
+		? FindOptionByKey(GlobalSettings->ScreenResolutionOptions, InScreenResolutionKey)
+		: nullptr;
+	if (FoundOption == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMSettingsViewModel::SetScreenResolutionKey] 미등록 해상도 키(%s)"), *InScreenResolutionKey.ToString());
+		return;
+	}
+
+	CachedCurrentSettings.ScreenResolution = FIntPoint(
+		FMath::Max(320, FoundOption->Value.X),
+		FMath::Max(240, FoundOption->Value.Y)
 	);
-	CachedCurrentSettings.ScreenResolution = ClampedResolution;
 
-	if (UE_MVVM_SET_PROPERTY_VALUE(ScreenResolution, ClampedResolution) == false)
+	if (UE_MVVM_SET_PROPERTY_VALUE(ScreenResolutionKey, InScreenResolutionKey) == false)
 	{
 		return;
 	}
+
+	RefreshComboBoxSelection(ScreenResolutionComboBoxViewModel, ScreenResolutionKey);
 
 	if (bIsSyncingFromSubsystem == false)
 	{
@@ -223,16 +358,16 @@ void UBBMSettingsViewModel::SetScreenResolution(FIntPoint InScreenResolution)
 	}
 }
 
-bool UBBMSettingsViewModel::GetVSyncEnabled() const
+ECheckBoxState UBBMSettingsViewModel::GetVSyncEnabled() const
 {
-	return bVSyncEnabled;
+	return VSyncEnabled;
 }
 
-void UBBMSettingsViewModel::SetVSyncEnabled(bool bInVSyncEnabled)
+void UBBMSettingsViewModel::SetVSyncEnabled(ECheckBoxState InVSyncEnabled)
 {
-	CachedCurrentSettings.bVSyncEnabled = bInVSyncEnabled;
+	CachedCurrentSettings.bVSyncEnabled = ConvertCheckBoxStateToBool(InVSyncEnabled);
 
-	if (UE_MVVM_SET_PROPERTY_VALUE(bVSyncEnabled, bInVSyncEnabled) == false)
+	if (UE_MVVM_SET_PROPERTY_VALUE(VSyncEnabled, InVSyncEnabled) == false)
 	{
 		return;
 	}
@@ -293,14 +428,7 @@ void UBBMSettingsViewModel::RemapKey(int32 InCategoryIndex, int32 InEntryIndex, 
 	CurrentChord = InNewChord;
 	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(KeyMappings);
 
-	if (KeyMappingCategoryEntries.IsValidIndex(InCategoryIndex) == true && KeyMappingCategoryEntries[InCategoryIndex] != nullptr)
-	{
-		KeyMappingCategoryEntries[InCategoryIndex]->RemapKey(InEntryIndex, InNewChord);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[UBBMSettingsViewModel::RemapKey] UBBMKeyMappingCategoryEntryViewModel 접근 실패 (CategoryIndex=%d)"), InCategoryIndex);
-	}
+	RefreshKeyMappingSingleEntry(InCategoryIndex, InEntryIndex, InNewChord);
 
 	if (bIsSyncingFromSubsystem == false)
 	{
@@ -399,52 +527,51 @@ void UBBMSettingsViewModel::AddFixedTabEntries()
 	SetTabEntries(InitialTabEntries);
 }
 
-void UBBMSettingsViewModel::RefreshKeyMappingCategoryEntries()
+void UBBMSettingsViewModel::AddFixedComboBoxEntries()
 {
-	const int32 NumCategories = KeyMappings.Num();
-	const int32 NumCategoryEntries = KeyMappingCategoryEntries.Num();
-	if (NumCategories != NumCategoryEntries)
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	if (GlobalSettings == nullptr)
 	{
-		/* 크기 변경 시 VM 재구성 */
-
-		RemoveAllKeyMappingCategoryEntries();
-
-		TArray<TObjectPtr<UBBMKeyMappingCategoryEntryViewModel>> InitialKeyMappingCategoryEntries;
-		InitialKeyMappingCategoryEntries.Reserve(NumCategories);
-
-		for (int32 CategoryIndex = 0; CategoryIndex < NumCategories; ++CategoryIndex)
-		{
-			UBBMKeyMappingCategoryEntryViewModel* CategoryVM = NewObject<UBBMKeyMappingCategoryEntryViewModel>(this);
-			if (CategoryVM != nullptr)
-			{
-				CategoryVM->SetCategoryIndex(CategoryIndex);
-				CategoryVM->SetKeyMappings(KeyMappings[CategoryIndex]);
-				InitialKeyMappingCategoryEntries.Add(CategoryVM);
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("[UBBMSettingsViewModel::RefreshKeyMappingCategoryEntries] UBBMKeyMappingCategoryEntryViewModel 생성 실패 (CategoryIndex=%d)"), CategoryIndex);
-			}
-		}
-
-		SetKeyMappingCategoryEntries(InitialKeyMappingCategoryEntries);
+		UE_LOG(LogTemp, Error, TEXT("[UBBMSettingsViewModel::AddFixedComboBoxEntries] UBBMGlobalSettings CDO 조회 실패"));
+		return;
 	}
-	else
-	{
-		/* 크기 동일 시 VM 갱신 */
 
-		for (int32 CategoryIndex = 0; CategoryIndex < NumCategories; ++CategoryIndex)
-		{
-			if (KeyMappingCategoryEntries.IsValidIndex(CategoryIndex) == true && KeyMappingCategoryEntries[CategoryIndex] != nullptr)
-			{
-				KeyMappingCategoryEntries[CategoryIndex]->SetCategoryIndex(CategoryIndex);
-				KeyMappingCategoryEntries[CategoryIndex]->SetKeyMappings(KeyMappings[CategoryIndex]);
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("[UBBMSettingsViewModel::RefreshKeyMappingCategoryEntries] UBBMKeyMappingCategoryEntryViewModel 접근 실패 (CategoryIndex=%d)"), CategoryIndex);
-			}
-		}
+	UnbindComboBoxViewModels();
+
+	PopulateComboBoxFromOptions(LanguageComboBoxViewModel, GlobalSettings->LanguageOptions);
+	PopulateComboBoxFromOptions(WindowModeComboBoxViewModel, GlobalSettings->WindowModeOptions);
+	PopulateComboBoxFromOptions(ScreenResolutionComboBoxViewModel, GlobalSettings->ScreenResolutionOptions);
+
+	RebindComboBoxViewModels();
+}
+
+void UBBMSettingsViewModel::RemoveAllKeyMappingCategoryEntries()
+{
+	if (KeyMappingCategoryEntries.IsEmpty() == true)
+	{
+		return;
+	}
+
+	UnbindKeyMappingCategoryEntries();
+	KeyMappingCategoryEntries.Reset();
+	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(KeyMappingCategoryEntries);
+}
+
+void UBBMSettingsViewModel::RemoveAllComboBoxEntries()
+{
+	UnbindComboBoxViewModels();
+
+	if (LanguageComboBoxViewModel != nullptr)
+	{
+		LanguageComboBoxViewModel->RemoveAllComboBoxTextEntries();
+	}
+	if (WindowModeComboBoxViewModel != nullptr)
+	{
+		WindowModeComboBoxViewModel->RemoveAllComboBoxTextEntries();
+	}
+	if (ScreenResolutionComboBoxViewModel != nullptr)
+	{
+		ScreenResolutionComboBoxViewModel->RemoveAllComboBoxTextEntries();
 	}
 }
 
@@ -509,16 +636,39 @@ void UBBMSettingsViewModel::SyncFromSettingsData(const FBBMUserSettingsData& InS
 	UE_MVVM_SET_PROPERTY_VALUE(DialogueVolume, ClampedSettings.DialogueVolume);
 
 	CachedCurrentSettings.bEnableBeatVisualAssist = ClampedSettings.bEnableBeatVisualAssist;
-	UE_MVVM_SET_PROPERTY_VALUE(bEnableBeatVisualAssist, ClampedSettings.bEnableBeatVisualAssist);
+	UE_MVVM_SET_PROPERTY_VALUE(EnableBeatVisualAssist, ConvertBoolToCheckBoxState(ClampedSettings.bEnableBeatVisualAssist));
+
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	const FName MatchedLanguageKey = (GlobalSettings != nullptr)
+		? FindOptionKeyForValue(GlobalSettings->LanguageOptions, ClampedSettings.Language)
+		: NAME_None;
+	const FName MatchedWindowModeKey = (GlobalSettings != nullptr)
+		? FindOptionKeyForValue(GlobalSettings->WindowModeOptions, ClampedSettings.WindowMode.GetValue())
+		: NAME_None;
+	const FName MatchedResolutionKey = (GlobalSettings != nullptr)
+		? FindOptionKeyForValue(GlobalSettings->ScreenResolutionOptions, ClampedSettings.ScreenResolution)
+		: NAME_None;
+
+	CachedCurrentSettings.Language = ClampedSettings.Language;
+	if (UE_MVVM_SET_PROPERTY_VALUE(LanguageKey, MatchedLanguageKey) == true)
+	{
+		RefreshComboBoxSelection(LanguageComboBoxViewModel, MatchedLanguageKey);
+	}
 
 	CachedCurrentSettings.WindowMode = ClampedSettings.WindowMode;
-	UE_MVVM_SET_PROPERTY_VALUE(WindowMode, ClampedSettings.WindowMode);
+	if (UE_MVVM_SET_PROPERTY_VALUE(WindowModeKey, MatchedWindowModeKey) == true)
+	{
+		RefreshComboBoxSelection(WindowModeComboBoxViewModel, MatchedWindowModeKey);
+	}
 
 	CachedCurrentSettings.ScreenResolution = ClampedSettings.ScreenResolution;
-	UE_MVVM_SET_PROPERTY_VALUE(ScreenResolution, ClampedSettings.ScreenResolution);
+	if (UE_MVVM_SET_PROPERTY_VALUE(ScreenResolutionKey, MatchedResolutionKey) == true)
+	{
+		RefreshComboBoxSelection(ScreenResolutionComboBoxViewModel, MatchedResolutionKey);
+	}
 
 	CachedCurrentSettings.bVSyncEnabled = ClampedSettings.bVSyncEnabled;
-	UE_MVVM_SET_PROPERTY_VALUE(bVSyncEnabled, ClampedSettings.bVSyncEnabled);
+	UE_MVVM_SET_PROPERTY_VALUE(VSyncEnabled, ConvertBoolToCheckBoxState(ClampedSettings.bVSyncEnabled));
 
 	CachedCurrentSettings.KeyMappings = ClampedSettings.KeyMappings;
 	if (UE_MVVM_SET_PROPERTY_VALUE(KeyMappings, ClampedSettings.KeyMappings) == true)
@@ -537,10 +687,8 @@ void UBBMSettingsViewModel::HandleSubsystemSettingsChanged(const FBBMUserSetting
 		return;
 	}
 
-	{
-		TGuardValue<bool> SyncGuard(bIsSyncingFromSubsystem, true);
-		SyncFromSettingsData(NewSettings);
-	}
+	TGuardValue<bool> SyncGuard(bIsSyncingFromSubsystem, true);
+	SyncFromSettingsData(NewSettings);
 }
 
 void UBBMSettingsViewModel::SetKeyMappingCategoryEntries(const TArray<TObjectPtr<UBBMKeyMappingCategoryEntryViewModel>>& InKeyMappingCategoryEntries)
@@ -550,18 +698,6 @@ void UBBMSettingsViewModel::SetKeyMappingCategoryEntries(const TArray<TObjectPtr
 	UE_MVVM_SET_PROPERTY_VALUE(KeyMappingCategoryEntries, InKeyMappingCategoryEntries);
 
 	RebindKeyMappingCategoryEntries();
-}
-
-void UBBMSettingsViewModel::RemoveAllKeyMappingCategoryEntries()
-{
-	if (KeyMappingCategoryEntries.IsEmpty() == true)
-	{
-		return;
-	}
-
-	UnbindKeyMappingCategoryEntries();
-	KeyMappingCategoryEntries.Reset();
-	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(KeyMappingCategoryEntries);
 }
 
 void UBBMSettingsViewModel::RebindKeyMappingCategoryEntries()
@@ -604,7 +740,203 @@ void UBBMSettingsViewModel::UnbindKeyMappingCategoryEntries()
 	KeyMappingCategoryEntryBindings.Reset();
 }
 
+void UBBMSettingsViewModel::RefreshKeyMappingSingleEntry(int32 InCategoryIndex, int32 InEntryIndex, const FInputChord& InNewChord)
+{
+	if (bIsSyncingKeyMappings == true)
+	{
+		return;
+	}
+	TGuardValue<bool> KeyMappingSyncGuard(bIsSyncingKeyMappings, true);
+
+	if (KeyMappingCategoryEntries.IsValidIndex(InCategoryIndex) == true && KeyMappingCategoryEntries[InCategoryIndex] != nullptr)
+	{
+		KeyMappingCategoryEntries[InCategoryIndex]->RemapKey(InEntryIndex, InNewChord);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[UBBMSettingsViewModel::RemapKey] UBBMKeyMappingCategoryEntryViewModel 접근 실패 (CategoryIndex=%d)"), InCategoryIndex);
+	}
+}
+
+void UBBMSettingsViewModel::RefreshKeyMappingCategoryEntries()
+{
+	if (bIsSyncingKeyMappings == true)
+	{
+		return;
+	}
+	TGuardValue<bool> KeyMappingSyncGuard(bIsSyncingKeyMappings, true);
+
+	const int32 NumCategories = KeyMappings.Num();
+	const int32 NumCategoryEntries = KeyMappingCategoryEntries.Num();
+	if (NumCategories != NumCategoryEntries)
+	{
+		/* 크기 변경 시 VM 재구성 */
+
+		RemoveAllKeyMappingCategoryEntries();
+
+		TArray<TObjectPtr<UBBMKeyMappingCategoryEntryViewModel>> InitialKeyMappingCategoryEntries;
+		InitialKeyMappingCategoryEntries.Reserve(NumCategories);
+
+		for (int32 CategoryIndex = 0; CategoryIndex < NumCategories; ++CategoryIndex)
+		{
+			UBBMKeyMappingCategoryEntryViewModel* CategoryVM = NewObject<UBBMKeyMappingCategoryEntryViewModel>(this);
+			if (CategoryVM != nullptr)
+			{
+				CategoryVM->SetCategoryIndex(CategoryIndex);
+				CategoryVM->SetKeyMappings(KeyMappings[CategoryIndex]);
+				InitialKeyMappingCategoryEntries.Add(CategoryVM);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("[UBBMSettingsViewModel::RefreshKeyMappingCategoryEntries] UBBMKeyMappingCategoryEntryViewModel 생성 실패 (CategoryIndex=%d)"), CategoryIndex);
+			}
+		}
+
+		SetKeyMappingCategoryEntries(InitialKeyMappingCategoryEntries);
+	}
+	else
+	{
+		/* 크기 동일 시 VM 갱신 */
+
+		for (int32 CategoryIndex = 0; CategoryIndex < NumCategories; ++CategoryIndex)
+		{
+			if (KeyMappingCategoryEntries.IsValidIndex(CategoryIndex) == true && KeyMappingCategoryEntries[CategoryIndex] != nullptr)
+			{
+				KeyMappingCategoryEntries[CategoryIndex]->SetCategoryIndex(CategoryIndex);
+				KeyMappingCategoryEntries[CategoryIndex]->SetKeyMappings(KeyMappings[CategoryIndex]);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("[UBBMSettingsViewModel::RefreshKeyMappingCategoryEntries] UBBMKeyMappingCategoryEntryViewModel 접근 실패 (CategoryIndex=%d)"), CategoryIndex);
+			}
+		}
+	}
+}
+
 void UBBMSettingsViewModel::HandleCategoryInputChordChanged(int32 InCategoryIndex, int32 InEntryIndex, FName /* InMappingName */, const FInputChord& InNewChord)
 {
+	if (bIsSyncingKeyMappings == true)
+	{
+		return;
+	}
+	TGuardValue<bool> KeyMappingSyncGuard(bIsSyncingKeyMappings, true);
+
 	RemapKey(InCategoryIndex, InEntryIndex, InNewChord);
+}
+
+void UBBMSettingsViewModel::RebindComboBoxViewModels()
+{
+	UnbindComboBoxViewModels();
+
+	if (LanguageComboBoxViewModel != nullptr)
+	{
+		LanguageComboChangedHandle = LanguageComboBoxViewModel->OnSelectedKeyChangedNative.AddUObject(
+			this,
+			&UBBMSettingsViewModel::HandleLanguageComboBoxSelectedKeyChanged
+		);
+	}
+
+	if (WindowModeComboBoxViewModel != nullptr)
+	{
+		WindowModeComboChangedHandle = WindowModeComboBoxViewModel->OnSelectedKeyChangedNative.AddUObject(
+			this,
+			&UBBMSettingsViewModel::HandleWindowModeComboBoxSelectedKeyChanged
+		);
+	}
+
+	if (ScreenResolutionComboBoxViewModel != nullptr)
+	{
+		ScreenResolutionComboChangedHandle = ScreenResolutionComboBoxViewModel->OnSelectedKeyChangedNative.AddUObject(
+			this,
+			&UBBMSettingsViewModel::HandleScreenResolutionComboBoxSelectedKeyChanged
+		);
+	}
+}
+
+void UBBMSettingsViewModel::UnbindComboBoxViewModels()
+{
+	if (LanguageComboBoxViewModel != nullptr && LanguageComboChangedHandle.IsValid() == true)
+	{
+		LanguageComboBoxViewModel->OnSelectedKeyChangedNative.Remove(LanguageComboChangedHandle);
+	}
+	LanguageComboChangedHandle.Reset();
+
+	if (WindowModeComboBoxViewModel != nullptr && WindowModeComboChangedHandle.IsValid() == true)
+	{
+		WindowModeComboBoxViewModel->OnSelectedKeyChangedNative.Remove(WindowModeComboChangedHandle);
+	}
+	WindowModeComboChangedHandle.Reset();
+
+	if (ScreenResolutionComboBoxViewModel != nullptr && ScreenResolutionComboChangedHandle.IsValid() == true)
+	{
+		ScreenResolutionComboBoxViewModel->OnSelectedKeyChangedNative.Remove(ScreenResolutionComboChangedHandle);
+	}
+	ScreenResolutionComboChangedHandle.Reset();
+}
+
+void UBBMSettingsViewModel::RefreshComboBoxSelections()
+{
+	RefreshComboBoxSelection(LanguageComboBoxViewModel, LanguageKey);
+	RefreshComboBoxSelection(WindowModeComboBoxViewModel, WindowModeKey);
+	RefreshComboBoxSelection(ScreenResolutionComboBoxViewModel, ScreenResolutionKey);
+}
+
+void UBBMSettingsViewModel::RefreshComboBoxSelection(UBBMComboBoxTextViewModel* InComboBoxVM, FName InSelectedKey)
+{
+	if (InComboBoxVM == nullptr)
+	{
+		return;
+	}
+
+	if (bIsSyncingComboBoxes == true)
+	{
+		return;
+	}
+	TGuardValue<bool> ComboSyncGuard(bIsSyncingComboBoxes, true);
+	InComboBoxVM->SetSelectedKey(InSelectedKey);
+}
+
+void UBBMSettingsViewModel::HandleLanguageComboBoxSelectedKeyChanged(FName InSelectedKey)
+{
+	if (InSelectedKey.IsNone() == true)
+	{
+		return;
+	}
+
+	if (bIsSyncingComboBoxes == true)
+	{
+		return;
+	}
+	TGuardValue<bool> ComboSyncGuard(bIsSyncingComboBoxes, true);
+	SetLanguageKey(InSelectedKey);
+}
+
+void UBBMSettingsViewModel::HandleWindowModeComboBoxSelectedKeyChanged(FName InSelectedKey)
+{
+	if (InSelectedKey.IsNone() == true)
+	{
+		return;
+	}
+
+	if (bIsSyncingComboBoxes == true)
+	{
+		return;
+	}
+	TGuardValue<bool> ComboSyncGuard(bIsSyncingComboBoxes, true);
+	SetWindowModeKey(InSelectedKey);
+}
+
+void UBBMSettingsViewModel::HandleScreenResolutionComboBoxSelectedKeyChanged(FName InSelectedKey)
+{
+	if (InSelectedKey.IsNone() == true)
+	{
+		return;
+	}
+
+	if (bIsSyncingComboBoxes == true)
+	{
+		return;
+	}
+	TGuardValue<bool> ComboSyncGuard(bIsSyncingComboBoxes, true);
+	SetScreenResolutionKey(InSelectedKey);
 }

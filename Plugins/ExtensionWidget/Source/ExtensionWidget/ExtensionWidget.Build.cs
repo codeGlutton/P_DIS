@@ -20,7 +20,11 @@ public class ExtensionWidget : ModuleRules
 				"Slate",
 				"SlateCore",
 				"UMG",
-				"InputCore"
+				"InputCore",
+
+				/* MVVM 및 필드 노티파이 모듈 */
+				"FieldNotification",
+				"ModelViewViewModel"
 			}
 		);
 

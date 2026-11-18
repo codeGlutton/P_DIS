@@ -5,6 +5,7 @@
  *********************************************************************/
 
 #include "Level/BBMTitleGameMode.h"
+#include "Level/BBMPlayerController.h"
 
 #include "UI/Widget/BBMTitleWidget.h"
 #include "UI/Widget/BBMSettingsWidget.h"
@@ -20,6 +21,8 @@
 
 ABBMTitleGameMode::ABBMTitleGameMode()
 {
+	PlayerControllerClass = ABBMPlayerController::StaticClass();
+
 	// 타이틀 레벨 시작 시 타이틀 메뉴 위젯 및 뷰모델 자동 등록
 
 	FBBMWorldUIConfig TitleMenuConfig;

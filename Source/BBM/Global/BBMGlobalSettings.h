@@ -9,6 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "Global/BBMGlobalTypes.h"
 #include "Combat/Team/BBMTeamTypes.h"
 #include "UI/BBMUITypes.h"
 #include "BBMGlobalSettings.generated.h"
@@ -94,4 +95,18 @@ public:
 	/* Chord Trigger Alt 조합 판정용 Input Action */
 	UPROPERTY(Category = "Input", EditAnywhere, BlueprintReadOnly, Config)
 	TSoftObjectPtr<UInputAction> AltChordAction;
+
+	/* 환경설정 선택 옵션 목록 (배열 순서가 UI 표시 순서를 결정함) */
+public:
+	/* 선택 가능한 언어 옵션 목록 */
+	UPROPERTY(Category = "Settings|Options", EditAnywhere, BlueprintReadOnly, Config)
+	TArray<FBBMStringSelectionData> LanguageOptions;
+
+	/* 선택 가능한 창 모드 옵션 목록 */
+	UPROPERTY(Category = "Settings|Options", EditAnywhere, BlueprintReadOnly, Config)
+	TArray<FBBMWindowModeSelectionData> WindowModeOptions;
+
+	/* 선택 가능한 화면 해상도 옵션 목록 */
+	UPROPERTY(Category = "Settings|Options", EditAnywhere, BlueprintReadOnly, Config)
+	TArray<FBBMIntPointSelectionData> ScreenResolutionOptions;
 };

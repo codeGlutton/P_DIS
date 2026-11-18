@@ -491,12 +491,16 @@ bool FBBMGameModeHierarchyTest::RunTest(const FString& Parameters)
 		TestNull(TEXT("ABBMGameModeBase의 DefaultPawnClass는 nullptr여야 함"), GameModeBaseCDO->DefaultPawnClass.Get());
 	}
 
-	// 3. ABBMTitleGameMode 기본 CDO 설정 검증 (타이틀은 폰/컨트롤러 비움)
+	// 3. ABBMTitleGameMode 기본 CDO 설정 검증 (타이틀은 폰을 비우고 ABBMPlayerController 사용)
 	const ABBMTitleGameMode* TitleGameModeCDO = GetDefault<ABBMTitleGameMode>();
 	TestNotNull(TEXT("TitleGameMode CDO가 유효해야 함"), TitleGameModeCDO);
 	if (TitleGameModeCDO != nullptr)
 	{
-		TestNull(TEXT("ABBMTitleGameMode의 PlayerControllerClass는 nullptr여야 함"), TitleGameModeCDO->PlayerControllerClass.Get());
+		TestEqual(
+			TEXT("ABBMTitleGameMode의 PlayerControllerClass는 ABBMPlayerController여야 함"),
+			TitleGameModeCDO->PlayerControllerClass.Get(),
+			ABBMPlayerController::StaticClass()
+		);
 		TestNull(TEXT("ABBMTitleGameMode의 DefaultPawnClass는 nullptr여야 함"), TitleGameModeCDO->DefaultPawnClass.Get());
 	}
 
@@ -1323,23 +1327,24 @@ bool FWorldWidgetAnimConfigCacheTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("캐시 히트 상태에서 GetOwnerWidget도 FrameWidget 유지"), TreeConfig.GetOwnerWidget(HostWidget), static_cast<UUserWidget*>(FrameWidget));
 	FrameWBGC->Animations = MoveTemp(SavedFrameAnims);
 
-	// 6-2. NamedSlot 내부에 배치된 하위 UUserWidget 애님 탐색 및 StopAllAnimations 트리 정지 검증
+	// 6-2. NamedSlot 내부에 배치된 하위 UUserWidget 애님 탐색 및 ViewModel 해제 시 비설정 애님 유지 검증
 	TreeConfig.AnimationName = FName(TEXT("SlotInnerPulse"));
 	TestEqual(TEXT("NamedSlot 내부 위젯(SlotInnerWidget)의 SlotInnerPulse 애님까지 재귀 탐색 성공"), TreeConfig.GetAnimation(HostWidget), SlotInnerAnim);
 	TestEqual(TEXT("NamedSlot 내부 애님의 GetOwnerWidget은 SlotInnerWidget이어야 함"), TreeConfig.GetOwnerWidget(HostWidget), static_cast<UUserWidget*>(SlotInnerWidget));
 
-	// SlotInnerWidget과 HostWidget 모두에서 ViewModel 주입 해제 시 하위 트리 애니메이션 정지 검증
+	// OpenAnimConfig/CloseAnimConfig에 연결되지 않은 하위 위젯 애니메이션은 ViewModel 해제 시에도 강제 정지되지 않음을 검증
 	UBBMTitleViewModel* DummyVM = NewObject<UBBMTitleViewModel>(TestWorld.World);
 	KeepAliveObjects.Emplace(DummyVM);
 	HostWidget->SetViewModelInstance(DummyVM);
 	FrameWidget->PlayAnimation(FrameOpenAnim, 0.0f, 0, EUMGSequencePlayMode::Forward, 1.0f);
 	SlotInnerWidget->PlayAnimation(SlotInnerAnim, 0.0f, 0, EUMGSequencePlayMode::Forward, 1.0f);
-	TestTrue(TEXT("정지 전 FrameWidget 애니메이션이 재생/활성 상태여야 함"), FrameWidget->IsAnimationPlaying(FrameOpenAnim));
-	TestTrue(TEXT("정지 전 SlotInnerWidget 애니메이션이 재생/활성 상태여야 함"), SlotInnerWidget->IsAnimationPlaying(SlotInnerAnim));
+	TestTrue(TEXT("뷰모델 해제 전 FrameWidget 애니메이션이 재생/활성 상태여야 함"), FrameWidget->IsAnimationPlaying(FrameOpenAnim));
+	TestTrue(TEXT("뷰모델 해제 전 SlotInnerWidget 애니메이션이 재생/활성 상태여야 함"), SlotInnerWidget->IsAnimationPlaying(SlotInnerAnim));
 
 	HostWidget->SetViewModelInstance(nullptr);
-	TestFalse(TEXT("뷰모델 해제 후 StopAllAnimationsInWidgetTree에 의해 FrameWidget 애님도 정지되어야 함"), FrameWidget->IsAnimationPlaying(FrameOpenAnim));
-	TestFalse(TEXT("뷰모델 해제 후 StopAllAnimationsInWidgetTree에 의해 SlotInnerWidget 애님도 정지되어야 함"), SlotInnerWidget->IsAnimationPlaying(SlotInnerAnim));
+	TestNull(TEXT("뷰모델 해제 후 HostWidget GetViewModel()은 nullptr여야 함"), HostWidget->GetViewModel());
+	TestTrue(TEXT("Open/CloseAnimConfig에 미지정된 FrameWidget 애님은 강제 정지되지 않아야 함"), FrameWidget->IsAnimationPlaying(FrameOpenAnim));
+	TestTrue(TEXT("Open/CloseAnimConfig에 미지정된 SlotInnerWidget 애님은 강제 정지되지 않아야 함"), SlotInnerWidget->IsAnimationPlaying(SlotInnerAnim));
 
 	return true;
 }

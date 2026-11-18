@@ -34,6 +34,8 @@ public class DISTest : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"UnrealEd",
+			"UMGEditor",
+			"ModelViewViewModelBlueprint",
 			"AutomationController",
 			"MovieScene"
 		});

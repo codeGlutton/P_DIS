@@ -29,31 +29,34 @@ class UUserWidget;
 class UWidgetAnimation;
 
 /**
- * 월드 UI 위젯 ZOrder 레이어 구분 열거형 (순차 0~6 레이어)
+ * 월드 UI 위젯 ZOrder 레이어 구분 열거형 (순차 0~7 레이어)
  */
 UENUM(BlueprintType)
 enum class EWorldWidgetZOrder : uint8
 {
 	/* 최하단 배경 아트 및 맵 오버레이 (0) */
-	Background   = 0  UMETA(DisplayName = "Background (0)"),
+	Background          = 0  UMETA(DisplayName = "Background (0)"),
 
 	/* 기본 인게임 HUD 및 상시 표시 상태바 (1) */
-	Base         = 1  UMETA(DisplayName = "Base HUD (1)"),
+	Base                = 1  UMETA(DisplayName = "Base HUD (1)"),
 
 	/* 인벤토리, 상점, 캐릭터 장비 등 메인 게임플레이 창 (2) */
-	Content      = 2  UMETA(DisplayName = "Content / Windows (2)"),
+	Content             = 2  UMETA(DisplayName = "Content / Windows (2)"),
 
 	/* 팝업 창, 모달 대화상자, 확인 창 (3) */
-	Popup        = 3  UMETA(DisplayName = "Popups / Modals (3)"),
+	Popup               = 3  UMETA(DisplayName = "Popups / Modals (3)"),
 
 	/* 알림, 보상 획득 배너, 획득 토스트 메시지 (4) */
-	Notification = 4  UMETA(DisplayName = "Notifications / Alerts (4)"),
+	Notification        = 4  UMETA(DisplayName = "Notifications / Alerts (4)"),
 
 	/* 화면 암전 FadeInOut 및 레벨/지역 전환 로딩 표기 위젯 (5) */
-	FadeLoading  = 5  UMETA(DisplayName = "Fade & Loading (5)"),
+	FadeLoading         = 5  UMETA(DisplayName = "Fade & Loading (5)"),
 
-	/* 최상단 시스템 메시지, 에러 팝업, 디버그 오버레이 (6) */
-	System       = 6  UMETA(DisplayName = "System / Debug (6)")
+	/* 로딩 화면 위에서도 노출되어야 하는 상단 알림 및 진행 인디케이터 (예: 저장 중 표기 UI) (6) */
+	OverlayNotification = 6  UMETA(DisplayName = "Overlay Notification (6)"),
+
+	/* 최상단 시스템 메시지, 에러 팝업, 디버그 오버레이 (7) */
+	System              = 7  UMETA(DisplayName = "System / Debug (7)")
 };
 
 /**

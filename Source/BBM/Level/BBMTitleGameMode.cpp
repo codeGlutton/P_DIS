@@ -9,6 +9,7 @@
 
 #include "UI/Widget/BBMTitleWidget.h"
 #include "UI/Widget/BBMSettingsWidget.h"
+#include "UI/Widget/BBMCharacterSelectWidget.h"
 #include "UI/Widget/BBMCreditsWidget.h"
 
 #include "UI/ViewModel/BBMTitleViewModel.h"
@@ -48,7 +49,7 @@ ABBMTitleGameMode::ABBMTitleGameMode()
 	FBBMWorldUIConfig CharacterSelectConfig;
 	CharacterSelectConfig.WidgetKey = TEXT("CharacterSelect");
 	CharacterSelectConfig.CreationPhase = EBBMWidgetCreationPhase::BeforeEncounter;
-	//CharacterSelectConfig.WidgetConfig.WidgetClass = UBBMCharacterSelectWidget::StaticClass();
+	CharacterSelectConfig.WidgetConfig.WidgetClass = UBBMCharacterSelectWidget::StaticClass();
 	CharacterSelectConfig.ViewModelConfig.ViewModelClass = UBBMCharacterSelectViewModel::StaticClass();
 
 	AutoCreateUIs.Add(CharacterSelectConfig);

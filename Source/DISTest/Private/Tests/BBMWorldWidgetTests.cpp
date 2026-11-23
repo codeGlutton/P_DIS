@@ -7,6 +7,8 @@
 #include "UI/BBMUITypes.h"
 #include "Widget/WorldLayerRootWidget.h"
 #include "Widget/WorldUserWidgetBase.h"
+#include "UI/Widget/BBMLoadingWidget.h"
+#include "UI/Widget/BBMSaveWidget.h"
 #include "WorldUISubsystem.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -82,7 +84,7 @@ struct FBBMWidgetScopedTestWorld
 	}
 };
 
-// 1. EWorldWidgetZOrder 순차 레이어 값(0~6) 일관성 검증
+// 1. EWorldWidgetZOrder 순차 레이어 값(0~7) 일관성 검증
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FBBMWidgetZOrderEnumTest,
 	"DIS.BBM.WorldWidget.ZOrderEnumValues",
@@ -97,7 +99,8 @@ bool FBBMWidgetZOrderEnumTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Popup 레이어 값은 3이어야 함"), static_cast<uint8>(EWorldWidgetZOrder::Popup), 3);
 	TestEqual(TEXT("Notification 레이어 값은 4여야 함"), static_cast<uint8>(EWorldWidgetZOrder::Notification), 4);
 	TestEqual(TEXT("FadeLoading 레이어 값은 5여야 함"), static_cast<uint8>(EWorldWidgetZOrder::FadeLoading), 5);
-	TestEqual(TEXT("System 레이어 값은 6이어야 함"), static_cast<uint8>(EWorldWidgetZOrder::System), 6);
+	TestEqual(TEXT("OverlayNotification 레이어 값은 6이어야 함"), static_cast<uint8>(EWorldWidgetZOrder::OverlayNotification), 6);
+	TestEqual(TEXT("System 레이어 값은 7이어야 함"), static_cast<uint8>(EWorldWidgetZOrder::System), 7);
 
 	// FWorldWidgetConfig / FWorldViewModelConfig / FBBMWorldUIConfig 기본 설정 검증
 	FWorldWidgetConfig DefaultWidgetConfig;
@@ -1358,7 +1361,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FBBMWorldUILayerManagementTest::RunTest(const FString& Parameters)
 {
-	// 1. EWorldWidgetZOrder 7개 레이어별 독립 UCanvasPanel 및 루트 ZOrder(0~6) 생성 검증
+	// 1. EWorldWidgetZOrder 8개 레이어별 독립 UCanvasPanel 및 루트 ZOrder(0~7) 생성 검증
 	{
 		FBBMWidgetScopedTestWorld ProbeWorld;
 		TestTrue(TEXT("프로브 테스트 월드가 유효해야 함"), ProbeWorld.World != nullptr);
@@ -1374,6 +1377,7 @@ bool FBBMWorldUILayerManagementTest::RunTest(const FString& Parameters)
 			EWorldWidgetZOrder::Popup,
 			EWorldWidgetZOrder::Notification,
 			EWorldWidgetZOrder::FadeLoading,
+			EWorldWidgetZOrder::OverlayNotification,
 			EWorldWidgetZOrder::System
 		};
 
@@ -1401,7 +1405,7 @@ bool FBBMWorldUILayerManagementTest::RunTest(const FString& Parameters)
 				TestNotNull(TEXT("레이어 캔버스는 루트 캔버스 슬롯에 배치되어 있어야 함"), LayerSlot);
 				if (LayerSlot != nullptr)
 				{
-					TestEqual(TEXT("레이어 캔버스 루트 ZOrder는 열거형 정수값(0~6)과 일치해야 함"), LayerSlot->GetZOrder(), static_cast<int32>(Layer));
+					TestEqual(TEXT("레이어 캔버스 루트 ZOrder는 열거형 정수값(0~7)과 일치해야 함"), LayerSlot->GetZOrder(), static_cast<int32>(Layer));
 					TestEqual(TEXT("레이어 캔버스는 전체 화면 앵커를 가져야 함"), LayerSlot->GetAnchors(), FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
 				}
 			}
@@ -1410,7 +1414,20 @@ bool FBBMWorldUILayerManagementTest::RunTest(const FString& Parameters)
 			TestFalse(TEXT("RemoveFromParent 후 IsInLayer는 false여야 함"), ProbeWidget->IsInLayer());
 		}
 
-		TestEqual(TEXT("총 7개의 독립 레이어 캔버스가 확인되어야 함"), DistinctLayerCanvases.Num(), ExpectedLayers.Num());
+		TestEqual(TEXT("총 8개의 독립 레이어 캔버스가 확인되어야 함"), DistinctLayerCanvases.Num(), ExpectedLayers.Num());
+
+		// 로딩 위젯과 세이브 위젯의 기본 레이어 및 수명 주기 정책 검증
+		UBBMLoadingWidget* LoadingWidget = CreateWidget<UBBMLoadingWidget>(ProbeWorld.World, UBBMLoadingWidget::StaticClass());
+		UBBMSaveWidget* SaveWidget = CreateWidget<UBBMSaveWidget>(ProbeWorld.World, UBBMSaveWidget::StaticClass());
+		TestNotNull(TEXT("UBBMLoadingWidget 생성 성공"), LoadingWidget);
+		TestNotNull(TEXT("UBBMSaveWidget 생성 성공"), SaveWidget);
+		if (LoadingWidget != nullptr && SaveWidget != nullptr)
+		{
+			TestEqual(TEXT("LoadingWidget 수명 주기 정책은 PersistentViewport여야 함"), LoadingWidget->GetLifecyclePolicy(), EWorldWidgetLifecyclePolicy::PersistentViewport);
+			TestEqual(TEXT("LoadingWidget 기본 ZOrder는 FadeLoading이어야 함"), LoadingWidget->GetDefaultZOrderLayer(), EWorldWidgetZOrder::FadeLoading);
+			TestEqual(TEXT("SaveWidget 수명 주기 정책은 PersistentViewport여야 함"), SaveWidget->GetLifecyclePolicy(), EWorldWidgetLifecyclePolicy::PersistentViewport);
+			TestEqual(TEXT("SaveWidget 기본 ZOrder는 OverlayNotification이어야 함"), SaveWidget->GetDefaultZOrderLayer(), EWorldWidgetZOrder::OverlayNotification);
+		}
 	}
 
 	FBBMWidgetScopedTestWorld TestWorld;

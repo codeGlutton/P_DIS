@@ -17,6 +17,7 @@
 #include "UI/Widget/BBMSettingsWidget.h"
 #include "UI/Widget/BBMTabEntryWidget.h"
 #include "UI/Widget/BBMSettingsTabEntryWidget.h"
+#include "UI/Widget/BBMCharacterSelectWidget.h"
 #include "UI/Widget/BBMCreditsWidget.h"
 #include "WorldUISubsystem.h"
 #include "ViewModel/WorldViewModelBase.h"
@@ -2114,6 +2115,66 @@ bool FBBMKeyMappingAndRuntimeIMCTest::RunTest(const FString& Parameters)
 	UBBMKeyMappingCategoryEntryWidget* CategoryEntryWidget = NewObject<UBBMKeyMappingCategoryEntryWidget>(TestWorld.World);
 	TestNotNull(TEXT("UBBMKeyMappingCategoryEntryWidget 인스턴스 생성 성공"), CategoryEntryWidget);
 	TestTrue(TEXT("UBBMKeyMappingCategoryEntryWidget는 IUserObjectListEntry를 구현해야 함"), CategoryEntryWidget->GetClass()->ImplementsInterface(UUserObjectListEntry::StaticClass()));
+
+	return true;
+}
+
+// 캐릭터 선택 위젯(UWorldUserWidgetBase) 및 뷰모델(UBBMTabViewModelBase) 껍데기 검증
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FBBMCharacterSelectWidgetAndViewModelTest,
+	"DIS.BBM.UI.CharacterSelectWidgetAndViewModel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter
+)
+
+bool FBBMCharacterSelectWidgetAndViewModelTest::RunTest(const FString& Parameters)
+{
+	FBBMMVVMScopedTestWorld TestWorld;
+	if (TestWorld.World == nullptr)
+	{
+		return false;
+	}
+
+	UBBMCharacterSelectWidget* CharacterSelectWidget = CreateWidget<UBBMCharacterSelectWidget>(TestWorld.World, UBBMCharacterSelectWidget::StaticClass());
+	TestNotNull(TEXT("UBBMCharacterSelectWidget 생성 성공"), CharacterSelectWidget);
+	if (CharacterSelectWidget == nullptr)
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("UBBMCharacterSelectWidget은 UWorldUserWidgetBase를 상속해야 함"), CharacterSelectWidget->IsA<UWorldUserWidgetBase>());
+	TestEqual(TEXT("CharacterSelectWidget 수명 주기 정책은 PersistentViewport여야 함"), CharacterSelectWidget->GetLifecyclePolicy(), EWorldWidgetLifecyclePolicy::PersistentViewport);
+	TestEqual(TEXT("CharacterSelectWidget 기본 ZOrder는 Popup이어야 함"), CharacterSelectWidget->GetDefaultZOrderLayer(), EWorldWidgetZOrder::Popup);
+
+	UBBMCharacterSelectViewModel* CharacterSelectVM = NewObject<UBBMCharacterSelectViewModel>(TestWorld.World);
+	TestNotNull(TEXT("UBBMCharacterSelectViewModel 생성 성공"), CharacterSelectVM);
+	if (CharacterSelectVM == nullptr)
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("UBBMCharacterSelectViewModel은 UBBMTabViewModelBase를 상속해야 함"), CharacterSelectVM->IsA<UBBMTabViewModelBase>());
+	CharacterSelectVM->FinishInitialization();
+
+	CharacterSelectWidget->SetViewModelInstance(CharacterSelectVM);
+	TestTrue(TEXT("GetCharacterSelectViewModel()은 바인딩된 CharacterSelectVM을 반환해야 함"), CharacterSelectWidget->GetCharacterSelectViewModel() == CharacterSelectVM);
+
+	// UBBMTabViewModelBase 기반 탭/명부 엔트리 조작 및 정리 검증
+	TestEqual(TEXT("초기 TabCount는 0이어야 함"), CharacterSelectVM->GetTabCount(), 0);
+	TestEqual(TEXT("초기 SelectedTabIndex는 INDEX_NONE이어야 함"), CharacterSelectVM->GetSelectedTabIndex(), INDEX_NONE);
+
+	CharacterSelectVM->AddTabWithText(FText::FromString(TEXT("MerchantA")));
+	CharacterSelectVM->AddTabWithText(FText::FromString(TEXT("MerchantB")));
+	TestEqual(TEXT("2개 엔트리 추가 후 TabCount는 2여야 함"), CharacterSelectVM->GetTabCount(), 2);
+	TestEqual(TEXT("2개 엔트리 추가 후 마지막 추가 엔트리(1)가 선택되어야 함"), CharacterSelectVM->GetSelectedTabIndex(), 1);
+	TestEqual(TEXT("PreSelectedTabIndex는 0이어야 함"), CharacterSelectVM->GetPreSelectedTabIndex(), 0);
+
+	CharacterSelectVM->SelectTab(0);
+	TestEqual(TEXT("0번 엔트리 선택 후 SelectedTabIndex == 0"), CharacterSelectVM->GetSelectedTabIndex(), 0);
+
+	CharacterSelectVM->StartNewGame();
+	CharacterSelectVM->ConditionalBeginDestroy();
+	TestEqual(TEXT("EndViewModel 후 TabCount == 0"), CharacterSelectVM->GetTabCount(), 0);
+	TestEqual(TEXT("EndViewModel 후 SelectedTabIndex == INDEX_NONE"), CharacterSelectVM->GetSelectedTabIndex(), INDEX_NONE);
 
 	return true;
 }

@@ -14,7 +14,9 @@
 #include "AbilitySystemComponent.h"
 #include "Stage/BBMStageSubsystem.h"
 #include "Stage/BBMRegionDefinition.h"
+#include "Save/BBMGameDataSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "InputCoreTypes.h"
@@ -37,6 +39,14 @@ void ABBMPlayerController::BeginPlay()
 void ABBMPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
+
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UBBMGameDataSubsystem* GameDataSS = GameInstance->GetSubsystem<UBBMGameDataSubsystem>())
+		{
+			GameDataSS->RegisterIMCs(GetLocalPlayer());
+		}
+	}
 
 #if WITH_EDITOR || !UE_BUILD_SHIPPING
 	if (InputComponent != nullptr)

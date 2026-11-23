@@ -151,13 +151,13 @@ public:
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
 	FText GetEnhancedDisplayName(const FText& BaseName) const;
 
-	/* 캐싱된 결합 접두사 반환 */
+	/* 캐싱된 결합 접두사 텍스트 반환 */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
-	FString GetCachedPrefix() const;
+	FText GetCachedPrefix() const;
 
-	/* 캐싱된 결합 접미사 반환 */
+	/* 캐싱된 결합 접미사 텍스트 반환 */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable, BlueprintPure)
-	FString GetCachedSuffix() const;
+	FText GetCachedSuffix() const;
 
 	/* 수식어(Prefix/Suffix) 캐시를 무효화하여 다음 조회 시 재계산하도록 마킹 */
 	UFUNCTION(Category = "DIS|Enhancement", BlueprintCallable)
@@ -268,9 +268,9 @@ protected:
 	/* 수식어(Prefix/Suffix) 캐시 재계산 필요 여부 플래그 */
 	mutable bool bIsDisplayNameDirty;
 
-	/* 캐싱된 결합 접두사 문자열 */
-	mutable FString CachedPrefix;
+	/* 캐싱된 결합 접두사 텍스트 */
+	mutable FText CachedPrefix;
 
-	/* 캐싱된 결합 접미사 문자열 */
-	mutable FString CachedSuffix;
+	/* 캐싱된 결합 접미사 텍스트 */
+	mutable FText CachedSuffix;
 };

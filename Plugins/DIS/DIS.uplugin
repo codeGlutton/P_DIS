@@ -15,6 +15,18 @@
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
 	"Installed": false,
+	"LocalizationTargets": [
+		{
+			"Name": "DIS",
+			"LoadingPolicy": "Game",
+			"ConfigGenerationPolicy": "User"
+		},
+		{
+			"Name": "DISEditor",
+			"LoadingPolicy": "Editor",
+			"ConfigGenerationPolicy": "User"
+		}
+	],
 	"Modules": [
 		{
 			"Name": "DISRuntime",

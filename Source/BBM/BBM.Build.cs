@@ -33,8 +33,10 @@ public class BBM : ModuleRules
 			"SlateCore",
 			"ModelViewViewModel",
 
-			/* 인벤토리 플러그인 런타임 모듈 */
-			"DISRuntime" 
+			/* 인벤토리 및 UI 플러그인 런타임 모듈 */
+			"DISRuntime",
+			"ExtensionWidget",
+			"WorldUI"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {

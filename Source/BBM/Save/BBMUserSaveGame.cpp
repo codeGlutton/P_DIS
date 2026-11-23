@@ -9,11 +9,19 @@
 const FString UBBMUserSaveGame::SlotName = TEXT("BBMUserSettings");
 
 UBBMUserSaveGame::UBBMUserSaveGame() :
-	MasterVolume(1.0f),
-	BGMVolume(0.8f),
-	SFXVolume(1.0f),
 	TotalRunsAttempted(0),
 	TotalRunsCleared(0)
 {
+}
+
+const FBBMUserSettingsData& UBBMUserSaveGame::GetSettingsData() const
+{
+	return SettingsData;
+}
+
+void UBBMUserSaveGame::SetSettingsData(const FBBMUserSettingsData& InSettingsData)
+{
+	SettingsData = InSettingsData;
+	SettingsData.ClampValues();
 }
 

@@ -1,0 +1,316 @@
+﻿# GameEditor English translation.
+# Fill out your copyright notice in the Description page of Project Settings.
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: GameEditor\n"
+"POT-Creation-Date: 2026-11-11 11:39\n"
+"PO-Revision-Date: 2026-11-11 11:39\n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. Key:	NoPatternsWarning
+#. SourceLocation:	Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(207)
+#: Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(207)
+msgctxt "UBBMAICombatantDefinition,NoPatternsWarning"
+msgid "AI 전투원 패턴 풀이 비어있습니다. 최소 1개 이상의 8비트 패턴을 등록해야 합니다."
+msgstr ""
+
+#. Key:	InvalidBeatsNumError
+#. SourceLocation:	Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(219)
+#: Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(219)
+msgctxt "UBBMAICombatantDefinition,InvalidBeatsNumError"
+msgid "패턴 [{0}] (인덱스 {1})의 비트 수가 8개가 아닙니다 (현재: {2}개)."
+msgstr ""
+
+#. Key:	InvalidEffectRangeError
+#. SourceLocation:	Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(234)
+#: Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(234)
+msgctxt "UBBMAICombatantDefinition,InvalidEffectRangeError"
+msgid "패턴 [{0}]의 EffectRange [{1}] 범위가 유효하지 않습니다 (Start: {2}, End: {3}). 0 <= Start < End <= 8 이어야 합니다."
+msgstr ""
+
+#. Key:	NegativeWeightError
+#. SourceLocation:	Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(248)
+#: Source/BBM/Combat/Pawn/BBMAICombatantDefinition.cpp(248)
+msgctxt "UBBMAICombatantDefinition,NegativeWeightError"
+msgid "패턴 [{0}]의 선택 가중치가 음수입니다 ({1}). 0 이상이어야 합니다."
+msgstr ""
+
+#. Key:	BBMItemDurabilityNotSupportedWarning
+#. SourceLocation:	Source/BBM/Item/BBMItemDefinition.cpp(26)
+#: Source/BBM/Item/BBMItemDefinition.cpp(26)
+msgctxt "BBMItemDefinition,BBMItemDurabilityNotSupportedWarning"
+msgid "BBM 아이템 '{0}'에 MaxDurability({1})가 설정되어 있습니다. BBM 무기/장비/소모품은 내구도를 사용하지 않으므로 0.0을 권장합니다."
+msgstr ""
+
+#. Key:	BBMItemBeatCountMismatchError
+#. SourceLocation:	Source/BBM/Item/BBMItemDefinition.cpp(37)
+#: Source/BBM/Item/BBMItemDefinition.cpp(37)
+msgctxt "BBMItemDefinition,BBMItemBeatCountMismatchError"
+msgid "BBM 아이템 '{0}'의 비트 구성 수({1})가 점유 타일 수({2})와 일치하지 않습니다. (점유 타일 1칸당 1비트 구성 필수)"
+msgstr ""
+
+#. Key:	BeatNumberFormat
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(134)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(134)
+msgctxt "FBBMBeatSequenceCustomization,BeatNumberFormat"
+msgid "비트 {0}"
+msgstr ""
+
+#. Key:	BeatNumberUnusedFormat
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(135)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(135)
+msgctxt "FBBMBeatSequenceCustomization,BeatNumberUnusedFormat"
+msgid "비트 {0} (-)"
+msgstr ""
+
+#. Key:	ActionsTrackTitle
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(171)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(171)
+msgctxt "FBBMBeatSequenceCustomization,ActionsTrackTitle"
+msgid "[ 로직 액션 (Logic Actions) ]"
+msgstr ""
+
+#. Key:	AnimationsTrackTitle
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(189)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(189)
+msgctxt "FBBMBeatSequenceCustomization,AnimationsTrackTitle"
+msgid "[ 애니메이션 연출 (Animations: 4-Slot Windows) ]"
+msgstr ""
+
+#. Key:	EffectRangesTrackTitle
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(226)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(226)
+msgctxt "FBBMBeatSequenceCustomization,EffectRangesTrackTitle"
+msgid "[ 효과 지속 구간 (Effect Ranges) ]"
+msgstr ""
+
+#. Key:	NoEffectRangesText
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(238)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(238)
+msgctxt "FBBMBeatSequenceCustomization,NoEffectRangesText"
+msgid "(설정된 비트 구간 효과 없음)"
+msgstr ""
+
+#. Key:	AnimLayerRangesTrackTitle
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(339)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(339)
+msgctxt "FBBMBeatSequenceCustomization,AnimLayerRangesTrackTitle"
+msgid "[ 애님 레이어 지속 구간 (Anim Layer Ranges) ]"
+msgstr ""
+
+#. Key:	NoAnimLayerRangesText
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(351)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(351)
+msgctxt "FBBMBeatSequenceCustomization,NoAnimLayerRangesText"
+msgid "(설정된 비트 구간 애님 레이어 없음)"
+msgstr ""
+
+#. Key:	EmptyBeatToolTip
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(572)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(572)
+msgctxt "FBBMBeatSequenceCustomization,EmptyBeatToolTip"
+msgid "비트 {0}: 등록된 로직 액션 없음"
+msgstr ""
+
+#. Key:	EmptyActionSlotText
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(583)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(583)
+msgctxt "FBBMBeatSequenceCustomization,EmptyActionSlotText"
+msgid "-"
+msgstr ""
+
+#. Key:	LegendEffectRange
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(694)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(694)
+msgctxt "FBBMBeatSequenceCustomization,LegendEffectRange"
+msgid "◀▶ Effect Range (Solid)"
+msgstr ""
+
+#. Key:	LegendAnimLayerRange
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(703)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(703)
+msgctxt "FBBMBeatSequenceCustomization,LegendAnimLayerRange"
+msgid "◆◆ Anim Layer Range (Outline)"
+msgstr ""
+
+#. Key:	TimelineVisualizerFilter
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(71)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(71)
+msgctxt "FBBMBeatSequenceCustomization,TimelineVisualizerFilter"
+msgid "비트 타임라인 시각화"
+msgstr ""
+
+#. Key:	LegendDamage
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(719)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(719)
+msgctxt "FBBMBeatSequenceCustomization,LegendDamage"
+msgid "■ Damage"
+msgstr ""
+
+#. Key:	LegendDefense
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(729)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(729)
+msgctxt "FBBMBeatSequenceCustomization,LegendDefense"
+msgid "■ Defense"
+msgstr ""
+
+#. Key:	LegendMovement
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(739)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(739)
+msgctxt "FBBMBeatSequenceCustomization,LegendMovement"
+msgid "■ Movement"
+msgstr ""
+
+#. Key:	LegendBuff
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(749)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(749)
+msgctxt "FBBMBeatSequenceCustomization,LegendBuff"
+msgid "■ Buff/Debuff"
+msgstr ""
+
+#. Key:	LegendAnimation
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(758)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(758)
+msgctxt "FBBMBeatSequenceCustomization,LegendAnimation"
+msgid "■ Animation (4-Slot)"
+msgstr ""
+
+#. Key:	NullSequenceSummary
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(786)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(786)
+msgctxt "FBBMBeatSequenceCustomization,NullSequenceSummary"
+msgid "시퀀스 데이터 없음"
+msgstr ""
+
+#. Key:	InvalidBeatText
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(797)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(797)
+msgctxt "FBBMBeatSequenceCustomization,InvalidBeatText"
+msgid "규격 초과(>8)"
+msgstr ""
+
+#. Key:	FullEightBeatsText
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(801)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(801)
+msgctxt "FBBMBeatSequenceCustomization,FullEightBeatsText"
+msgid "완전 8비트"
+msgstr ""
+
+#. Key:	PartialBeatsText
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(805)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(805)
+msgctxt "FBBMBeatSequenceCustomization,PartialBeatsText"
+msgid "{0}비트 가변"
+msgstr ""
+
+#. Key:	BeatSequenceSummaryFormat
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(809)
+#: Source/BBMEditor/Private/Customizations/BBMBeatSequenceCustomization.cpp(809)
+msgctxt "FBBMBeatSequenceCustomization,BeatSequenceSummaryFormat"
+msgid "{0}개 비트 ({1}) | {2}개 EffectRange | {3}개 AnimLayerRange"
+msgstr ""
+
+#. Key:	LegendNormal
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(101)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(101)
+msgctxt "FBBMInventoryDefinitionCustomization,LegendNormal"
+msgid "일반 타일"
+msgstr ""
+
+#. Key:	LegendBlocked
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(130)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(130)
+msgctxt "FBBMInventoryDefinitionCustomization,LegendBlocked"
+msgid "막힌 타일 (X)"
+msgstr ""
+
+#. Key:	LegendEnhanced
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(158)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(158)
+msgctxt "FBBMInventoryDefinitionCustomization,LegendEnhanced"
+msgid "슬롯 강화 (+N)"
+msgstr ""
+
+#. Key:	BackpackSummaryFormat
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(251)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(251)
+msgctxt "FBBMInventoryDefinitionCustomization,BackpackSummaryFormat"
+msgid "배낭 그리드: {0} x {1} (총 {2}칸) | 사용 가능: {3}칸 | 막힌 타일: {4}칸 | 강화 슬롯: {5}칸"
+msgstr ""
+
+#. Key:	BlockedTileTooltip
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(304)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(304)
+msgctxt "FBBMInventoryDefinitionCustomization,BlockedTileTooltip"
+msgid "좌표 ({0}, {1}) | 슬롯 #{2}\n사용 불가하게 막힌 타일 (BlockedTileShape)"
+msgstr ""
+
+#. Key:	EnhancedTileLabel
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(312)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(312)
+msgctxt "FBBMInventoryDefinitionCustomization,EnhancedTileLabel"
+msgid "+{0}"
+msgstr ""
+
+#. Key:	NormalTileLabel
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(327)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(327)
+msgctxt "FBBMInventoryDefinitionCustomization,NormalTileLabel"
+msgid "{0},{1}"
+msgstr ""
+
+#. Key:	NormalTileTooltip
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(329)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(329)
+msgctxt "FBBMInventoryDefinitionCustomization,NormalTileTooltip"
+msgid "좌표 ({0}, {1}) | 슬롯 #{2}\n사용 가능한 기본 타일"
+msgstr ""
+
+#. Key:	BackpackPreviewCategory
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(52)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(52)
+msgctxt "FBBMInventoryDefinitionCustomization,BackpackPreviewCategory"
+msgid "BBM 배낭 2D 시각화 프리뷰"
+msgstr ""
+
+#. Key:	BackpackPreviewRow
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(56)
+#: Source/BBMEditor/Private/Customizations/BBMInventoryDefinitionCustomization.cpp(56)
+msgctxt "FBBMInventoryDefinitionCustomization,BackpackPreviewRow"
+msgid "배낭 2D 프리뷰"
+msgstr ""
+
+#. Key:	SummaryFormat
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMTeamRelationCustomization.cpp(116)
+#: Source/BBMEditor/Private/Customizations/BBMTeamRelationCustomization.cpp(116)
+msgctxt "FBBMTeamRelationCustomization,SummaryFormat"
+msgid "{0}개 태도 설정됨"
+msgstr ""
+
+#. Key:	FillMissingTeamsText
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMTeamRelationCustomization.cpp(51)
+#: Source/BBMEditor/Private/Customizations/BBMTeamRelationCustomization.cpp(51)
+msgctxt "FBBMTeamRelationCustomization,FillMissingTeamsText"
+msgid "누락된 팀 자동 채우기"
+msgstr ""
+
+#. Key:	FillMissingTeamsToolTip
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMTeamRelationCustomization.cpp(52)
+#: Source/BBMEditor/Private/Customizations/BBMTeamRelationCustomization.cpp(52)
+msgctxt "FBBMTeamRelationCustomization,FillMissingTeamsToolTip"
+msgid "EBBMTeamType 열거형 중 현재 목록에 누락된 모든 팀을 기본 태도로 일괄 추가합니다."
+msgstr ""
+
+#. Key:	FillMissingTeamsTransaction
+#. SourceLocation:	Source/BBMEditor/Private/Customizations/BBMTeamRelationCustomization.cpp(77)
+#: Source/BBMEditor/Private/Customizations/BBMTeamRelationCustomization.cpp(77)
+msgctxt "FBBMTeamRelationCustomization,FillMissingTeamsTransaction"
+msgid "BBM: 누락된 팀 관계 일괄 생성"
+msgstr ""
+

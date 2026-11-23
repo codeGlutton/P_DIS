@@ -23,12 +23,36 @@
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "Misc/Paths.h"
 #include "Misc/FileHelper.h"
+#include "Misc/App.h"
 #include "Async/Async.h"
+#include "Global/BBMGlobalSettings.h"
+#include "AudioDevice.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/LocalPlayer.h"
+#include "GameFramework/GameUserSettings.h"
+#include "Sound/SoundClass.h"
+#include "Sound/SoundMix.h"
+#include "InputMappingContext.h"
+#include "InputAction.h"
+#include "InputTriggers.h"
+#include "EnhancedActionKeyMapping.h"
+#include "EnhancedInputLibrary.h"
+#include "EnhancedInputSubsystems.h"
+#include "Internationalization/Internationalization.h"
+#include "Internationalization/Culture.h"
 
 UBBMGameDataSubsystem::UBBMGameDataSubsystem() :
 	UserSaveData(nullptr),
 	CurrentRunData(nullptr),
-	bIsAsyncOperationInProgress(false)
+	bIsAsyncOperationInProgress(false),
+	bAppliedInitialViewportSettings(false),
+	RuntimeIMC(nullptr),
+	CachedDefaultIMC(nullptr),
+	CachedModifierIMC(nullptr),
+	CachedShiftChordAction(nullptr),
+	CachedCtrlChordAction(nullptr),
+	CachedAltChordAction(nullptr)
 {
 }
 
@@ -36,11 +60,20 @@ void UBBMGameDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	// 1. 기본 인메모리 세이브 객체 생성
+	// 1. Default IMC 및 모디파이어 IMC/Chord Action 로드 후 복제 RuntimeIMC와 기본 키 매핑 맵 캐싱
+	InitializeInputMappingsFromSettings();
+
+	// 2. 기본 인메모리 세이브 객체 생성 및 Default IMC 기반 초기 키 매핑 채우기 (디스크 로드 전 선행)
 	UserSaveData = NewObject<UBBMUserSaveGame>(this, UBBMUserSaveGame::StaticClass());
+	if (UserSaveData != nullptr)
+	{
+		FBBMUserSettingsData InitialUserSettings = UserSaveData->GetSettingsData();
+		InitialUserSettings.KeyMappings = CachedDefaultKeyMappings;
+		UserSaveData->SetSettingsData(InitialUserSettings);
+	}
 	CurrentRunData = NewObject<UBBMRunSaveGame>(this, UBBMRunSaveGame::StaticClass());
 
-	// 2. 필요 시 백업(.bak) 파일로부터 복구 시도 후 디스크 유저 세팅 로드
+	// 3. 필요 시 백업(.bak) 파일로부터 복구 시도 후 디스크 유저 세팅 로드
 	RestoreFromBackupIfNeeded(UBBMUserSaveGame::SlotName);
 	if (UGameplayStatics::DoesSaveGameExist(UBBMUserSaveGame::SlotName, UBBMUserSaveGame::UserIndex) == true)
 	{
@@ -51,7 +84,7 @@ void UBBMGameDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		}
 	}
 
-	// 3. 필요 시 백업(.bak) 파일로부터 복구 시도 후 디스크 런 세이브 로드
+	// 4. 필요 시 백업(.bak) 파일로부터 복구 시도 후 디스크 런 세이브 로드
 	RestoreFromBackupIfNeeded(UBBMRunSaveGame::SlotName);
 	if (UGameplayStatics::DoesSaveGameExist(UBBMRunSaveGame::SlotName, UBBMRunSaveGame::UserIndex) == true)
 	{
@@ -61,10 +94,40 @@ void UBBMGameDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			CurrentRunData = CastedRun;
 		}
 	}
+
+	// 5. 초기 유저 환경설정 정규화 및 오디오/화면/RuntimeIMC 메모리 반영
+	if (UserSaveData != nullptr)
+	{
+		const FBBMUserSettingsData InitialSettings = GetUserSettingsData();
+		ApplyUserSettingsRuntime(InitialSettings);
+	}
+
+	// Standalone 초기화 시점에는 GameViewport가 아직 생성 전일 수 있으므로 생성 완료 시 1회 화면 설정 보정 바인딩
+	if (GEngine != nullptr && GEngine->GameViewport == nullptr && FApp::CanEverRender() == true && IsRunningCommandlet() == false)
+	{
+		ViewportCreatedHandle = UGameViewportClient::OnViewportCreated().AddUObject(
+			this,
+			&UBBMGameDataSubsystem::HandleViewportCreatedForInitialSettings
+		);
+	}
 }
 
 void UBBMGameDataSubsystem::Deinitialize()
 {
+	if (ViewportCreatedHandle.IsValid() == true)
+	{
+		UGameViewportClient::OnViewportCreated().Remove(ViewportCreatedHandle);
+		ViewportCreatedHandle.Reset();
+	}
+
+	CachedDefaultIMC = nullptr;
+	RuntimeIMC = nullptr;
+	CachedModifierIMC = nullptr;
+	CachedShiftChordAction = nullptr;
+	CachedCtrlChordAction = nullptr;
+	CachedAltChordAction = nullptr;
+	CachedDefaultKeyMappings.Empty();
+
 	Super::Deinitialize();
 }
 
@@ -83,49 +146,8 @@ UBBMRunSaveGame* UBBMGameDataSubsystem::GetCurrentRunData() const
 	return CurrentRunData;
 }
 
-bool UBBMGameDataSubsystem::EnsureSaveDataLoaded()
-{
-	bool bLoadedOrCreated = true;
-
-	if (UserSaveData == nullptr)
-	{
-		UserSaveData = NewObject<UBBMUserSaveGame>(this, UBBMUserSaveGame::StaticClass());
-		RestoreFromBackupIfNeeded(UBBMUserSaveGame::SlotName);
-		if (UGameplayStatics::DoesSaveGameExist(UBBMUserSaveGame::SlotName, UBBMUserSaveGame::UserIndex) == true)
-		{
-			if (USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(UBBMUserSaveGame::SlotName, UBBMUserSaveGame::UserIndex))
-			{
-				if (UBBMUserSaveGame* CastedUser = Cast<UBBMUserSaveGame>(Loaded))
-				{
-					UserSaveData = CastedUser;
-				}
-			}
-		}
-	}
-
-	if (CurrentRunData == nullptr)
-	{
-		CurrentRunData = NewObject<UBBMRunSaveGame>(this, UBBMRunSaveGame::StaticClass());
-		RestoreFromBackupIfNeeded(UBBMRunSaveGame::SlotName);
-		if (UGameplayStatics::DoesSaveGameExist(UBBMRunSaveGame::SlotName, UBBMRunSaveGame::UserIndex) == true)
-		{
-			if (USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(UBBMRunSaveGame::SlotName, UBBMRunSaveGame::UserIndex))
-			{
-				if (UBBMRunSaveGame* CastedRun = Cast<UBBMRunSaveGame>(Loaded))
-				{
-					CurrentRunData = CastedRun;
-				}
-			}
-		}
-	}
-
-	return bLoadedOrCreated;
-}
-
 void UBBMGameDataSubsystem::ResetAndInitializeNewRun(const UBBMPlayerCharacterDefinition* PlayerDef)
 {
-	EnsureSaveDataLoaded();
-
 	if (CurrentRunData != nullptr)
 	{
 		CurrentRunData->ResetRunData();
@@ -316,9 +338,413 @@ void UBBMGameDataSubsystem::LoadUserSettingAsync(FSimpleDelegate OnComplete)
 		if (UBBMUserSaveGame* Casted = Cast<UBBMUserSaveGame>(LoadedGame))
 		{
 			UserSaveData = Casted;
+			ApplyUserSettingsRuntime(GetUserSettingsData());
 		}
 		OnComplete.ExecuteIfBound();
 	});
+}
+
+const FBBMUserSettingsData& UBBMGameDataSubsystem::GetUserSettingsData() const
+{
+	if (UserSaveData == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[UBBMGameDataSubsystem::GetUserSettingsData] UserSaveData 미생성"));
+		static const FBBMUserSettingsData EmptyDefaultSettings;
+		return EmptyDefaultSettings;
+	}
+
+	return UserSaveData->GetSettingsData();
+}
+
+void UBBMGameDataSubsystem::ApplyUserSettingsRuntime(const FBBMUserSettingsData& InSettings)
+{
+	FBBMUserSettingsData SanitizedSettings = InSettings;
+	SanitizedSettings.ClampValues();
+
+	if (UserSaveData != nullptr)
+	{
+		UserSaveData->SetSettingsData(SanitizedSettings);
+	}
+
+	ApplyAudioSettingsInternal(SanitizedSettings);
+	ApplyLanguageSettingsInternal(SanitizedSettings);
+	ApplyDisplaySettingsInternal(SanitizedSettings);
+	ApplyInputSettingsInternal(SanitizedSettings);
+
+	if (OnUserSettingsChanged.IsBound() == true)
+	{
+		OnUserSettingsChanged.Broadcast(SanitizedSettings);
+	}
+}
+
+void UBBMGameDataSubsystem::CommitAndSaveUserSettings(FSimpleDelegate OnComplete)
+{
+	const FBBMUserSettingsData CurrentSettings = GetUserSettingsData();
+	ApplyUserSettingsRuntime(CurrentSettings);
+	SaveUserSettingAsync(OnComplete);
+}
+
+void UBBMGameDataSubsystem::ResetUserSettingsToDefaults()
+{
+	FBBMUserSettingsData DefaultSettings;
+	DefaultSettings.KeyMappings = CachedDefaultKeyMappings;
+	ApplyUserSettingsRuntime(DefaultSettings);
+}
+
+void UBBMGameDataSubsystem::RemapByName(FName MappingName, const FInputChord& Chord, bool bNeedRebuild)
+{
+	if (RuntimeIMC == nullptr || MappingName.IsNone() == true)
+	{
+		return;
+	}
+
+	const TArray<FEnhancedActionKeyMapping>& Mappings = RuntimeIMC->GetMappings();
+	for (int32 Index = 0; Index < Mappings.Num(); ++Index)
+	{
+		const FEnhancedActionKeyMapping& Existing = Mappings[Index];
+		if (Existing.GetMappingName() != MappingName)
+		{
+			continue;
+		}
+
+		FEnhancedActionKeyMapping& Mapping = RuntimeIMC->GetMapping(Index);
+		Mapping.Key = Chord.Key;
+
+		// 이전에 동적/정적으로 부착된 Chord 트리거를 제거한 뒤 새 Chord 상태에 맞춰 재구성함
+		Mapping.Triggers.RemoveAll([](const TObjectPtr<UInputTrigger>& Trigger)
+		{
+			return Trigger != nullptr && Trigger->IsA<UInputTriggerChordAction>();
+		});
+		AddChordTriggers(Mapping, Chord);
+		break;
+	}
+
+	if (bNeedRebuild == true)
+	{
+		RebuildControlMappingsIfRegistered();
+	}
+}
+
+void UBBMGameDataSubsystem::RegisterIMCs(ULocalPlayer* InLocalPlayer)
+{
+	if (InLocalPlayer == nullptr)
+	{
+		return;
+	}
+
+	UEnhancedInputLocalPlayerSubsystem* InputSS = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(InLocalPlayer);
+	if (InputSS == nullptr)
+	{
+		return;
+	}
+
+	// 모디파이어 전용 IMC를 RuntimeIMC보다 높은 우선순위로 등록해 동일 프레임에 ChordAction 상태가 먼저 평가되도록 함
+	if (CachedModifierIMC != nullptr && InputSS->HasMappingContext(CachedModifierIMC) == false)
+	{
+		InputSS->AddMappingContext(CachedModifierIMC, 1);
+	}
+
+	if (RuntimeIMC != nullptr && InputSS->HasMappingContext(RuntimeIMC) == false)
+	{
+		InputSS->AddMappingContext(RuntimeIMC, 0);
+	}
+
+	// LocalPlayer 확보 시점에 현재 유저 설정(키 리매핑 포함)을 다시 적용해 활성 컨트롤 매핑 리빌드까지 확정함
+	ApplyUserSettingsRuntime(GetUserSettingsData());
+}
+
+void UBBMGameDataSubsystem::InitializeInputMappingsFromSettings()
+{
+	CachedDefaultIMC = nullptr;
+	RuntimeIMC = nullptr;
+	CachedModifierIMC = nullptr;
+	CachedShiftChordAction = nullptr;
+	CachedCtrlChordAction = nullptr;
+	CachedAltChordAction = nullptr;
+	CachedDefaultKeyMappings.Empty();
+
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	if (GlobalSettings == nullptr)
+	{
+		return;
+	}
+
+	if (GlobalSettings->ShiftChordAction.IsNull() == false)
+	{
+		CachedShiftChordAction = GlobalSettings->ShiftChordAction.LoadSynchronous();
+	}
+	if (GlobalSettings->CtrlChordAction.IsNull() == false)
+	{
+		CachedCtrlChordAction = GlobalSettings->CtrlChordAction.LoadSynchronous();
+	}
+	if (GlobalSettings->AltChordAction.IsNull() == false)
+	{
+		CachedAltChordAction = GlobalSettings->AltChordAction.LoadSynchronous();
+	}
+	if (GlobalSettings->ModifierInputMappingContext.IsNull() == false)
+	{
+		CachedModifierIMC = GlobalSettings->ModifierInputMappingContext.LoadSynchronous();
+	}
+	if (GlobalSettings->DefaultInputMappingContext.IsNull() == false)
+	{
+		CachedDefaultIMC = GlobalSettings->DefaultInputMappingContext.LoadSynchronous();
+	}
+
+	if (CachedDefaultIMC == nullptr)
+	{
+		return;
+	}
+
+	RuntimeIMC = DuplicateObject<UInputMappingContext>(CachedDefaultIMC, this);
+	if (RuntimeIMC == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[UBBMGameDataSubsystem::InitializeInputMappingsFromSettings] RuntimeIMC 복제 생성 실패"));
+		return;
+	}
+
+	const TArray<FEnhancedActionKeyMapping>& DefaultMappings = CachedDefaultIMC->GetMappings();
+	TMap<FName, int32> CategoryIndexMap;
+	TSet<FName> SeenMappingNames;
+
+	for (const FEnhancedActionKeyMapping& Mapping : DefaultMappings)
+	{
+		const FName MappingName = Mapping.GetMappingName();
+		if (MappingName.IsNone() == true || SeenMappingNames.Contains(MappingName) == true)
+		{
+			continue;
+		}
+		SeenMappingNames.Add(MappingName);
+
+		const FText CategoryText = Mapping.GetDisplayCategory();
+		const FName CategoryKey(*CategoryText.ToString());
+
+		int32 CategoryIndex = INDEX_NONE;
+		if (const int32* FoundCategoryIndex = CategoryIndexMap.Find(CategoryKey))
+		{
+			CategoryIndex = *FoundCategoryIndex;
+		}
+		else
+		{
+			FBBMKeyCategoryMappingData NewCategory;
+			NewCategory.CategoryName = CategoryText;
+			CategoryIndex = CachedDefaultKeyMappings.Add(NewCategory);
+			CategoryIndexMap.Add(CategoryKey, CategoryIndex);
+		}
+
+		FBBMKeyMappingData MappingEntry;
+		MappingEntry.MappingName = MappingName;
+		const FText& RawDisplayName = Mapping.GetDisplayName();
+		MappingEntry.DisplayName = (RawDisplayName.IsEmpty() == false) ? RawDisplayName : FText::FromName(MappingName);
+		MappingEntry.InputChord = ExtractChordFromMapping(Mapping);
+
+		CachedDefaultKeyMappings[CategoryIndex].KeyMappings.Add(MappingEntry);
+	}
+}
+
+FInputChord UBBMGameDataSubsystem::ExtractChordFromMapping(const FEnhancedActionKeyMapping& InMapping) const
+{
+	FInputChord ResultChord(InMapping.Key);
+
+	for (const TObjectPtr<UInputTrigger>& Trigger : InMapping.Triggers)
+	{
+		const UInputTriggerChordAction* ChordTrigger = Cast<UInputTriggerChordAction>(Trigger.Get());
+		if (ChordTrigger == nullptr || ChordTrigger->ChordAction == nullptr)
+		{
+			continue;
+		}
+
+		if (CachedShiftChordAction != nullptr && ChordTrigger->ChordAction == CachedShiftChordAction)
+		{
+			ResultChord.bShift = true;
+		}
+		else if (CachedCtrlChordAction != nullptr && ChordTrigger->ChordAction == CachedCtrlChordAction)
+		{
+			ResultChord.bCtrl = true;
+		}
+		else if (CachedAltChordAction != nullptr && ChordTrigger->ChordAction == CachedAltChordAction)
+		{
+			ResultChord.bAlt = true;
+		}
+	}
+
+	return ResultChord;
+}
+
+void UBBMGameDataSubsystem::AddChordTriggers(FEnhancedActionKeyMapping& InOutMapping, const FInputChord& InChord)
+{
+	if (RuntimeIMC == nullptr)
+	{
+		return;
+	}
+
+	auto AppendChordTriggerIfNeeded = [this, &InOutMapping](bool bEnabled, const UInputAction* InChordAction)
+	{
+		if (bEnabled == false || InChordAction == nullptr)
+		{
+			return;
+		}
+
+		UInputTriggerChordAction* ChordTrigger = NewObject<UInputTriggerChordAction>(RuntimeIMC);
+		if (ChordTrigger != nullptr)
+		{
+			ChordTrigger->ChordAction = InChordAction;
+			InOutMapping.Triggers.Add(ChordTrigger);
+		}
+	};
+
+	AppendChordTriggerIfNeeded(InChord.bShift, CachedShiftChordAction);
+	AppendChordTriggerIfNeeded(InChord.bCtrl, CachedCtrlChordAction);
+	AppendChordTriggerIfNeeded(InChord.bAlt, CachedAltChordAction);
+}
+
+void UBBMGameDataSubsystem::RebuildControlMappingsIfRegistered() const
+{
+	if (RuntimeIMC == nullptr)
+	{
+		return;
+	}
+
+	// RuntimeIMC를 실제로 등록 중인 활성 EnhancedInput 서브시스템이 있을 때만 리빌드를 요청하므로 초기화 초기 시점에서도 안전함
+	UEnhancedInputLibrary::RequestRebuildControlMappingsUsingContext(RuntimeIMC);
+}
+
+void UBBMGameDataSubsystem::ApplyAudioSettingsInternal(const FBBMUserSettingsData& InSettings)
+{
+	if (GEngine == nullptr || GEngine->UseSound() == false)
+	{
+		return;
+	}
+
+	const UBBMGlobalSettings* GlobalSettings = GetDefault<UBBMGlobalSettings>();
+	if (GlobalSettings == nullptr)
+	{
+		return;
+	}
+
+	USoundMix* SoundMix = GlobalSettings->UserSettingsSoundMix.LoadSynchronous();
+	if (SoundMix == nullptr)
+	{
+		return;
+	}
+
+	const UWorld* World = GetWorld();
+	FAudioDeviceHandle AudioDevice = (World != nullptr) ? World->GetAudioDevice() : GEngine->GetMainAudioDevice();
+	if (AudioDevice.IsValid() == false)
+	{
+		return;
+	}
+
+	AudioDevice->PushSoundMixModifier(SoundMix);
+
+	const TPair<const TSoftObjectPtr<USoundClass>*, float> ClassVolumePairs[] =
+	{
+		{ &GlobalSettings->MasterSoundClass, InSettings.MasterVolume },
+		{ &GlobalSettings->BGMSoundClass, InSettings.BGMVolume },
+		{ &GlobalSettings->SFXSoundClass, InSettings.SFXVolume },
+		{ &GlobalSettings->DialogueSoundClass, InSettings.DialogueVolume }
+	};
+
+	for (const TPair<const TSoftObjectPtr<USoundClass>*, float>& Pair : ClassVolumePairs)
+	{
+		if (Pair.Key == nullptr || Pair.Key->IsNull() == true)
+		{
+			continue;
+		}
+
+		if (USoundClass* SoundClass = Pair.Key->LoadSynchronous())
+		{
+			AudioDevice->SetSoundMixClassOverride(SoundMix, SoundClass, Pair.Value, 1.0f, 0.0f, false);
+		}
+	}
+}
+
+void UBBMGameDataSubsystem::ApplyLanguageSettingsInternal(const FBBMUserSettingsData& InSettings)
+{
+	// 에디터 및 커맨드릿 환경에서는 에디터 UI 언어가 동반 변경되지 않도록 전환을 건너뜀
+	if (GIsEditor == true || IsRunningCommandlet() == true)
+	{
+		return;
+	}
+
+	if (InSettings.Language.IsEmpty() == true)
+	{
+		return;
+	}
+
+	FInternationalization& I18n = FInternationalization::Get();
+	if (I18n.GetCurrentLanguage()->GetName() == InSettings.Language)
+	{
+		return;
+	}
+
+	if (I18n.SetCurrentLanguage(InSettings.Language) == false)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UBBMGameDataSubsystem::ApplyLanguageSettingsInternal] 언어 전환 실패 (Language=%s)"), *InSettings.Language);
+	}
+}
+
+void UBBMGameDataSubsystem::ApplyDisplaySettingsInternal(const FBBMUserSettingsData& InSettings)
+{
+	if (GEngine == nullptr)
+	{
+		return;
+	}
+
+	UGameUserSettings* EngineUserSettings = GEngine->GetGameUserSettings();
+	if (EngineUserSettings == nullptr)
+	{
+		return;
+	}
+
+	EngineUserSettings->SetVSyncEnabled(InSettings.bVSyncEnabled);
+
+#if PLATFORM_DESKTOP
+	EngineUserSettings->SetFullscreenMode(InSettings.WindowMode.GetValue());
+	EngineUserSettings->SetScreenResolution(InSettings.ScreenResolution);
+#endif
+
+	// 실제 렌더링 환경에서만 뷰포트 해상도 및 창모드/VSync 즉각 반영 (SaveSettings는 호출하지 않음)
+	if (FApp::CanEverRender() == true && IsRunningCommandlet() == false)
+	{
+		EngineUserSettings->ApplyResolutionSettings(false);
+		EngineUserSettings->ApplyNonResolutionSettings();
+		EngineUserSettings->RequestUIUpdate();
+	}
+}
+
+void UBBMGameDataSubsystem::ApplyInputSettingsInternal(const FBBMUserSettingsData& InSettings)
+{
+	if (RuntimeIMC == nullptr)
+	{
+		return;
+	}
+
+	for (const FBBMKeyCategoryMappingData& CategoryData : InSettings.KeyMappings)
+	{
+		for (const FBBMKeyMappingData& KeyData : CategoryData.KeyMappings)
+		{
+			RemapByName(KeyData.MappingName, KeyData.InputChord, false);
+		}
+	}
+
+	RebuildControlMappingsIfRegistered();
+}
+
+void UBBMGameDataSubsystem::HandleViewportCreatedForInitialSettings()
+{
+	if (bAppliedInitialViewportSettings == true)
+	{
+		return;
+	}
+
+	bAppliedInitialViewportSettings = true;
+	ApplyDisplaySettingsInternal(GetUserSettingsData());
+
+	if (ViewportCreatedHandle.IsValid() == true)
+	{
+		UGameViewportClient::OnViewportCreated().Remove(ViewportCreatedHandle);
+		ViewportCreatedHandle.Reset();
+	}
 }
 
 void UBBMGameDataSubsystem::SaveGameAsyncInternal(
@@ -349,6 +775,15 @@ void UBBMGameDataSubsystem::SaveGameAsyncInternal(
 	}
 
 	bIsAsyncOperationInProgress = true;
+	if (OnSaveStartedNative.IsBound() == true)
+	{
+		OnSaveStartedNative.Broadcast();
+	}
+	if (OnSaveStarted.IsBound() == true)
+	{
+		OnSaveStarted.Broadcast();
+	}
+
 	const TWeakObjectPtr<UBBMGameDataSubsystem> WeakThis(this);
 
 	// 2. [백그라운드 스레드] 파일 시스템 I/O 순차 실행: (sav 확인 -> bak 복제) -> (새 바이트 데이터를 sav로 파일 쓰기)
@@ -381,9 +816,17 @@ void UBBMGameDataSubsystem::SaveGameAsyncInternal(
 		// 3. [메인 스레드] 완료 통보 및 상태 플래그 해제
 		Async(EAsyncExecution::TaskGraphMainThread, [WeakThis, OnComplete, bSaved]()
 		{
-			if (WeakThis.IsValid())
+			if (WeakThis.IsValid() == true)
 			{
 				WeakThis->bIsAsyncOperationInProgress = false;
+				if (WeakThis->OnSaveCompletedNative.IsBound() == true)
+				{
+					WeakThis->OnSaveCompletedNative.Broadcast(bSaved);
+				}
+				if (WeakThis->OnSaveCompleted.IsBound() == true)
+				{
+					WeakThis->OnSaveCompleted.Broadcast(bSaved);
+				}
 			}
 			if (OnComplete)
 			{

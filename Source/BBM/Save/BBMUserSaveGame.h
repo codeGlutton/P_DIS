@@ -9,6 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "Save/BBMSaveTypes.h"
 #include "BBMUserSaveGame.generated.h"
 
 /**
@@ -28,23 +29,23 @@ public:
 	/* 유저 세팅 세이브 사용자 인덱스 */
 	static constexpr int32 UserIndex = 0;
 
-	/* 생성자 */
+	/* 생성자 및 변환 헬퍼 */
 public:
 	UBBMUserSaveGame();
 
+	/* 현재 저장된 설정 값을 스냅샷 구조체로 추출 */
+	UFUNCTION(Category = "Settings", BlueprintCallable, BlueprintPure)
+	const FBBMUserSettingsData& GetSettingsData() const;
+
+	/* 전달된 스냅샷 구조체 값을 세이브 객체에 안전 클램핑 후 반영 */
+	UFUNCTION(Category = "Settings", BlueprintCallable)
+	void SetSettingsData(const FBBMUserSettingsData& InSettingsData);
+
 	/* 프로퍼티 */
 public:
-	/* 마스터 볼륨 (0.0 ~ 1.0) */
-	UPROPERTY(Category = "Settings|Audio", EditAnywhere, BlueprintReadWrite)
-	float MasterVolume;
-
-	/* 배경음악(BGM) 볼륨 (0.0 ~ 1.0) */
-	UPROPERTY(Category = "Settings|Audio", EditAnywhere, BlueprintReadWrite)
-	float BGMVolume;
-
-	/* 효과음(SFX) 볼륨 (0.0 ~ 1.0) */
-	UPROPERTY(Category = "Settings|Audio", EditAnywhere, BlueprintReadWrite)
-	float SFXVolume;
+	/* 통합 유저 환경설정 스냅샷 데이터 */
+	UPROPERTY(Category = "Settings", EditAnywhere, BlueprintReadWrite)
+	FBBMUserSettingsData SettingsData;
 
 	/* 해금된 플레이어 캐릭터 PrimaryAssetId 목록 */
 	UPROPERTY(Category = "Meta|Unlock", EditAnywhere, BlueprintReadWrite)

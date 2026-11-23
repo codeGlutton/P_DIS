@@ -23,5 +23,12 @@
 		}
 	],
 	"ExplicitlyLoaded": true,
-	"BuiltInInitialFeatureState": "Active"
+	"BuiltInInitialFeatureState": "Active",
+	"LocalizationTargets": [
+		{
+			"Name": "BBMGameFeatureCore",
+			"LoadingPolicy": "Game",
+			"ConfigGenerationPolicy": "User"
+		}
+	]
 }

@@ -1,0 +1,99 @@
+﻿# DIS English translation.
+# Fill out your copyright notice in the Description page of Project Settings.
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: DIS\n"
+"POT-Creation-Date: 2026-11-11 11:22\n"
+"PO-Revision-Date: 2026-11-11 11:22\n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. Key:	AffixDelimiter
+#. SourceLocation:	/DIS/Global/ST_DIS_Global.ST_DIS_Global
+#: /DIS/Global/ST_DIS_Global.ST_DIS_Global
+msgctxt "ST_DIS_Global,AffixDelimiter"
+msgid ", "
+msgstr ""
+
+#. Key:	EnhancedDisplayNamePrefixAndSuffixFormat
+#. SourceLocation:	/DIS/Global/ST_DIS_Global.ST_DIS_Global
+#: /DIS/Global/ST_DIS_Global.ST_DIS_Global
+msgctxt "ST_DIS_Global,EnhancedDisplayNamePrefixAndSuffixFormat"
+msgid "{Prefix} {BaseName} {Suffix}"
+msgstr ""
+
+#. Key:	EnhancedDisplayNamePrefixOnlyFormat
+#. SourceLocation:	/DIS/Global/ST_DIS_Global.ST_DIS_Global
+#: /DIS/Global/ST_DIS_Global.ST_DIS_Global
+msgctxt "ST_DIS_Global,EnhancedDisplayNamePrefixOnlyFormat"
+msgid "{Prefix} {BaseName}"
+msgstr ""
+
+#. Key:	EnhancedDisplayNameSuffixOnlyFormat
+#. SourceLocation:	/DIS/Global/ST_DIS_Global.ST_DIS_Global
+#: /DIS/Global/ST_DIS_Global.ST_DIS_Global
+msgctxt "ST_DIS_Global,EnhancedDisplayNameSuffixOnlyFormat"
+msgid "{BaseName} {Suffix}"
+msgstr ""
+
+#. Key:	DefaultAffixDelimiter
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Enhancement/DISEnhancementContainer.cpp(34)
+#: Plugins/DIS/Source/DISRuntime/Private/Enhancement/DISEnhancementContainer.cpp(34)
+msgctxt "UDISEnhancementContainer,DefaultAffixDelimiter"
+msgid ", "
+msgstr ""
+
+#. Key:	DefaultEnhancedDisplayNamePrefixAndSuffixFormat
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Enhancement/DISEnhancementContainer.cpp(49)
+#: Plugins/DIS/Source/DISRuntime/Private/Enhancement/DISEnhancementContainer.cpp(49)
+msgctxt "UDISEnhancementContainer,DefaultEnhancedDisplayNamePrefixAndSuffixFormat"
+msgid "{Prefix} {BaseName} {Suffix}"
+msgstr ""
+
+#. Key:	DefaultEnhancedDisplayNamePrefixOnlyFormat
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Enhancement/DISEnhancementContainer.cpp(59)
+#: Plugins/DIS/Source/DISRuntime/Private/Enhancement/DISEnhancementContainer.cpp(59)
+msgctxt "UDISEnhancementContainer,DefaultEnhancedDisplayNamePrefixOnlyFormat"
+msgid "{Prefix} {BaseName}"
+msgstr ""
+
+#. Key:	DefaultEnhancedDisplayNameSuffixOnlyFormat
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Enhancement/DISEnhancementContainer.cpp(67)
+#: Plugins/DIS/Source/DISRuntime/Private/Enhancement/DISEnhancementContainer.cpp(67)
+msgctxt "UDISEnhancementContainer,DefaultEnhancedDisplayNameSuffixOnlyFormat"
+msgid "{BaseName} {Suffix}"
+msgstr ""
+
+#. Key:	EnhancedDisplayNamePrefixAndSuffixFormat
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Global/DISGlobalSettings.cpp(10)
+#: Plugins/DIS/Source/DISRuntime/Private/Global/DISGlobalSettings.cpp(10)
+msgctxt "UDISGlobalSettings,EnhancedDisplayNamePrefixAndSuffixFormat"
+msgid "{Prefix} {BaseName} {Suffix}"
+msgstr ""
+
+#. Key:	EnhancedDisplayNamePrefixOnlyFormat
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Global/DISGlobalSettings.cpp(11)
+#: Plugins/DIS/Source/DISRuntime/Private/Global/DISGlobalSettings.cpp(11)
+msgctxt "UDISGlobalSettings,EnhancedDisplayNamePrefixOnlyFormat"
+msgid "{Prefix} {BaseName}"
+msgstr ""
+
+#. Key:	EnhancedDisplayNameSuffixOnlyFormat
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Global/DISGlobalSettings.cpp(12)
+#: Plugins/DIS/Source/DISRuntime/Private/Global/DISGlobalSettings.cpp(12)
+msgctxt "UDISGlobalSettings,EnhancedDisplayNameSuffixOnlyFormat"
+msgid "{BaseName} {Suffix}"
+msgstr ""
+
+#. Key:	AffixDelimiter
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Global/DISGlobalSettings.cpp(9)
+#: Plugins/DIS/Source/DISRuntime/Private/Global/DISGlobalSettings.cpp(9)
+msgctxt "UDISGlobalSettings,AffixDelimiter"
+msgid ", "
+msgstr ""
+

@@ -5,9 +5,11 @@
  *********************************************************************/
 
 #include "Level/BBMGameModeBase.h"
-#include "UI/BBMWorldWidgetSubsystem.h"
-#include "UI/BBMUserWidgetBase.h"
+#include "WorldUISubsystem.h"
+#include "Widget/WorldUserWidgetBase.h"
+#include "ViewModel/WorldViewModelBase.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 
 ABBMGameModeBase::ABBMGameModeBase()
 {
@@ -20,17 +22,23 @@ void ABBMGameModeBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 1단계: 인카운터 초기화 전 위젯 생성 (예: FadeLoading 위젯 등)
-	CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase::BeforeEncounter);
+	// 1단계: 인카운터 초기화 전 처리 실행 훅
+	PreInitializeLevelSpecificGameMode();
 
-	// 2단계: 레벨 특화 게임모드 초기화 실행 (스테이지 게임모드에서 인카운터 배치 실행)
+	// 2단계: 인카운터 초기화 전 UI 생성 (예: FadeLoading 위젯 등)
+	CreateWorldUIsByPhase(EBBMWidgetCreationPhase::BeforeEncounter);
+
+	// 3단계: 레벨 특화 게임모드 초기화 실행 (스테이지 게임모드에서 인카운터 배치 실행)
 	InitializeLevelSpecificGameMode();
 
-	// 3단계: 인카운터 초기화 후 위젯 생성 (예: 인게임 전투 HUD 등)
-	CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase::AfterEncounter);
+	// 4단계: 인카운터 초기화 후 UI 생성 (예: 인게임 전투 HUD 등)
+	CreateWorldUIsByPhase(EBBMWidgetCreationPhase::AfterEncounter);
+
+	// 5단계: 인카운터 초기화 후 처리 실행 훅
+	PostInitializeLevelSpecificGameMode();
 }
 
-void ABBMGameModeBase::CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase Phase)
+void ABBMGameModeBase::CreateWorldUIsByPhase(EBBMWidgetCreationPhase Phase)
 {
 	UWorld* World = GetWorld();
 	if (World == nullptr)
@@ -38,22 +46,59 @@ void ABBMGameModeBase::CreateWorldWidgetsByPhase(EBBMWidgetCreationPhase Phase)
 		return;
 	}
 
-	UBBMWorldWidgetSubsystem* WidgetSS = World->GetSubsystem<UBBMWorldWidgetSubsystem>();
-	if (WidgetSS == nullptr)
+	UWorldUISubsystem* UISS = World->GetSubsystem<UWorldUISubsystem>();
+	if (UISS == nullptr)
 	{
 		return;
 	}
 
-	for (const FBBMWorldWidgetConfig& Config : AutoCreateWidgets)
+	for (const FBBMWorldUIConfig& Config : AutoCreateUIs)
 	{
-		if (Config.CreationPhase == Phase && Config.WidgetClass != nullptr && Config.WidgetKey != NAME_None)
+		if (Config.CreationPhase != Phase || Config.WidgetKey == NAME_None)
 		{
-			WidgetSS->CreateAndRegisterWidgetByConfig(Config);
+			continue;
+		}
+
+		UWorldUserWidgetBase* CreatedWidget = nullptr;
+		if (Config.WidgetConfig.WidgetClass != nullptr)
+		{
+			CreatedWidget = UISS->CreateAndRegisterWidgetByConfig(Config.WidgetKey, Config.WidgetConfig);
+		}
+
+		UWorldViewModelBase* CreatedViewModel = nullptr;
+		if (Config.ViewModelConfig.ViewModelClass != nullptr)
+		{
+			CreatedViewModel = UISS->CreateAndRegisterViewModelByConfig(Config.WidgetKey, Config.ViewModelConfig);
+		}
+
+		// 위젯과 ViewModel이 모두 생성된 경우에만 수동 바인딩 연결
+		if (CreatedWidget != nullptr && CreatedViewModel != nullptr)
+		{
+			CreatedWidget->SetViewModelInstance(CreatedViewModel);
 		}
 	}
 }
 
+void ABBMGameModeBase::PreInitializeLevelSpecificGameMode()
+{
+#if PLATFORM_DESKTOP
+	// PC 환경에서는 타이틀 및 인게임 레벨 진입 시 마우스 커서를 표시함
+	UWorld* World = GetWorld();
+	if (World != nullptr)
+	{
+		APlayerController* PlayerController = World->GetFirstPlayerController();
+		if (PlayerController != nullptr)
+		{
+			PlayerController->SetShowMouseCursor(true);
+		}
+	}
+#endif
+}
+
 void ABBMGameModeBase::InitializeLevelSpecificGameMode()
 {
-	// 베이스 클래스는 기본적으로 빈 구현 (파생 클래스에서 오버라이드)
+}
+
+void ABBMGameModeBase::PostInitializeLevelSpecificGameMode()
+{
 }

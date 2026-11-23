@@ -351,8 +351,8 @@ bool FBBMGameDataExtractionTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("UserSaveData 유효 검증"), UserData);
 	if (UserData != nullptr)
 	{
-		UserData->MasterVolume = 0.5f;
-		TestEqual(TEXT("마스터 볼륨 설정 일치"), UserData->MasterVolume, 0.5f);
+		UserData->SettingsData.MasterVolume = 0.5f;
+		TestEqual(TEXT("마스터 볼륨 설정 일치"), UserData->GetSettingsData().MasterVolume, 0.5f);
 	}
 
 	// 5. 런 데이터 삭제 검증

@@ -11,7 +11,7 @@
 	"MarketplaceURL": "",
 	"SupportURL": "",
 	"EngineVersion": "5.8.0",
-	"CanContainContent": false,
+	"CanContainContent": true,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
 	"Installed": false,
@@ -23,6 +23,13 @@
 			"PlatformAllowList": [
 				"Win64"
 			]
+		}
+	],
+	"LocalizationTargets": [
+		{
+			"Name": "AssetLinter",
+			"LoadingPolicy": "Editor",
+			"ConfigGenerationPolicy": "User"
 		}
 	],
 	"Plugins": [

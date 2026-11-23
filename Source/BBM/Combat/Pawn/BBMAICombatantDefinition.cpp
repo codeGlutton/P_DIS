@@ -4,8 +4,9 @@
 
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
-#define LOCTEXT_NAMESPACE "UBBMAICombatantDefinition"
 #endif
+
+#define LOCTEXT_NAMESPACE "UBBMAICombatantDefinition"
 
 FBBMAIBeatSequence::FBBMAIBeatSequence() :
 	PatternName(NAME_None),
@@ -22,7 +23,7 @@ bool FBBMAIBeatSequence::IsValid() const
 
 UBBMAICombatantDefinition::UBBMAICombatantDefinition()
 {
-	DisplayName = FText::FromString(TEXT("기본 AI 전투원"));
+	DisplayName = LOCTEXT("DefaultDisplayName", "기본 AI 전투원");
 	TableKeyName = FName(TEXT("Monster"));
 	DefaultTeam = EBBMTeamType::Monster;
 }
@@ -260,6 +261,7 @@ EDataValidationResult UBBMAICombatantDefinition::IsDataValid(FDataValidationCont
 
 	return Result;
 }
-#undef LOCTEXT_NAMESPACE
 #endif
+
+#undef LOCTEXT_NAMESPACE
 

@@ -9,8 +9,10 @@
 #include "Item/BBMItemDefinition.h"
 #include "Global/BBMGlobalLogic.h"
 
+#define LOCTEXT_NAMESPACE "UBBMRegionDefinition"
+
 UBBMRegionDefinition::UBBMRegionDefinition() :
-	RegionName(FText::FromString(TEXT("New Region")))
+	RegionName(LOCTEXT("DefaultRegionName", "새 지역"))
 {
 }
 
@@ -378,3 +380,5 @@ TArray<UBBMItemDefinition*> UBBMRegionDefinition::PickRandomItemsWithoutDuplicat
 
 	return Picked;
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -178,9 +178,11 @@ bool FDISEnhancementDisplayNameCacheTest::RunTest(const FString& Parameters)
 	const FText BaseNameA = FText::FromString(TEXT("IronSword"));
 	const FText BaseNameB = FText::FromString(TEXT("SteelShield"));
 
-	// 1. 초기 상태에서 접두사 및 접미사 캐시가 비어있는지 확인
-	TestTrue(TEXT("초기 접두사 캐시는 비어있어야 함"), Container->GetCachedPrefix().IsEmpty());
-	TestTrue(TEXT("초기 접미사 캐시는 비어있어야 함"), Container->GetCachedSuffix().IsEmpty());
+	// 1. 초기 상태에서 접두사 및 접미사 캐시(FText)가 비어있는지 확인
+	const FText InitialPrefix = Container->GetCachedPrefix();
+	const FText InitialSuffix = Container->GetCachedSuffix();
+	TestTrue(TEXT("초기 접두사 캐시는 비어있어야 함"), InitialPrefix.IsEmpty());
+	TestTrue(TEXT("초기 접미사 캐시는 비어있어야 함"), InitialSuffix.IsEmpty());
 
 	// 2. 수식어가 없을 때 BaseName 결합 반환 검증
 	const FText DisplayName1 = Container->GetEnhancedDisplayName(BaseNameA);

@@ -1,6 +1,6 @@
 # [BBM GDD] 02. 인벤토리, 아이템 프로파일 및 타임라인 계산 규칙 (Inventory & Items)
 
-> **상위 마스터 문서**: [RhythmRoguelike_GDD.md](file:///e:/Unreal/P_AI_Inven/DIS/Docs/RhythmRoguelike_GDD.md)  
+> **상위 기획 규칙**: [game-design-guide.md](file:///e:/Unreal/P_AI_Inven/DIS/.agents/rules/game-design-guide.md)  
 > **문서 버전**: 1.3.0 | **최종 수정일**: 2026-10-29  
 > **주요 역할**: 배낭 그리드 배치 순서, 점유 면적 공식, 3대 상위/13종 세부 프로파일, 내구도/스택 한도, 사용 수명주기, CustomData 계층 상속 단일 진실 공급원
 

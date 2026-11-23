@@ -20,6 +20,12 @@ public class DISTest : ModuleRules
 			"AIModule",
 			"DISRuntime",
 			"BBM",
+			"ExtensionWidget",
+			"WorldUI",
+			"InputCore",
+			"EnhancedInput",
+			"Slate",
+			"SlateCore",
 			"UMG",
 			"ModelViewViewModel"
 		});
@@ -28,7 +34,10 @@ public class DISTest : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"UnrealEd",
-			"AutomationController"
+			"UMGEditor",
+			"ModelViewViewModelBlueprint",
+			"AutomationController",
+			"MovieScene"
 		});
 	}
 }

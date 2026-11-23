@@ -38,6 +38,18 @@ public:
 	/* 아이템 스태킹 판정 시 제외할 강화 효과 태그 컨테이너 반환 */
 	const FGameplayTagContainer& GetStackingIgnoredEnhancementTags() const { return StackingIgnoredEnhancementTags; }
 
+	/* 다중 수식어 결합 시 사용하는 구분자 텍스트 반환 */
+	const FText& GetAffixDelimiter() const { return AffixDelimiter; }
+
+	/* 접두·접미사가 모두 존재할 때 사용하는 표시 이름 서식 반환 */
+	const FText& GetEnhancedDisplayNamePrefixAndSuffixFormat() const { return EnhancedDisplayNamePrefixAndSuffixFormat; }
+
+	/* 접두사만 존재할 때 사용하는 표시 이름 서식 반환 */
+	const FText& GetEnhancedDisplayNamePrefixOnlyFormat() const { return EnhancedDisplayNamePrefixOnlyFormat; }
+
+	/* 접미사만 존재할 때 사용하는 표시 이름 서식 반환 */
+	const FText& GetEnhancedDisplayNameSuffixOnlyFormat() const { return EnhancedDisplayNameSuffixOnlyFormat; }
+
 	/* 설정 프로퍼티 */
 public:
 	/* 프로젝트에서 사용할 전역 DIS 로직 서브오브젝트 클래스 (C++ 및 Blueprint 파생 클래스 지정 가능) */
@@ -59,4 +71,20 @@ public:
 	/* 아이템 스태킹(CanStackWith / HasIdenticalEnhancements) 판정 시 레벨 계산에서 제외할 강화 효과 태그 컨테이너 */
 	UPROPERTY(Category = "Enhancement|Stacking", EditAnywhere, BlueprintReadOnly, Config)
 	FGameplayTagContainer StackingIgnoredEnhancementTags;
+
+	/* 동일 계열 다중 수식어 또는 기본 이름 미존재 시 접두·접미사 결합에 사용할 구분자 텍스트 */
+	UPROPERTY(Category = "Enhancement|Display", EditAnywhere, BlueprintReadOnly, Config)
+	FText AffixDelimiter;
+
+	/* 접두사({Prefix}), 기본 이름({BaseName}), 접미사({Suffix})가 모두 존재할 때 사용하는 최종 이름 서식 포맷 */
+	UPROPERTY(Category = "Enhancement|Display", EditAnywhere, BlueprintReadOnly, Config)
+	FText EnhancedDisplayNamePrefixAndSuffixFormat;
+
+	/* 접두사({Prefix})와 기본 이름({BaseName})만 존재할 때 사용하는 최종 이름 서식 포맷 */
+	UPROPERTY(Category = "Enhancement|Display", EditAnywhere, BlueprintReadOnly, Config)
+	FText EnhancedDisplayNamePrefixOnlyFormat;
+
+	/* 기본 이름({BaseName})과 접미사({Suffix})만 존재할 때 사용하는 최종 이름 서식 포맷 */
+	UPROPERTY(Category = "Enhancement|Display", EditAnywhere, BlueprintReadOnly, Config)
+	FText EnhancedDisplayNameSuffixOnlyFormat;
 };

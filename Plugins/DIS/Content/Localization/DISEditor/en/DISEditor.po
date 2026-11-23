@@ -1,0 +1,148 @@
+﻿# DISEditor English translation.
+# Fill out your copyright notice in the Description page of Project Settings.
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: DISEditor\n"
+"POT-Creation-Date: 2026-11-11 11:24\n"
+"PO-Revision-Date: 2026-11-11 11:24\n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. Key:	TileGridSearchString
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(111)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(111)
+msgctxt "FDISTileShapeCustomization,TileGridSearchString"
+msgid "Tile Matrix Grid Shape"
+msgstr ""
+
+#. Key:	PointsListHeader
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(144)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(144)
+msgctxt "FDISTileShapeCustomization,PointsListHeader"
+msgid "Occupied Coordinates (Points)"
+msgstr ""
+
+#. Key:	ModifyTileShapeTransaction
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(183)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(183)
+msgctxt "FDISTileShapeCustomization,ModifyTileShapeTransaction"
+msgid "Modify Tile Shape"
+msgstr ""
+
+#. Key:	TileCoordTooltip
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(328)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(328)
+msgctxt "FDISTileShapeCustomization,TileCoordTooltip"
+msgid "Coord ({0}, {1}) 클릭하여 점유 토글"
+msgstr ""
+
+#. Key:	NoPointsDesc
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(355)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(355)
+msgctxt "FDISTileShapeCustomization,NoPointsDesc"
+msgid "No occupied tiles."
+msgstr ""
+
+#. Key:	IndexFormat
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(377)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(377)
+msgctxt "FDISTileShapeCustomization,IndexFormat"
+msgid "[{0}]"
+msgstr ""
+
+#. Key:	PointCoordFormat
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(385)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(385)
+msgctxt "FDISTileShapeCustomization,PointCoordFormat"
+msgid "({0}, {1})"
+msgstr ""
+
+#. Key:	EmptyShapeSummary
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(421)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(421)
+msgctxt "FDISTileShapeCustomization,EmptyShapeSummary"
+msgid "Empty (Max: {0}x{1})"
+msgstr ""
+
+#. Key:	ShapeSummaryFormat
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(428)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(428)
+msgctxt "FDISTileShapeCustomization,ShapeSummaryFormat"
+msgid "{0} tiles ({1}x{2} / Max {3}x{4})"
+msgstr ""
+
+#. Key:	TrimTooltip
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(68)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(68)
+msgctxt "FDISTileShapeCustomization,TrimTooltip"
+msgid "상/하/좌/우 불필요한 빈 여백을 지우고 전체 타일을 좌상단으로 밀착 정렬합니다."
+msgstr ""
+
+#. Key:	TrimButton
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(74)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(74)
+msgctxt "FDISTileShapeCustomization,TrimButton"
+msgid "Trim"
+msgstr ""
+
+#. Key:	ResetTooltip
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(84)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(84)
+msgctxt "FDISTileShapeCustomization,ResetTooltip"
+msgid "모든 타일 점유를 비우고 초기화합니다."
+msgstr ""
+
+#. Key:	ResetButton
+#. SourceLocation:	Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(90)
+#: Plugins/DIS/Source/DISEditor/Private/Customizations/DISTileShapeCustomization.cpp(90)
+msgctxt "FDISTileShapeCustomization,ResetButton"
+msgid "Reset"
+msgstr ""
+
+#. Key:	InventoryCapacityError
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(118)
+#: Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(118)
+msgctxt "DISInventoryDefinition,InventoryCapacityError"
+msgid "인벤토리 정의 '{0}'의 최대 확장 가능 용량({1})은 기본 용량({2})보다 크거나 같아야 합니다."
+msgstr ""
+
+#. Key:	InventoryWeightError
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(130)
+#: Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(130)
+msgctxt "DISInventoryDefinition,InventoryWeightError"
+msgid "인벤토리 정의 '{0}'의 기본 최대 무게({1})는 0 이상이어야 합니다."
+msgstr ""
+
+#. Key:	LineBreakTileCountError
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(141)
+#: Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(141)
+msgctxt "DISInventoryDefinition,LineBreakTileCountError"
+msgid "인벤토리 정의 '{0}'의 줄 바꿈 기준 칸 수({1})는 1 이상이어야 합니다."
+msgstr ""
+
+#. Key:	BlockedTileOutOfBoundsError
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(155)
+#: Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(155)
+msgctxt "DISInventoryDefinition,BlockedTileOutOfBoundsError"
+msgid "인벤토리 정의 '{0}'의 블록 타일 좌표({1}, {2})가 최대 허용 용량({3})의 유효 범위를 벗어났습니다."
+msgstr ""
+
+#. Key:	InventorySlotClassError
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(171)
+#: Plugins/DIS/Source/DISRuntime/Private/Inventory/DISInventoryDefinition.cpp(171)
+msgctxt "DISInventoryDefinition,InventorySlotClassError"
+msgid "인벤토리 정의 '{0}'의 슬롯 클래스 타입({1})은 UDISInventorySlot을 상속해야 합니다."
+msgstr ""
+
+#. Key:	ItemDimensionsExceededError
+#. SourceLocation:	Plugins/DIS/Source/DISRuntime/Private/Item/DISItemDefinition.cpp(41)
+#: Plugins/DIS/Source/DISRuntime/Private/Item/DISItemDefinition.cpp(41)
+msgctxt "DISItemDefinition,ItemDimensionsExceededError"
+msgid "아이템 '{0}'의 점유 크기({1}x{2})가 UDISGlobalSettings에 정의된 최대 허용 타일 규격({3}x{4})을 초과했습니다."
+msgstr ""
+

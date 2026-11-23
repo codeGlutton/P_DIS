@@ -78,3 +78,10 @@ DerivedDataCache/*
 GEMINI.md
 AGENTS.md
 .agents/*
+
+# AI Contents
+AIBuild/*
+
+# Temporary / Unversioned Feature Assets
+Plugins/GameFeatures/BBMGameFeatureCore/Content/Asset/
+

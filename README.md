@@ -2,12 +2,7 @@
 
 > **Unreal Engine 5.8.3** · **C++20** · **Win64**
 
-<!-- [이미지 삽입] 아래 주석을 해제하고 저장소 이미지 경로 또는 GitHub 업로드 URL을 입력하세요.
-![배낭 상인 출몰중! 타이틀 화면](Docs/Images/title_screen.jpg)
--->
-> **[스크린샷 예정 영역]** `배낭 상인 출몰중!` 타이틀 화면 이미지 추가 예정
-
----
+<img width="1096" height="639" alt="포트폴리오_261120_AI" src="https://github.com/user-attachments/assets/916b8905-6864-4b1f-a727-c40393a8a188" />
 
 ## 1. 프로젝트 및 게임 소개 (Project & Game Overview)
 
@@ -22,7 +17,6 @@
 3. **프리뷰를 토한 실시간 판단 (`Monster Intent Preview`)**: 적의 8비트 행동 예고를 보고 아이템 배치를 바꿔 방패 가드·패링·콤보를 구성합니다.
 4. **로그라이크 빌드 성장 (`Roguelike Progression`)**: 전투 보상, 배낭 용량 확장(`ExpandCapacity`), 슬롯 및 아이템 강화를 통해 매 판 고유 빌드를 완성합니다.
 
----
 
 ## 2. 핵심 아키텍처 (Core Architecture)
 
@@ -56,7 +50,6 @@ flowchart TD
 | **Host Editor** | `Source/BBMEditor` | `FBBMBeatSequence` 4단 타임라인 시각화, `UBBMInventoryDefinition` 배낭 프리뷰, 일괄 리네임 유틸리티 |
 | **Automated Test** | `Source/DISTest` | `DIS` 코어·`BBM` 게임플레이·`WorldUI`/`ExtensionWidget` 검증용 `AutomationTest` 15개 테스트 모듈 격리 |
 
----
 
 ## 3. 사용 기술 및 주요 시스템 (Tech Stack & Key Systems)
 
@@ -69,7 +62,6 @@ flowchart TD
 | **Input & Save** | `EnhancedInput` (`RuntimeIMC` 복제, 런타임 키 리매핑 `RemapByName`, Chord Modifier), `UBBMRunSaveGame` · `UBBMUserSaveGame` 비동기 저장/복원 |
 | **Localization & QA** | 호스트(`Game`) 및 플러그인(`DIS`, `DISEditor`, `AssetLinter`, `BBMGameFeatureCore`) 독립 `LocalizationTargets`, `UEditorValidatorBase` 기반 `AssetLinter`, `Misc/AutomationTest.h` 기반 `DISTest` |
 
----
 
 ## 4. AI 기반 개발 워크플로우 (AI-Assisted Development Workflow)
 
